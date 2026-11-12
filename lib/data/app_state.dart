@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'notifier.dart';
 
 /// Цялото състояние на тестовата версия. Всичко се пази само на телефона.
 /// По-късно този клас се заменя с връзка към сървъра (Supabase),
@@ -128,10 +129,22 @@ class AppState extends ChangeNotifier {
     currentChurchId = myChurches.firstOrNull?.id;
     if (currentChurchId != null) await _prefs.setString(_kChurch, currentChurchId!);
     notifyListeners();
+    await rescheduleReminders();
     return null;
   }
 
+  /// Моите събития във всички мои храмове – за тях идват напомняния.
+  Iterable<ChurchEvent> get _myEvents {
+    final u = currentUser;
+    if (u == null) return const [];
+    final ids = myChurches.map((c) => c.id).toSet();
+    return _events.where((e) => e.ownerId == u.id && ids.contains(e.churchId));
+  }
+
+  Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents);
+
   Future<void> logout() async {
+    await Notifier.cancelAll();
     currentUser = null;
     currentChurchId = null;
     await _prefs.remove(_kSession);
@@ -291,12 +304,14 @@ class AppState extends ChangeNotifier {
     _events.add(e);
     await _save();
     notifyListeners();
+    if (e.ownerId == currentUser?.id) await Notifier.schedule(e);
   }
 
   Future<void> deleteEvent(String id) async {
     _events.removeWhere((e) => e.id == id);
     await _save();
     notifyListeners();
+    await Notifier.cancel(id);
   }
 
   // ------------------------------------------------------------------
@@ -316,6 +331,7 @@ class AppState extends ChangeNotifier {
 
   /// Изтрива всички данни от телефона (за тестове).
   Future<void> wipeAll() async {
+    await Notifier.cancelAll();
     _users.clear();
     _churches.clear();
     _members.clear();

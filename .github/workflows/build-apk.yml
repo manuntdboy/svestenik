@@ -29,9 +29,9 @@ jobs:
           flutter --version
           flutter create . --platforms=android --org bg.svestenik --project-name svestenik
           rm -f test/widget_test.dart   # примерен тест от шаблона, не ни трябва
-          # Име на приложението на телефона
-          sed -i 's/android:label="svestenik"/android:label="Свещеник"/' android/app/src/main/AndroidManifest.xml
-          grep -n 'android:label' android/app/src/main/AndroidManifest.xml
+          # Име на приложението, известия, настройки за изграждане
+          python3 ci/patch_android.py .
+          cat android/settings.gradle.kts
 
       - name: Постоянен тестов ключ (за да се обновява върху старата версия)
         run: |

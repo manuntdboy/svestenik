@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/notifier.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'church_code.dart';
@@ -95,6 +96,35 @@ class ProfileScreen extends StatelessWidget {
           ],
           selected: {s.textScale},
           onSelectionChanged: (v) => s.setTextScale(v.first),
+        ),
+        heading('Напомняния'),
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                  'Напомнянията идват като известия на телефона, дори когато приложението е затворено.',
+                  style: TextStyle(fontSize: 15, color: p.textMuted)),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () async {
+                  await Notifier.requestPermissions();
+                  final on = await Notifier.notificationsEnabled();
+                  if (!context.mounted) return;
+                  if (on) {
+                    await Notifier.test();
+                    if (context.mounted) {
+                      showMessage(context, 'След 10 секунди ще дойде пробно известие.');
+                    }
+                  } else {
+                    showMessage(context,
+                        'Известията са изключени. Включете ги от Настройки → Приложения → Свещеник → Известия.');
+                  }
+                },
+                child: const Text('Пробно известие'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 28),
         FilledButton(

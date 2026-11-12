@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../data/notifier.dart';
 import '../theme.dart';
 import 'calendar.dart';
 import 'home.dart';
@@ -26,6 +27,8 @@ class _ShellState extends State<Shell> {
     _tick = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+    // При първото отваряне Android пита дали да се показват известия.
+    WidgetsBinding.instance.addPostFrameCallback((_) => Notifier.requestPermissions());
   }
 
   @override

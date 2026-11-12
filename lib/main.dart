@@ -4,6 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'data/app_state.dart';
+import 'data/notifier.dart';
 import 'screens/church_connect.dart';
 import 'screens/login.dart';
 import 'screens/shell.dart';
@@ -13,8 +14,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('bg');
   Intl.defaultLocale = 'bg';
+  await Notifier.init();
   final state = AppState();
   await state.load();
+  // Обновява напомнянията (например след промяна на версията).
+  if (state.isLoggedIn) state.rescheduleReminders();
   runApp(AppScope(state: state, child: const SvestenikApp()));
 }
 
