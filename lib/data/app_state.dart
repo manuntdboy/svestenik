@@ -774,6 +774,25 @@ class AppState extends ChangeNotifier {
     return e;
   }
 
+  final Set<String> _seenSent = {};
+
+  /// Отбелязва „видяно“ на молба за потвърждение (веднъж; вижда се от
+  /// записалия и председателя).
+  Future<void> markSeen(ChurchEvent e) async {
+    if (e.assigneeId != currentUser?.id || e.ownerId == e.assigneeId) return;
+    if (e.seenAt != null || !_seenSent.add(e.id)) return;
+    try {
+      final t = await _db.rpc('mark_event_seen', params: {'p_event': e.id});
+      if (t is String) {
+        e.seenAt = DateTime.tryParse(t)?.toLocal();
+        notifyListeners();
+      }
+    } catch (err) {
+      _seenSent.remove(e.id);
+      debugPrint('„Видяно“ не се записа: $err');
+    }
+  }
+
   /// Приемам или отказвам събитие, записано за мен.
   Future<void> respondAssignment(ChurchEvent e,
       {required bool accept, String reason = '', String? substituteId}) async {

@@ -7,6 +7,14 @@ import '../theme.dart';
 import 'common.dart';
 
 final _fmtDm = DateFormat('d MMMM', 'bg');
+final _fmtSeen = DateFormat('d MMMM, HH:mm', 'bg');
+
+/// „Видяно днес в 18:12“ / „Видяно 12 ноември, 18:12“ / „Още не е видяно“.
+String seenLabel(ChurchEvent e) {
+  final t = e.seenAt;
+  if (t == null) return 'още не е видяно';
+  return sameDay(t, DateTime.now()) ? 'видяно днес в ${fmtTime(t)}' : 'видяно ${_fmtSeen.format(t)}';
+}
 
 /// „12 ноември“ или „12 – 14 ноември“ / „30 ноември – 2 декември“.
 String fmtLeavePeriod(LeaveRequest l) {
@@ -162,6 +170,15 @@ class AwaitingCard extends StatefulWidget {
 
 class _AwaitingCardState extends State<AwaitingCard> {
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Картата е пред очите на свещеника – отбелязваме „видяно“.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) AppScope.read(context).markSeen(widget.event);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

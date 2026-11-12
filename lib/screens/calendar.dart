@@ -207,7 +207,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             // Кой е записал – вижда се от всички.
             owner: e.ownerId == s.currentUser?.id ? 'записах аз' : 'записа ${s.ownerName(e)}',
             confirmation: e.awaitsConfirmation
-                ? 'чака потвърждение от ${s.priestName(e.assigneeId)}'
+                ? 'чака потвърждение от ${s.priestName(e.assigneeId)} (${seenLabel(e)})'
                 : e.isDeclined
                     ? 'отказано – решава председателят'
                     : null,

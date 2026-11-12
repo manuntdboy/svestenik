@@ -346,6 +346,25 @@ select t.as_user(:'A');
 select public.respond_chair(:'cid', true) \g /dev/null
 select t.ok(public.is_manager(:'cid'), 'председателството се връща по същия начин');
 
+\echo '== Видяно'
+select t.as_user(:'A');
+insert into events (church_id, kind, starts_at, visibility, assignee_id, for_whom)
+  values (:'cid', 'vodosvet', now() + interval '8 day', 'church', :'B', 'видяно?');
+select id as ev3 from events where for_whom = 'видяно?' \gset
+select t.ok((select seen_at from events where id = :'ev3') is null, 'новата молба не е видяна');
+select t.rows(format($$update events set seen_at = now() where id = %L$$, :'ev3')) \g /dev/null
+select t.ok((select seen_at from events where id = :'ev3') is null, 'записалият не слага „видяно“ вместо свещеника');
+select t.ok(public.mark_event_seen(:'ev3') is null, 'само свещеникът слага „видяно“');
+select t.as_user(:'B');
+select public.mark_event_seen(:'ev3') as seen1 \gset
+select t.ok(:'seen1' <> '', 'свещеникът отваря – видяно');
+select pg_sleep(0.01) \g /dev/null
+select t.ok(public.mark_event_seen(:'ev3')::text = :'seen1', 'видяно се записва само първия път');
+select t.as_user(:'A');
+select t.ok((select seen_at from events where id = :'ev3') is not null, 'записалият вижда, че е видяно');
+select t.rows(format($$update events set assignee_id = %L where id = %L$$, :'C', :'ev3')) \g /dev/null
+select t.ok((select seen_at from events where id = :'ev3') is null, 'при прехвърляне „видяно“ се нулира');
+
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

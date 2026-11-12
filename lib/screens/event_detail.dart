@@ -140,7 +140,7 @@ class EventDetailScreen extends StatelessWidget {
                     row(
                         'Потвърждение',
                         e.awaitsConfirmation
-                            ? 'Чака ${s.priestName(e.assigneeId)}'
+                            ? 'Чака ${s.priestName(e.assigneeId)} · ${seenLabel(e)}'
                             : e.isDeclined
                                 ? 'Отказано${e.declineReason.isEmpty ? '' : ': ${e.declineReason}'} – решава председателят'
                                 : 'Прието'),

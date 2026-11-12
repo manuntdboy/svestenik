@@ -187,6 +187,7 @@ class ChurchEvent {
   String declineReason;
   String? proposedSubstituteId;
   String? declinedById;
+  DateTime? seenAt; // кога свещеникът е видял молбата
 
   ChurchEvent({
     required this.id,
@@ -209,6 +210,7 @@ class ChurchEvent {
     this.declineReason = '',
     this.proposedSubstituteId,
     this.declinedById,
+    this.seenAt,
   }) : assigneeId = assigneeId ?? ownerId;
 
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
@@ -304,6 +306,7 @@ class ChurchEvent {
         declineReason: (r['decline_reason'] as String?) ?? '',
         proposedSubstituteId: r['proposed_substitute'] as String?,
         declinedById: r['declined_by'] as String?,
+        seenAt: DateTime.tryParse((r['seen_at'] as String?) ?? '')?.toLocal(),
       );
 
   factory ChurchEvent.fromJson(Map<String, dynamic> j) => ChurchEvent(
