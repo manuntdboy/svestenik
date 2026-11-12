@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'church_code.dart';
@@ -53,7 +54,13 @@ class _ChurchConnectScreenState extends State<ChurchConnectScreen> {
     final state = AppScope.read(context);
     final nav = Navigator.of(context);
     final pushed = widget.pushed;
-    final church = await state.createChurch(_name.text, _place.text, _mun.text);
+    final Church church;
+    try {
+      church = await state.createChurch(_name.text, _place.text, _mun.text);
+    } on AppError catch (e) {
+      if (mounted) setState(() => _createError = e.message);
+      return;
+    }
     // Показваме кода веднага, за да може да се даде на другите свещеници.
     // (Този екран може вече да е заменен от таблото, затова ползваме nav.)
     if (pushed) nav.pop();

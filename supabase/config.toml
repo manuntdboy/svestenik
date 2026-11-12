@@ -1,0 +1,6 @@
+# Настройки за Supabase CLI (ползва ги GitHub Actions при прилагане на базата).
+project_id = "kairos"
+
+[functions.login]
+# Вход с потребителско име: извиква се преди входа, затова без проверка на токен.
+verify_jwt = false

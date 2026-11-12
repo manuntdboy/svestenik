@@ -23,6 +23,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   late bool _outside = widget.draft.outsideChurch;
   late int? _remind = widget.draft.remindMinutes;
   late bool _alarm = widget.draft.alarm;
+  bool _saving = false;
   late bool _shared = widget.draft.shared;
   late final _forWhom = TextEditingController(text: widget.draft.forWhom);
   late final _phone = TextEditingController(text: widget.draft.phone);
@@ -141,8 +142,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
       ..shared = _shared
       ..note = _note.text.trim();
     final nav = Navigator.of(context);
-    await state.saveEvent(e);
-    nav.pop(true);
+    setState(() => _saving = true);
+    try {
+      await state.saveEvent(e);
+      nav.pop(true);
+    } on AppError catch (err) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      showMessage(context, err.message);
+    }
   }
 
   Widget _section(String label, Widget child) => Padding(
@@ -411,7 +419,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            FilledButton(onPressed: _save, child: const Text('Запази')),
+            FilledButton(
+                onPressed: _saving ? null : _save,
+                child: Text(_saving ? 'Записване…' : 'Запази')),
           ],
         ),
       ),

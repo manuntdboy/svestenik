@@ -72,7 +72,12 @@ class ChurchCodeScreen extends StatelessWidget {
                             'Нов код',
                             'Старият код спира да работи. Вече свързаните свещеници остават свързани.',
                             'Смени кода');
-                        if (ok) await s.regenerateCode(churchId);
+                        if (!ok) return;
+                        try {
+                          await s.regenerateCode(churchId);
+                        } on AppError catch (e) {
+                          if (context.mounted) showMessage(context, e.message);
+                        }
                       },
                       child: const Text('Смени кода'),
                     ),
@@ -82,8 +87,8 @@ class ChurchCodeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-                'В тестовата версия данните са само на този телефон, затова кодът работи '
-                'само тук. Когато има сървър, другите свещеници ще го въвеждат на своите телефони.',
+                'Дайте кода на другите свещеници. Те го въвеждат в Кайрос на своя телефон '
+                '(„Добави още един храм“ или при първия вход) и се свързват с този храм.',
                 style: TextStyle(fontSize: 14, color: p.textMuted)),
             const SizedBox(height: 20),
             Text('Свързани свещеници',
@@ -114,7 +119,12 @@ class ChurchCodeScreen extends StatelessWidget {
                           onPressed: () async {
                             final ok = await confirm(context, 'Премахване',
                                 '${u.fullName} няма да вижда споделените събития на храма.', 'Премахни');
-                            if (ok) await s.removeMember(churchId, u.id);
+                            if (!ok) return;
+                            try {
+                              await s.removeMember(churchId, u.id);
+                            } on AppError catch (e) {
+                              if (context.mounted) showMessage(context, e.message);
+                            }
                           },
                           child: const Text('Премахни'),
                         ),

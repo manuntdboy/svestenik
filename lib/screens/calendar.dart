@@ -55,6 +55,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Stack(
       children: [
         ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
           children: [
             Row(

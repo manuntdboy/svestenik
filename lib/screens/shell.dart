@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../data/app_state.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
 import 'calendar.dart';
@@ -16,13 +17,14 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> {
+class _ShellState extends State<Shell> with WidgetsBindingObserver {
   int _tab = 0;
   Timer? _tick;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Обновява „след 2 часа“ и следващото събитие всяка минута.
     _tick = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
@@ -33,20 +35,59 @@ class _ShellState extends State<Shell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
     super.dispose();
+  }
+
+  /// При връщане в приложението изтегля новостите от сървъра.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) AppScope.read(context).refresh();
   }
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final s = AppScope.of(context);
     final pages = [
-      HomeScreen(openCalendar: () => setState(() => _tab = 1)),
-      const CalendarScreen(),
+      RefreshIndicator(
+        onRefresh: s.refresh,
+        child: HomeScreen(openCalendar: () => setState(() => _tab = 1)),
+      ),
+      RefreshIndicator(onRefresh: s.refresh, child: const CalendarScreen()),
       const ProfileScreen(),
     ];
     return Scaffold(
-      body: SafeArea(bottom: false, child: IndexedStack(index: _tab, children: pages)),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            if (s.syncError != null)
+              Material(
+                color: Palette.yellow,
+                child: InkWell(
+                  onTap: s.refresh,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(children: [
+                      const Icon(Icons.cloud_off_rounded, color: Palette.onYellow),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text('${s.syncError} Натиснете, за да опитате пак.',
+                            style: const TextStyle(
+                                fontSize: 15,
+                                color: Palette.onYellow,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            Expanded(child: IndexedStack(index: _tab, children: pages)),
+          ],
+        ),
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: p.surface,

@@ -104,7 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
-            Text('Профилът се пази само на този телефон, докато трае тестът.',
+            Text('С този профил влизате от всеки телефон. Имейлът не се показва на никого.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
             const SizedBox(height: 18),
             _field('Име, както да се показва', _name,
@@ -113,7 +113,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 caps: TextCapitalization.words),
             _field('Потребителско име (на латиница)', _user,
                 hint: 'например georgi', autofill: const [AutofillHints.newUsername]),
-            _field('Имейл (за забравена парола, по желание)', _email,
+            _field('Имейл (за забравена парола)', _email,
                 type: TextInputType.emailAddress, autofill: const [AutofillHints.email]),
             _field('Парола (поне 6 знака)', _pass,
                 password: true, autofill: const [AutofillHints.newPassword]),

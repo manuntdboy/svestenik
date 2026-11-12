@@ -1,38 +1,18 @@
-// Модели на данните. В тестовата версия се пазят като JSON на телефона.
+// Модели на данните. Пазят се в Supabase (PostgreSQL).
 
 class AppUser {
   final String id;
   final String username;
   final String fullName;
   final String email;
-  final String passwordHash;
-  final String salt;
 
-  AppUser({
-    required this.id,
-    required this.username,
-    required this.fullName,
-    required this.email,
-    required this.passwordHash,
-    required this.salt,
-  });
+  AppUser({required this.id, required this.username, required this.fullName, this.email = ''});
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'username': username,
-        'fullName': fullName,
-        'email': email,
-        'passwordHash': passwordHash,
-        'salt': salt,
-      };
-
-  factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
-        id: j['id'] as String,
-        username: j['username'] as String,
-        fullName: j['fullName'] as String,
-        email: (j['email'] as String?) ?? '',
-        passwordHash: j['passwordHash'] as String,
-        salt: j['salt'] as String,
+  factory AppUser.fromRow(Map<String, dynamic> r, {String email = ''}) => AppUser(
+        id: r['id'] as String,
+        username: r['username'] as String,
+        fullName: r['full_name'] as String,
+        email: email,
       );
 }
 
@@ -53,39 +33,28 @@ class Church {
 
   String get place => '$settlement, общ. $municipality';
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'settlement': settlement,
-        'municipality': municipality,
-        'joinCode': joinCode,
-      };
-
-  factory Church.fromJson(Map<String, dynamic> j) => Church(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        settlement: j['settlement'] as String,
-        municipality: j['municipality'] as String,
-        joinCode: j['joinCode'] as String,
+  factory Church.fromRow(Map<String, dynamic> r) => Church(
+        id: r['id'] as String,
+        name: r['name'] as String,
+        settlement: r['settlement'] as String,
+        municipality: r['municipality'] as String,
+        joinCode: r['join_code'] as String,
       );
 }
 
 class Membership {
   final String churchId;
   final String userId;
-  final String role; // 'manager' или 'priest'
+  final String role; // 'manager' (председател) или 'priest'
 
   Membership({required this.churchId, required this.userId, required this.role});
 
   bool get isManager => role == 'manager';
 
-  Map<String, dynamic> toJson() =>
-      {'churchId': churchId, 'userId': userId, 'role': role};
-
-  factory Membership.fromJson(Map<String, dynamic> j) => Membership(
-        churchId: j['churchId'] as String,
-        userId: j['userId'] as String,
-        role: j['role'] as String,
+  factory Membership.fromRow(Map<String, dynamic> r) => Membership(
+        churchId: r['church_id'] as String,
+        userId: r['user_id'] as String,
+        role: r['role'] as String,
       );
 }
 
@@ -195,6 +164,41 @@ class ChurchEvent {
         'shared': shared,
         'note': note,
       };
+
+  /// Ред за таблица `events` в Supabase.
+  Map<String, dynamic> toRow() => {
+        'id': id,
+        'owner_id': ownerId,
+        'church_id': churchId,
+        'kind': kind.name,
+        'starts_at': startsAt.toUtc().toIso8601String(),
+        'duration_minutes': durationMinutes,
+        'for_whom': forWhom,
+        'contact_phone': phone,
+        'outside_church': outsideChurch,
+        'address': address,
+        'remind_minutes': remindMinutes,
+        'alarm': alarm,
+        'visibility': shared ? 'church' : 'private',
+        'note': note,
+      };
+
+  factory ChurchEvent.fromRow(Map<String, dynamic> r) => ChurchEvent(
+        id: r['id'] as String,
+        ownerId: r['owner_id'] as String,
+        churchId: r['church_id'] as String,
+        kind: EventKind.fromName(r['kind'] as String),
+        startsAt: DateTime.parse(r['starts_at'] as String).toLocal(),
+        durationMinutes: (r['duration_minutes'] as int?) ?? defaultDurationMinutes,
+        forWhom: (r['for_whom'] as String?) ?? '',
+        phone: (r['contact_phone'] as String?) ?? '',
+        outsideChurch: (r['outside_church'] as bool?) ?? false,
+        address: (r['address'] as String?) ?? '',
+        remindMinutes: r['remind_minutes'] as int?,
+        alarm: (r['alarm'] as bool?) ?? false,
+        shared: r['visibility'] == 'church',
+        note: (r['note'] as String?) ?? '',
+      );
 
   factory ChurchEvent.fromJson(Map<String, dynamic> j) => ChurchEvent(
         id: j['id'] as String,

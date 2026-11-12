@@ -129,8 +129,12 @@ class EventDetailScreen extends StatelessWidget {
                 OutlinedButton(
                   onPressed: () async {
                     e.shared = true;
-                    await s.saveEvent(e);
-                    if (context.mounted) showMessage(context, 'Събитието е споделено с храма.');
+                    try {
+                      await s.saveEvent(e);
+                      if (context.mounted) showMessage(context, 'Събитието е споделено с храма.');
+                    } on AppError catch (err) {
+                      if (context.mounted) showMessage(context, err.message);
+                    }
                   },
                   child: const Text('Сподели с храма'),
                 )
@@ -138,8 +142,12 @@ class EventDetailScreen extends StatelessWidget {
                 OutlinedButton(
                   onPressed: () async {
                     e.shared = false;
-                    await s.saveEvent(e);
-                    if (context.mounted) showMessage(context, 'Събитието вече е само лично.');
+                    try {
+                      await s.saveEvent(e);
+                      if (context.mounted) showMessage(context, 'Събитието вече е само лично.');
+                    } on AppError catch (err) {
+                      if (context.mounted) showMessage(context, err.message);
+                    }
                   },
                   child: const Text('Направи го лично'),
                 ),
@@ -155,8 +163,13 @@ class EventDetailScreen extends StatelessWidget {
                   final ok = await confirm(
                       context, 'Изтриване', 'Събитието ще бъде изтрито.', 'Изтрий');
                   if (!ok) return;
-                  nav.pop();
-                  await s.deleteEvent(e.id);
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await s.deleteEvent(e.id);
+                    nav.pop();
+                  } on AppError catch (err) {
+                    messenger.showSnackBar(SnackBar(content: Text(err.message)));
+                  }
                 },
                 child: const Text('Изтрий'),
               ),

@@ -51,6 +51,7 @@ class HomeScreen extends StatelessWidget {
     return Stack(
       children: [
         ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
           children: [
             Row(

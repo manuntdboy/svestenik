@@ -42,27 +42,13 @@ class _LoginScreenState extends State<LoginScreen> {
   void _forgot() {
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Забравена парола'),
-        content: const Text(
-          'В тестовата версия данните са само на този телефон и няма как да се изпрати имейл. '
-          'Възстановяването с имейл ще работи, когато приложението се свърже със сървър.\n\n'
-          'Ако сте забравили паролата при тестовете, изберете „Изтрий всички данни“ '
-          'и се регистрирайте отново.',
+      builder: (ctx) => const AlertDialog(
+        title: Text('Забравена парола'),
+        content: Text(
+          'Смяната на паролата през имейл идва в следващата версия.\n\n'
+          'Дотогава се обърнете към администратора на приложението.',
           style: TextStyle(fontSize: 17),
         ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await confirm(context, 'Изтриване на всички данни',
-                  'Ще се изтрият всички профили, храмове и събития от този телефон.', 'Изтрий');
-              if (ok && mounted) await AppScope.read(context).wipeAll();
-            },
-            child: const Text('Изтрий всички данни'),
-          ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Затвори')),
-        ],
       ),
     );
   }
@@ -97,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Text('Влезте, за да видите календара си.',
                 style: TextStyle(fontSize: 17, color: p.textMuted)),
             const SizedBox(height: 24),
-            const FieldLabel('Потребителско име'),
+            const FieldLabel('Потребителско име или имейл'),
             TextField(
               controller: _user,
               autofillHints: const [AutofillHints.username],

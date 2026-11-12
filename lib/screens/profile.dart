@@ -150,22 +150,8 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => s.logout(),
           child: const Text('Изход'),
         ),
-        const SizedBox(height: 12),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-          onPressed: () async {
-            final ok = await confirm(
-                context,
-                'Изтриване на всички данни',
-                'Ще се изтрият всички профили, храмове и събития от този телефон. '
-                    'Това е само за тестове.',
-                'Изтрий всичко');
-            if (ok) await s.wipeAll();
-          },
-          child: const Text('Изтрий всички данни (тест)'),
-        ),
-        const SizedBox(height: 8),
-        Text('Тестова версия 0.1 · данните са само на този телефон.',
+        const SizedBox(height: 16),
+        Text('Тестова версия · данните са на сървъра в ЕС (Франкфурт).',
             textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: p.textMuted)),
       ],
     );

@@ -9,7 +9,31 @@ permissions:
   contents: write
 
 jobs:
+  server:
+    name: Сървър (Supabase)
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Свързване с проекта
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Прилагане на промените по базата
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Качване на функцията за вход
+        run: supabase functions deploy login --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+
   build:
+    needs: server
     runs-on: ubuntu-latest
     env:
       # Firebase се включва само когато тайните са добавени в GitHub Secrets.
@@ -48,7 +72,13 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Изграждане
-        run: flutter build apk --release --build-number=${{ github.run_number }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          flutter build apk --release --build-number=${{ github.run_number }} \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
 
       - name: Преименуване
         run: cp build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
