@@ -40,3 +40,12 @@ jobs:
               from public.notify_log
              where at > now() - interval '$h hours'
              order by at desc limit 200;"
+          echo "== Последни заявки за почивка (без имена) =="
+          psql "$url" -P pager=off -c "
+            select to_char(created_at at time zone 'Europe/Sofia', 'DD.MM HH24:MI:SS') as заявена,
+                   status as състояние,
+                   to_char(decided_at at time zone 'Europe/Sofia', 'DD.MM HH24:MI:SS') as решена,
+                   (decided_by = user_id) as сам_си
+              from public.leave_requests
+             where created_at > now() - interval '$h hours'
+             order by created_at desc limit 20;"
