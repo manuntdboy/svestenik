@@ -13,6 +13,18 @@ final _stamp = DateFormat('d MMMM, HH:mm', 'bg');
 
 String fmtEur(double v) => _eur.format(v);
 
+const _green = Color(0xFF2E7D4F);
+const _red = Color(0xFFB23A3A);
+const _negativeBg = Color(0xFF8E2323);
+
+/// Цвят на книгата: приходна – зелено, разходна – червено, банка – синьо, чакащи – жълто.
+Color bookColor(BuildContext context, CashBook? b) => switch (b) {
+      CashBook.income || CashBook.opening => _green,
+      CashBook.expense => _red,
+      CashBook.transfer => Palette.of(context).primary,
+      null => Palette.yellow,
+    };
+
 /// Каса: Приходна и Разходна книга (и банка, ако е включена).
 /// Председателят и касиерът виждат всичко; свещеникът – само своите приходи.
 class CashScreen extends StatefulWidget {
@@ -44,7 +56,13 @@ class _CashScreenState extends State<CashScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => CashEntryForm(holder: holder))),
+            context,
+            MaterialPageRoute(
+                builder: (_) => CashEntryForm(
+                    holder: holder,
+                    startWith: holder && (_tab == CashBook.expense || _tab == CashBook.transfer)
+                        ? _tab!
+                        : CashBook.income))),
         icon: const Icon(Icons.add_rounded),
         label: Text(holder ? 'Нов запис' : 'Предай приход'),
       ),
@@ -71,6 +89,7 @@ class _CashScreenState extends State<CashScreen> {
     final shown = _tab == null
         ? [...waiting, ...returned]
         : all.where((e) => e.isApproved && e.book == _tab).toList();
+    final pendingCount = all.where((e) => e.isPending).length;
     final monthIn = _sumMonth(all, CashBook.income);
     final monthOut = _sumMonth(all, CashBook.expense);
 
@@ -81,9 +100,33 @@ class _CashScreenState extends State<CashScreen> {
         // Баланс
         Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: p.heroBg, borderRadius: BorderRadius.circular(24)),
+          decoration: BoxDecoration(
+            color: cash + bank < 0 ? _negativeBg : p.heroBg,
+            borderRadius: BorderRadius.circular(24),
+            border: pendingCount > 0 ? Border.all(color: Palette.yellow, width: 4) : null,
+            boxShadow: pendingCount > 0
+                ? [BoxShadow(color: Palette.yellow.withValues(alpha: .45), blurRadius: 18, spreadRadius: 1)]
+                : null,
+          ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('В касата на храма', style: TextStyle(fontSize: 15, color: p.heroMuted)),
+            if (pendingCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: InkWell(
+                  onTap: () => setState(() => _tab = null),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Palette.yellow, borderRadius: BorderRadius.circular(12)),
+                    child: Text('$pendingCount ${pendingCount == 1 ? 'запис чака' : 'записа чакат'} одобрение',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Palette.onYellow)),
+                  ),
+                ),
+              ),
+            Text(cash + bank < 0 ? 'Касата е на минус' : 'В касата на храма',
+                style: TextStyle(
+                    fontSize: 15,
+                    color: cash + bank < 0 ? Colors.white : p.heroMuted,
+                    fontWeight: cash + bank < 0 ? FontWeight.w800 : FontWeight.w400)),
             const SizedBox(height: 4),
             Text(fmtEur(cash + bank),
                 style: TextStyle(
@@ -131,31 +174,32 @@ class _CashScreenState extends State<CashScreen> {
             Padding(padding: const EdgeInsets.only(bottom: 12), child: CashReviewCard(entry: e)),
         ],
         const SizedBox(height: 14),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SegmentedButton<CashBook?>(
-            showSelectedIcon: false,
-            segments: [
-              for (final t in tabs)
-                ButtonSegment(
-                  value: t,
-                  label: Text(t == null
-                      ? 'Чакащи${waiting.length + returned.length > 0 ? ' (${waiting.length + returned.length})' : ''}'
-                      : t == CashBook.transfer
-                          ? 'Банка'
-                          : t.bookName.split(' ').first),
+        LayoutBuilder(builder: (context, c) {
+          final perRow = tabs.length <= 3 ? tabs.length : 2;
+          final w = (c.maxWidth - (perRow - 1) * 10) / perRow;
+          return Wrap(spacing: 10, runSpacing: 10, children: [
+            for (final t in tabs)
+              SizedBox(
+                width: w,
+                child: _BookTile(
+                  book: t,
+                  selected: _tab == t,
+                  count: t == null
+                      ? waiting.length + returned.length
+                      : all.where((e) => e.isApproved && e.book == t).length,
+                  onTap: () => setState(() => _tab = t),
                 ),
-            ],
-            selected: {_tab},
-            onSelectionChanged: (v) => setState(() => _tab = v.first),
-          ),
+              ),
+          ]);
+        }),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.only(left: 12),
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(border: Border(left: BorderSide(color: bookColor(context, _tab), width: 5))),
+          child: Text(_tab == null ? 'Чакащи и върнати' : _tab!.bookName,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         ),
-        const SizedBox(height: 12),
-        if (_tab != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(_tab!.bookName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          ),
         if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -243,6 +287,52 @@ class _CashScreenState extends State<CashScreen> {
     } on AppError catch (e) {
       if (context.mounted) showMessage(context, e.message);
     }
+  }
+}
+
+class _BookTile extends StatelessWidget {
+  final CashBook? book;
+  final bool selected;
+  final int count;
+  final VoidCallback onTap;
+  const _BookTile({required this.book, required this.selected, required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final c = bookColor(context, book);
+    final onC = book == null ? Palette.onYellow : Colors.white;
+    final (icon, label) = switch (book) {
+      CashBook.income => (Icons.south_west_rounded, 'Приходна'),
+      CashBook.expense => (Icons.north_east_rounded, 'Разходна'),
+      CashBook.transfer => (Icons.account_balance_outlined, 'Банка'),
+      _ => (Icons.hourglass_top_rounded, 'Чакащи'),
+    };
+    final alert = book == null && count > 0;
+    return Material(
+      color: selected ? c : c.withValues(alpha: p.dark ? .18 : .10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: alert || selected ? c : c.withValues(alpha: .45), width: alert ? 3 : 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 24, color: selected ? onC : (book == null ? p.text : c)),
+            const SizedBox(height: 6),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: selected ? onC : p.text)),
+            Text(book == null ? (count == 0 ? 'няма' : '$count чакат') : '$count записа',
+                style: TextStyle(fontSize: 13, color: selected ? onC.withValues(alpha: .85) : p.textMuted)),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
@@ -528,7 +618,11 @@ class _CashEntryFormState extends State<CashEntryForm> {
       ? (AppScope.read(context).openingAccountsLeft(AppScope.read(context).currentChurchId!).firstOrNull ?? 'cash')
       : 'cash';
   String _direction = 'to_bank';
-  late String _category = widget.event == null ? incomeCategories.first : incomeCategoryFor(widget.event!.kind);
+  late String _category = widget.event != null
+      ? incomeCategoryFor(widget.event!.kind)
+      : widget.startWith == CashBook.expense
+          ? expenseCategories.first
+          : incomeCategories.first;
   final _amount = TextEditingController();
   final _other = TextEditingController();
   late final _note = TextEditingController(

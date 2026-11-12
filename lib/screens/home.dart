@@ -327,9 +327,15 @@ class _CashTile extends StatelessWidget {
     final holder = s.canSeeCash(churchId);
     final waiting = holder ? s.cashToDecide(churchId).length : 0;
     final (cash, bank) = cashBalance(s.cashEntries(churchId));
+    final negative = holder && cash + bank < 0;
+    final pending = holder && s.cashEntries(churchId).any((e) => e.isPending);
     return Material(
-      color: p.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: BorderSide(color: p.border)),
+      color: negative ? const Color(0xFFB23A3A).withValues(alpha: p.dark ? .30 : .14) : p.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(
+              color: pending ? Palette.yellow : (negative ? const Color(0xFFB23A3A) : p.border),
+              width: pending || negative ? 3 : 1)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashScreen())),
@@ -361,7 +367,10 @@ class _CashTile extends StatelessWidget {
                 Text(holder ? fmtEur(cash + bank) : 'Предай приход',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: p.textMuted)),
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: negative ? const Color(0xFFB23A3A) : p.textMuted,
+                        fontWeight: negative ? FontWeight.w800 : FontWeight.w400)),
               ]),
             ],
           ),
