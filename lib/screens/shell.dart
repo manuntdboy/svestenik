@@ -91,7 +91,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final type = data['type'] ?? '';
     final eventId = data['event_id'];
     if (type.startsWith('leave_')) {
-      nav.push(MaterialPageRoute(builder: (_) => const LeavesScreen()));
+      final rid = data['request_id'];
+      nav.push(MaterialPageRoute(
+          builder: (_) => rid == null ? const LeavesScreen() : LeaveRequestScreen(requestId: rid)));
     } else if (eventId != null && s.eventById(eventId) != null) {
       // Молба за потвърждение и др. – детайлите имат „Приемам / Отказвам“.
       setState(() => _tab = 0);

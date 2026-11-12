@@ -954,6 +954,8 @@ class AppState extends ChangeNotifier {
   // Почивки
   // ------------------------------------------------------------------
   /// Моите заявки в храма (всички състояния), най-новите първи.
+  LeaveRequest? leaveById(String id) => _leaves.where((l) => l.id == id).firstOrNull;
+
   List<LeaveRequest> myLeaves(String churchId) => _leaves
       .where((l) => l.churchId == churchId && l.userId == currentUser?.id)
       .toList()

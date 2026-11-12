@@ -172,3 +172,91 @@ class LeavesScreen extends StatelessWidget {
     );
   }
 }
+
+
+/// Една заявка за почивка – отваря се от известието.
+/// Председателят решава тук („Одобри“ / „Откажи“); заявилият вижда решението.
+class LeaveRequestScreen extends StatelessWidget {
+  final String requestId;
+  const LeaveRequestScreen({super.key, required this.requestId});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final l = s.leaveById(requestId);
+    Widget body;
+    if (l == null) {
+      body = Text('Заявката е оттеглена или отменена.',
+          style: TextStyle(fontSize: 17, color: p.textMuted));
+    } else if (l.status == LeaveStatus.pending && s.isManagerOf(l.churchId)) {
+      body = LeaveReviewCard(leave: l);
+    } else {
+      final approved = l.status == LeaveStatus.approved;
+      final rejected = l.status == LeaveStatus.rejected;
+      body = SurfaceCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            PriestBadge(
+                name: s.priestName(l.userId),
+                color: p.priest(s.priestIndex(l.churchId, l.userId)),
+                size: 40,
+                userId: l.userId),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(s.priestName(l.userId),
+                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          Text('${fmtLeavePeriod(l)} · ${l.days == 1 ? '1 ден' : '${l.days} дни'}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          if (l.note.isNotEmpty) Text(l.note, style: TextStyle(fontSize: 15, color: p.textMuted)),
+          const SizedBox(height: 14),
+          Row(children: [
+            Icon(
+                approved
+                    ? Icons.check_circle_rounded
+                    : rejected
+                        ? Icons.cancel_rounded
+                        : Icons.hourglass_top_rounded,
+                color: approved
+                    ? Colors.green.shade600
+                    : rejected
+                        ? Theme.of(context).colorScheme.error
+                        : p.textMuted),
+            const SizedBox(width: 8),
+            Text(
+                approved
+                    ? 'Одобрена'
+                    : rejected
+                        ? 'Не е одобрена'
+                        : 'Чака одобрение от председателя',
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          ]),
+        ]),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Заявка за почивка')),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: s.refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            children: [
+              body,
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LeavesScreen())),
+                child: const Text('Всички почивки'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
