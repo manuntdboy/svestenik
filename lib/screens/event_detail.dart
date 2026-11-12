@@ -101,7 +101,7 @@ class EventDetailScreen extends StatelessWidget {
               const SizedBox(height: 14),
               OverlapNotice(
                 s.placeOverlapsFor(e),
-                title: 'Храмът е зает по това време',
+                title: s.placeOverlapTitle(e, s.placeOverlapsFor(e)),
                 suffix: (o) => s.priestName(o.assigneeId),
               ),
             ],

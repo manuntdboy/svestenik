@@ -418,6 +418,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     if (_address.text.isEmpty) _outside = k.defaultOutside;
                     _kind = k;
                     if (!_durationTouched) _duration = k.defaultMinutes;
+                    // Архиерейска Литургия: 08:00–14:00 в избрания ден.
+                    final h = k.defaultStartHour;
+                    if (h != null) {
+                      _start = DateTime(_start.year, _start.month, _start.day, h);
+                      _duration = k.defaultMinutes;
+                      _outside = false;
+                    }
                   });
                 },
               ),
@@ -453,7 +460,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   if (place.isNotEmpty)
                     OverlapNotice(
                       place,
-                      title: 'Храмът е зает по това време',
+                      title: s.placeOverlapTitle(_probe, place),
                       suffix: (o) => s.priestName(o.assigneeId),
                     ),
                 ]),

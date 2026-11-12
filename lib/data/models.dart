@@ -157,6 +157,7 @@ enum EventKind {
   panihida('Панихида'),
   vodosvet('Водосвет'),
   sluzhba('Служба'),
+  arhiereyska('Архиерейска Литургия'),
   izpoved('Изповед'),
   maslosvet('Маслосвет'),
   kurban('Курбан'),
@@ -177,11 +178,19 @@ enum EventKind {
         EventKind.panihida => 30,
         EventKind.vodosvet => 30,
         EventKind.sluzhba => 120,
+        EventKind.arhiereyska => 360, // 08:00–14:00
         EventKind.izpoved => 30,
         EventKind.maslosvet => 60,
         EventKind.kurban => 30,
         EventKind.drugo => 30,
       };
+
+  /// Заема целия храм: всяко друго събитие в храма по това време получава
+  /// предупреждение (но може да се запише).
+  bool get occupiesChurch => this == EventKind.arhiereyska;
+
+  /// Час на започване по подразбиране (само за някои видове).
+  int? get defaultStartHour => this == EventKind.arhiereyska ? 8 : null;
 
   static EventKind fromName(String n) =>
       EventKind.values.firstWhere((k) => k.name == n, orElse: () => EventKind.drugo);

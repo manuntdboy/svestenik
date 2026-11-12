@@ -199,7 +199,9 @@ class PriestProfileScreen extends StatelessWidget {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   title: const Text('Касиер',
                       style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                  subtitle: Text('Вижда и води касата на храма. Останалите свещеници нямат достъп.',
+                  subtitle: Text(
+                      'Вижда и води касата на храма. Останалите свещеници нямат достъп. '
+                      'В храма може да има само един касиер.',
                       style: TextStyle(fontSize: 15, color: p.textMuted)),
                   onChanged: (v) async {
                     try {

@@ -209,6 +209,9 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
+    if (t.contains('one_cashier')) {
+      return 'В храма вече има касиер. Първо махнете правото на сегашния касиер.';
+    }
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
     if (t.contains('last_manager')) return 'Храмът трябва да има поне един председател.';
@@ -748,18 +751,27 @@ class AppState extends ChangeNotifier {
   /// е зает. Събития извън храма не се броят.
   List<ChurchEvent> placeOverlapsFor(ChurchEvent e) {
     final u = currentUser;
-    if (u == null || e.outsideChurch || e.isCancelled) return [];
+    if (u == null || e.isCancelled) return [];
     return _events
         .where((x) =>
             x.id != e.id &&
             x.churchId == e.churchId &&
-            !x.outsideChurch &&
             !x.isCancelled &&
-            x.assigneeId != e.assigneeId &&
             (x.ownerId == u.id || x.assigneeId == u.id || x.shared) &&
-            x.overlaps(e))
+            x.overlaps(e) &&
+            // Архиерейската Литургия заема целия храм – засича се с всичко.
+            (x.kind.occupiesChurch ||
+                e.kind.occupiesChurch ||
+                (!e.outsideChurch && !x.outsideChurch && x.assigneeId != e.assigneeId)))
         .toList()
       ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  /// Заглавие на предупреждението за заетия храм.
+  String placeOverlapTitle(ChurchEvent e, List<ChurchEvent> list) {
+    if (e.kind.occupiesChurch) return 'По време на Архиерейската Литургия има записани събития';
+    if (list.any((x) => x.kind.occupiesChurch)) return 'По това време е Архиерейска Литургия – храмът е зает';
+    return 'Храмът е зает по това време';
   }
 
   /// Търсене в събитията на текущия храм: име, телефон, адрес, бележка,

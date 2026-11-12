@@ -110,6 +110,9 @@ select t.ok((select count(*) from churches) = 0 and (select count(*) from profil
 select t.as_user(:'A');
 insert into events (church_id, kind, starts_at, for_whom) values (:'cid', 'sluzhba', now() + interval '1 day', 'А лично');
 insert into events (church_id, kind, starts_at, visibility, for_whom) values (:'cid', 'vodosvet', now() + interval '2 day', 'church', 'А споделено');
+select t.ok(t.rows(format($$insert into events(church_id,kind,starts_at,duration_minutes,for_whom) values (%L,'arhiereyska',now() + interval '3 day',360,'Арх')$$, :'cid')) = 1,
+            'Архиерейска Литургия се записва (6 часа)');
+delete from events where for_whom = 'Арх';
 insert into events (church_id, kind, starts_at, visibility, assignee_id, for_whom, duration_minutes)
   values (:'cid', 'krashtene', now() + interval '3 day', 'church', :'B', 'за Б', 60);
 select t.ok((select assignee_id = owner_id from events where for_whom = 'А лично'), 'свещеникът по подразбиране е записалият');
@@ -161,6 +164,8 @@ select t.ok((select permissions from church_members where user_id = :'B') = '{ca
 select t.as_user(:'C');
 select t.ok(not public.has_permission(:'cid', 'cash'), 'останалите нямат касата');
 select t.as_user(:'A');
+select t.fails(format($$select public.set_member_permission(%L,%L,'cash',true)$$, :'cid', :'C'),
+               'втори касиер в храма се отказва', 'one_cashier');
 select public.set_member_permission(:'cid', :'B', 'cash', false) \g /dev/null
 select t.as_user(:'B');
 select t.ok(not public.has_permission(:'cid', 'cash'), 'правото се отнема');

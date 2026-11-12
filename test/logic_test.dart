@@ -257,4 +257,14 @@ void main() {
       expect(back.addressExtra, 'бл. 5, ап. 9');
     });
   });
+
+  group('Архиерейска Литургия', () {
+    test('6 часа и заема целия храм', () {
+      expect(EventKind.arhiereyska.defaultMinutes, 360);
+      expect(EventKind.arhiereyska.defaultStartHour, 8);
+      expect(EventKind.arhiereyska.occupiesChurch, isTrue);
+      expect(EventKind.krashtene.occupiesChurch, isFalse);
+      expect(EventKind.fromName('arhiereyska'), EventKind.arhiereyska);
+    });
+  });
 }

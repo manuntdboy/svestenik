@@ -43,6 +43,7 @@ const KIND: Record<string, string> = {
   panihida: "Панихида",
   vodosvet: "Водосвет",
   sluzhba: "Служба",
+  arhiereyska: "Архиерейска Литургия",
   izpoved: "Изповед",
   maslosvet: "Маслосвет",
   kurban: "Курбан",
