@@ -8,6 +8,7 @@ import 'event_detail.dart';
 import 'church_priests.dart';
 import 'my_profile.dart';
 import '../widgets/requests.dart';
+import '../widgets/whats_new.dart';
 import 'event_form.dart';
 
 /// Начален екран – табло, вариант Б.
@@ -82,6 +83,11 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
+                // Камбанката „Какво е новото“ – само в тестовите версии.
+                if (isTestBuild) ...[
+                  const WhatsNewBell(),
+                  const SizedBox(width: 8),
+                ],
                 Flexible(
                   child: OutlinedButton(
                     onPressed: s.myChurches.length > 1 ? () => _pickChurch(context) : null,

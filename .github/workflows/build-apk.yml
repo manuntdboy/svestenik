@@ -141,7 +141,9 @@ jobs:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
             --dart-define=FIREBASE_APP_ID="$FIREBASE_APP_ID" \
-            --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY"
+            --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY" \
+            --dart-define=BUILD_NUMBER=${{ github.run_number }} \
+            --dart-define=TEST_BUILD=true
 
       - name: Преименуване
         run: cp build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
@@ -164,7 +166,9 @@ jobs:
         run: |
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
-          printf 'Версия %s\n\n%s\n' "${{ github.run_number }}" "${COMMIT_MESSAGE:-Ръчно изграждане}" > "$RUNNER_TEMP/notes.txt"
+          # Бележките са същите като в камбанката на приложението.
+          python3 ci/release_notes.py "${{ github.run_number }}" > "$RUNNER_TEMP/notes.txt"
+          cat "$RUNNER_TEMP/notes.txt"
           npx --yes firebase-tools@latest appdistribution:distribute "$APK_NAME" \
             --app "$FIREBASE_APP_ID" \
             --groups "testers" \
