@@ -23,6 +23,7 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
+  // 0 Календар (отваря се при стартиране), 1 Начало, 2 Профил.
   int _tab = 0;
   Timer? _tick;
   StreamSubscription<AlarmSet>? _ringing;
@@ -93,10 +94,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       nav.push(MaterialPageRoute(builder: (_) => const LeavesScreen()));
     } else if (eventId != null && s.eventById(eventId) != null) {
       // Молба за потвърждение и др. – детайлите имат „Приемам / Отказвам“.
-      setState(() => _tab = 1);
+      setState(() => _tab = 0);
       nav.push(MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: eventId)));
     } else {
-      setState(() => _tab = 0); // заявка за присъединяване, одобрение и т.н.
+      setState(() => _tab = 1); // заявка за присъединяване, одобрение и т.н.
     }
   }
 
@@ -111,11 +112,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final p = Palette.of(context);
     final s = AppScope.of(context);
     final pages = [
+      RefreshIndicator(onRefresh: s.refresh, child: const CalendarScreen()),
       RefreshIndicator(
         onRefresh: s.refresh,
-        child: HomeScreen(openCalendar: () => setState(() => _tab = 1)),
+        child: HomeScreen(openCalendar: () => setState(() => _tab = 0)),
       ),
-      RefreshIndicator(onRefresh: s.refresh, child: const CalendarScreen()),
       const ProfileScreen(),
     ];
     return Scaffold(
@@ -159,9 +160,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
             height: 72,
             child: Row(
               children: [
-                _NavItem(Icons.home_outlined, 'Начало', _tab == 0, () => setState(() => _tab = 0)),
-                _NavItem(Icons.calendar_month_outlined, 'Календар', _tab == 1,
-                    () => setState(() => _tab = 1)),
+                _NavItem(Icons.calendar_month_outlined, 'Календар', _tab == 0,
+                    () => setState(() => _tab = 0)),
+                _NavItem(Icons.home_outlined, 'Начало', _tab == 1, () => setState(() => _tab = 1)),
                 _NavItem(Icons.person_outline_rounded, 'Профил', _tab == 2,
                     () => setState(() => _tab = 2)),
               ],
