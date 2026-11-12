@@ -1,0 +1,20 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# Android частта се създава автоматично в GitHub
+/android/
+/ios/
+/web/
+/linux/
+/macos/
+/windows/
+
+# Редактори
+.idea/
+.vscode/
+*.iml
