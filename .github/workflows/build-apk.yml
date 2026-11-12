@@ -63,6 +63,9 @@ jobs:
     env:
       # Firebase се включва само когато тайните са добавени в GitHub Secrets.
       HAS_FIREBASE: ${{ secrets.FIREBASE_APP_ID != '' && secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+      # Към тестерите се изпраща само при ръчно пускане (Actions → Run workflow)
+      # или когато съобщението на промяната съдържа „[тестери]“.
+      SEND_TO_TESTERS: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[тестери]') }}
       APK_NAME: kairos-${{ github.run_number }}.apk
     steps:
       - uses: actions/checkout@v4
@@ -118,7 +121,7 @@ jobs:
           files: ${{ env.APK_NAME }}
 
       - name: Изпращане към Firebase App Distribution
-        if: env.HAS_FIREBASE == 'true'
+        if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS == 'true'
         env:
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -132,6 +135,10 @@ jobs:
             --groups "testers" \
             --release-notes-file "$RUNNER_TEMP/notes.txt"
           rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Без изпращане към тестерите
+        if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS != 'true'
+        run: echo "::notice::Версията е изградена, но не е изпратена към тестерите (няма „[тестери]“ в съобщението)."
 
       - name: Напомняне за Firebase
         if: env.HAS_FIREBASE != 'true'
