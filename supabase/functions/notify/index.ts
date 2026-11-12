@@ -111,7 +111,8 @@ async function handle(req: Request): Promise<Response> {
 
   let sa: ServiceAccount;
   try {
-    sa = JSON.parse(Deno.env.get("FCM_SERVICE_ACCOUNT") ?? "");
+    // Тайната е записана и като CM_SERVICE_ACCOUNT (без F) – приемаме и двете.
+    sa = JSON.parse(Deno.env.get("FCM_SERVICE_ACCOUNT") ?? Deno.env.get("CM_SERVICE_ACCOUNT") ?? "");
   } catch {
     return json(500, { error: "fcm_not_configured" });
   }
