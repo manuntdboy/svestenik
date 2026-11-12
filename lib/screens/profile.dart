@@ -148,10 +148,13 @@ class ProfileScreen extends StatelessWidget {
                   final on = await Notifier.notificationsEnabled();
                   if (!context.mounted) return;
                   if (on) {
-                    await Notifier.testAlarm();
+                    final ok = await Notifier.testAlarm();
                     if (context.mounted) {
-                      showMessage(context,
-                          'След 10 секунди ще звънне пробна аларма. Спира се с „Спри“.');
+                      showMessage(
+                          context,
+                          ok
+                              ? 'След 10 секунди ще звънне пробна аларма. Спира се с „Спри“.'
+                              : 'Алармата не можа да се нагласи.');
                     }
                   } else {
                     showMessage(context,

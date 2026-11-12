@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -27,31 +28,6 @@ class Notifier {
       importance: Importance.high,
       priority: Priority.high,
       category: AndroidNotificationCategory.reminder,
-    ),
-  );
-
-  /// Аларма: звук на будилник, звъни, докато не се спре, показва се и
-  /// върху заключения екран. Отделен канал, за да има свой звук.
-  static final _alarmDetails = NotificationDetails(
-    android: AndroidNotificationDetails(
-      'alarms_v1',
-      'Аларми за събития',
-      channelDescription: 'Звъни като будилник, докато не натиснете „Спри“',
-      importance: Importance.max,
-      priority: Priority.max,
-      category: AndroidNotificationCategory.alarm,
-      audioAttributesUsage: AudioAttributesUsage.alarm,
-      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
-      playSound: true,
-      enableVibration: true,
-      vibrationPattern: Int64List.fromList([0, 800, 600, 800, 600, 800]),
-      fullScreenIntent: true,
-      visibility: NotificationVisibility.public,
-      // FLAG_INSISTENT: звукът се повтаря, докато известието не бъде спряно.
-      additionalFlags: Int32List.fromList([4]),
-      actions: const [
-        AndroidNotificationAction('stop', 'Спри', cancelNotification: true),
-      ],
     ),
   );
 
@@ -85,6 +61,53 @@ class Notifier {
     } catch (e) {
       debugPrint('Известията не тръгнаха: $e');
     }
+    try {
+      await Alarm.init();
+      _alarmReady = true;
+    } catch (e) {
+      debugPrint('Алармите не тръгнаха: $e');
+    }
+  }
+
+  static bool _alarmReady = false;
+
+  /// Истинска аларма (пакет alarm): свири камбанен звън на силата на
+  /// будилника, в цикъл, с вибрация и на цял екран, докато не се спре.
+  static Future<bool> _setAlarm(int id, DateTime when, String title, String body) async {
+    if (!_alarmReady) return false;
+    try {
+      return await Alarm.set(
+        alarmSettings: AlarmSettings(
+          id: id,
+          dateTime: when,
+          assetAudioPath: 'assets/alarm.mp3',
+          loopAudio: true,
+          vibrate: true,
+          warningNotificationOnKill: false,
+          androidFullScreenIntent: true,
+          androidStopAlarmOnTermination: false,
+          allowAlarmOverlap: true,
+          volumeSettings: const VolumeSettings.fade(
+            volume: 0.9,
+            fadeDuration: Duration(seconds: 3),
+            volumeEnforced: true,
+          ),
+          notificationSettings: NotificationSettings(
+            title: title,
+            body: body,
+            stopButton: 'Спри',
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Не може да се нагласи аларма: $e');
+      return false;
+    }
+  }
+
+  /// Спира звъняща аларма (бутонът „Спри“ на екрана на алармата).
+  static Future<void> stopAlarm(int id) async {
+    if (_alarmReady) await Alarm.stop(id);
   }
 
   /// Пита за разрешение за известия (Android 13+) и за точно време.
@@ -134,13 +157,16 @@ class Notifier {
     if (!when.isAfter(DateTime.now())) return;
     final who = e.forWhom.isEmpty ? '' : '${e.forWhom} · ';
     final day = sameDay(e.startsAt, when) ? '' : '${fmtDayLong(e.startsAt)}, ';
+    final title = '${e.kind.label} в ${fmtTime(e.startsAt)}';
+    final body = '$day$who${e.placeLabel}';
+    if (e.alarm && await _setAlarm(_idFor(e.id), when, '⏰ $title', body)) return;
     try {
       await _plugin.zonedSchedule(
         id: _idFor(e.id),
-        title: '${e.alarm ? '⏰ ' : ''}${e.kind.label} в ${fmtTime(e.startsAt)}',
-        body: '$day$who${e.placeLabel}',
+        title: title,
+        body: body,
         scheduledDate: tz.TZDateTime.from(when, tz.UTC),
-        notificationDetails: e.alarm ? _alarmDetails : _details,
+        notificationDetails: _details,
         androidScheduleMode: await _mode(),
       );
     } catch (err) {
@@ -149,11 +175,13 @@ class Notifier {
   }
 
   static Future<void> cancel(String eventId) async {
+    if (_alarmReady) await Alarm.stop(_idFor(eventId));
     if (!_ready) return;
     await _plugin.cancel(id: _idFor(eventId));
   }
 
   static Future<void> cancelAll() async {
+    if (_alarmReady) await Alarm.stopAll();
     if (!_ready) return;
     await _plugin.cancelAll();
   }
@@ -180,17 +208,12 @@ class Notifier {
   }
 
   /// Пробна аларма след 10 секунди.
-  static Future<void> testAlarm() async {
-    if (!_ready) return;
-    await _plugin.zonedSchedule(
-      id: 2,
-      title: '⏰ Пробна аларма',
-      body: 'Натиснете „Спри“, за да спре звъненето.',
-      scheduledDate: tz.TZDateTime.now(tz.UTC).add(const Duration(seconds: 10)),
-      notificationDetails: _alarmDetails,
-      androidScheduleMode: await _mode(),
-    );
-  }
+  static Future<bool> testAlarm() => _setAlarm(
+        2,
+        DateTime.now().add(const Duration(seconds: 10)),
+        '⏰ Пробна аларма',
+        'Натиснете „Спри“, за да спре звъненето.',
+      );
 
   /// Показва известие веднага (за push, докато приложението е отворено).
   static Future<void> showNow(String title, String body, {Map<String, String>? data}) async {

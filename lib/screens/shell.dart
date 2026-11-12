@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:alarm/alarm.dart';
+import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
+import 'alarm_ring.dart';
 import 'calendar.dart';
 import 'event_detail.dart';
 import 'leaves.dart';
@@ -22,6 +25,8 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
   int _tab = 0;
   Timer? _tick;
+  StreamSubscription<AlarmSet>? _ringing;
+  int? _ringingShown; // номерът на алармата, чийто екран е отворен
 
   @override
   void initState() {
@@ -37,11 +42,37 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       _openFromNotification();
     });
     Notifier.opened.addListener(_openFromNotification);
+    _ringing = Alarm.ringing.listen(_onRinging);
+  }
+
+  /// Звъни аларма → отваряме екрана с „Спри“; спряна от известието →
+  /// затваряме го.
+  void _onRinging(AlarmSet set) {
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    final shown = _ringingShown;
+    if (shown != null && !set.alarms.any((a) => a.id == shown)) {
+      _ringingShown = null;
+      nav.popUntil((r) => r.settings.name != 'alarm');
+    }
+    if (_ringingShown != null || set.alarms.isEmpty) return;
+    final alarm = set.alarms.first;
+    _ringingShown = alarm.id;
+    nav
+        .push(MaterialPageRoute(
+          settings: const RouteSettings(name: 'alarm'),
+          fullscreenDialog: true,
+          builder: (_) => AlarmRingScreen(alarm: alarm),
+        ))
+        .then((_) {
+      if (_ringingShown == alarm.id) _ringingShown = null;
+    });
   }
 
   @override
   void dispose() {
     Notifier.opened.removeListener(_openFromNotification);
+    _ringing?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
     super.dispose();
