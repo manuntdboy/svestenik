@@ -7,7 +7,7 @@ import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
 import 'church_priests.dart';
-import 'priest_profile.dart';
+import 'my_profile.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -43,7 +43,7 @@ class ProfileScreen extends StatelessWidget {
                 onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (_) => PriestProfileScreen(churchId: church.id, userId: u.id))),
+                        builder: (_) => const MyProfileScreen())),
                 child: const Text('Моят профил'),
               ),
             ],

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -60,6 +61,10 @@ class AppState extends ChangeNotifier {
   /// Последното потребителско име (попълва се на екрана за вход).
   String lastUsername = '';
 
+  /// Моят личен профил и снимката ми (зареждат се отделно).
+  ProfileDetails myDetails = ProfileDetails();
+  Uint8List? myPhoto;
+
   /// true докато се зареждат данните след вход или стартиране.
   bool loading = false;
 
@@ -109,6 +114,8 @@ class AppState extends ChangeNotifier {
 
   void _clear() {
     currentUser = null;
+    myDetails = ProfileDetails();
+    myPhoto = null;
     _profiles.clear();
     _churches.clear();
     _members.clear();
@@ -153,6 +160,7 @@ class AppState extends ChangeNotifier {
         currentChurchId = myChurches.firstOrNull?.id;
       }
       syncError = null;
+      unawaited(_loadDetails());
       unawaited(rescheduleReminders());
       unawaited(_registerPush());
     } catch (e) {
@@ -417,6 +425,66 @@ class AppState extends ChangeNotifier {
       await _db.functions.invoke('notify', body: body);
     } catch (e) {
       debugPrint('Известието не тръгна: $e');
+    }
+  }
+
+  Future<void> _loadDetails() async {
+    try {
+      final row = await _db.from('profile_details').select().maybeSingle();
+      myDetails = row == null ? ProfileDetails() : ProfileDetails.fromRow(row);
+      final path = myDetails.photoPath;
+      myPhoto = path == null ? null : await _db.storage.from('avatars').download(path);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Личният профил не се зареди: $e');
+    }
+  }
+
+  /// Записва личния профил (три имена, дати, имен ден).
+  Future<void> saveDetails(ProfileDetails d) async {
+    try {
+      final row = await _db
+          .from('profile_details')
+          .upsert({...d.toRow(), 'user_id': currentUser!.id})
+          .select()
+          .single();
+      myDetails = ProfileDetails.fromRow(row);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Качва нова снимка (JPEG) в частното хранилище и я записва в профила.
+  Future<void> uploadPhoto(Uint8List bytes) async {
+    final path = '${currentUser!.id}/avatar.jpg';
+    try {
+      await _db.storage.from('avatars').uploadBinary(path, bytes,
+          fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'));
+      final d = myDetails.copy()..photoPath = path;
+      await saveDetails(d);
+      myPhoto = bytes;
+      notifyListeners();
+    } on AppError {
+      rethrow;
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Премахва снимката.
+  Future<void> removePhoto() async {
+    final path = myDetails.photoPath;
+    try {
+      if (path != null) await _db.storage.from('avatars').remove([path]);
+      final d = myDetails.copy()..photoPath = null;
+      await saveDetails(d);
+      myPhoto = null;
+      notifyListeners();
+    } on AppError {
+      rethrow;
+    } catch (e) {
+      throw AppError(_friendly(e));
     }
   }
 

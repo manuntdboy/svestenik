@@ -4,6 +4,7 @@ import '../data/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'event_detail.dart';
+import 'my_profile.dart';
 
 /// Профил на свещеник в храма: име, роля, цвят и предстоящите му събития.
 /// По-късно тук идват рожден ден, имен ден, ръкоположение и снимка.
@@ -52,6 +53,9 @@ class PriestProfileScreen extends StatelessWidget {
     }
     final (u, m) = entry;
     final me = u.id == s.currentUser?.id;
+    // Своя профил показваме по макета „Моят профил“.
+    if (me) return const MyProfileScreen();
+    final canRemove = s.isManagerOf(churchId);
     final color = p.priest(s.priestIndex(churchId, u.id));
     final now = DateTime.now();
     final upcoming = s.visibleEvents
@@ -158,6 +162,32 @@ class PriestProfileScreen extends StatelessWidget {
                 child: Text('Личните му събития не се виждат – само споделените с храма.',
                     style: TextStyle(fontSize: 14, color: p.textMuted)),
               ),
+            if (canRemove) ...[
+              const SizedBox(height: 24),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    minimumSize: const Size.fromHeight(52)),
+                onPressed: () async {
+                  final nav = Navigator.of(context);
+                  final ok = await confirm(
+                      context,
+                      'Премахване от храма',
+                      '${u.fullName} няма да вижда споделените събития на храма. '
+                          'Събитията, записани за него, остават в календара.',
+                      'Премахни');
+                  if (!ok) return;
+                  try {
+                    await s.removeMember(churchId, u.id);
+                    nav.pop();
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
+                },
+                icon: const Icon(Icons.person_remove_outlined),
+                label: const Text('Премахни от храма'),
+              ),
+            ],
           ],
         ),
       ),

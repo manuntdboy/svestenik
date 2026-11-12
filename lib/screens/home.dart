@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'event_detail.dart';
 import 'church_priests.dart';
+import 'my_profile.dart';
 import 'event_form.dart';
 
 /// Начален екран – табло, вариант Б.
@@ -66,11 +67,16 @@ class HomeScreen extends StatelessWidget {
                           style: TextStyle(
                               fontSize: 15, color: p.textMuted, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 2),
-                      Text(s.currentUser!.fullName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const MyProfileScreen())),
+                        child: Text(s.currentUser!.fullName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                      ),
                     ],
                   ),
                 ),

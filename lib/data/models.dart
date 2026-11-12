@@ -234,3 +234,74 @@ class ChurchEvent {
         note: (j['note'] as String?) ?? '',
       );
 }
+
+/// Личен профил на свещеника (вижда го само той).
+class ProfileDetails {
+  String threeNames;
+  DateTime? birthDate;
+  DateTime? ordinationDate;
+  int? nameDayMonth;
+  int? nameDayDay;
+  String? photoPath;
+
+  ProfileDetails({
+    this.threeNames = '',
+    this.birthDate,
+    this.ordinationDate,
+    this.nameDayMonth,
+    this.nameDayDay,
+    this.photoPath,
+  });
+
+  bool get hasNameDay => nameDayMonth != null && nameDayDay != null;
+
+  static DateTime? _date(Object? v) => v == null ? null : DateTime.tryParse(v as String);
+  static String? _iso(DateTime? d) => d == null
+      ? null
+      : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  factory ProfileDetails.fromRow(Map<String, dynamic> r) => ProfileDetails(
+        threeNames: (r['three_names'] as String?) ?? '',
+        birthDate: _date(r['birth_date']),
+        ordinationDate: _date(r['ordination_date']),
+        nameDayMonth: r['name_day_month'] as int?,
+        nameDayDay: r['name_day_day'] as int?,
+        photoPath: r['photo_path'] as String?,
+      );
+
+  Map<String, dynamic> toRow() => {
+        'three_names': threeNames.trim().isEmpty ? null : threeNames.trim(),
+        'birth_date': _iso(birthDate),
+        'ordination_date': _iso(ordinationDate),
+        'name_day_month': nameDayMonth,
+        'name_day_day': nameDayDay,
+        'photo_path': photoPath,
+      };
+
+  ProfileDetails copy() => ProfileDetails(
+        threeNames: threeNames,
+        birthDate: birthDate,
+        ordinationDate: ordinationDate,
+        nameDayMonth: nameDayMonth,
+        nameDayDay: nameDayDay,
+        photoPath: photoPath,
+      );
+
+  /// След колко дни е следващият имен ден (0 = днес).
+  int? daysToNameDay([DateTime? from]) {
+    if (!hasNameDay) return null;
+    final now = from ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime at(int year) {
+      var d = nameDayDay!;
+      // 29 февруари в невисокосна година се празнува на 28-и.
+      final last = DateTime(year, nameDayMonth! + 1, 0).day;
+      if (d > last) d = last;
+      return DateTime(year, nameDayMonth!, d);
+    }
+
+    var next = at(today.year);
+    if (next.isBefore(today)) next = at(today.year + 1);
+    return next.difference(today).inDays;
+  }
+}
