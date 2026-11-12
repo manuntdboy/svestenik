@@ -68,7 +68,7 @@ class PriestProfileScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
-            Center(child: PriestBadge(name: u.fullName, color: color, size: 96)),
+            Center(child: PriestBadge(name: u.fullName, color: color, size: 120, userId: u.id)),
             const SizedBox(height: 12),
             Text(u.fullName,
                 textAlign: TextAlign.center,
@@ -108,27 +108,37 @@ class PriestProfileScreen extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 20),
-            SurfaceCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Лични дати',
+            Builder(builder: (context) {
+              final d = s.detailsOf(u.id);
+              final days = d?.daysToNameDay();
+              Widget line(String label, String value, {String? extra}) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: Text(label, style: TextStyle(fontSize: 16, color: p.textMuted))),
+                      Flexible(
+                        child: Text(extra == null ? value : '$value\n$extra',
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                      ),
+                    ]),
+                  );
+              return SurfaceCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const Text('Лични данни',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
-                  for (final label in ['Рожден ден', 'Имен ден', 'Ръкоположение', 'Снимка'])
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(children: [
-                        Expanded(child: Text(label, style: const TextStyle(fontSize: 17))),
-                        Text('Скоро', style: TextStyle(fontSize: 15, color: p.textMuted)),
-                      ]),
-                    ),
-                  const SizedBox(height: 4),
-                  Text('Ще се попълват тук, за да напомня Кайрос за рождени дни и годишнини.',
-                      style: TextStyle(fontSize: 14, color: p.textMuted)),
-                ],
-              ),
-            ),
+                  if (d == null)
+                    Text('Още не е попълнил личния си профил.',
+                        style: TextStyle(fontSize: 16, color: p.textMuted))
+                  else ...[
+                    if (d.threeNames.trim().isNotEmpty) line('Три имена', d.threeNames.trim()),
+                    line('Дата на раждане', fmtDateFull(d.birthDate)),
+                    line('Дата на ръкоположение', fmtDateFull(d.ordinationDate)),
+                    line('Имен ден', fmtNameDay(d), extra: days == null ? null : daysLabel(days)),
+                  ],
+                ]),
+              );
+            }),
             const SizedBox(height: 20),
             Text(me ? 'Моите предстоящи събития' : 'Предстоящи събития',
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),

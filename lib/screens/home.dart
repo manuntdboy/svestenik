@@ -438,7 +438,7 @@ class _PriestsStrip extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
                   child: PriestBadge(
-                      name: u.fullName, color: p.priest(s.priestIndex(churchId, u.id)), size: 34),
+                      name: u.fullName, color: p.priest(s.priestIndex(churchId, u.id)), size: 34, userId: u.id),
                 ),
               if (priests.length > 5)
                 Padding(

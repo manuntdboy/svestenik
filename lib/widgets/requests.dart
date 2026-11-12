@@ -331,7 +331,7 @@ class _LeaveReviewCardState extends State<LeaveReviewCard> {
 
     return _RequestFrame(tag: 'Заявка за почивка', icon: Icons.beach_access_outlined, children: [
       Row(children: [
-        PriestBadge(name: s.priestName(l.userId), color: p.priest(s.priestIndex(l.churchId, l.userId)), size: 36),
+        PriestBadge(name: s.priestName(l.userId), color: p.priest(s.priestIndex(l.churchId, l.userId)), size: 36, userId: l.userId),
         const SizedBox(width: 10),
         Expanded(
           child: Text(s.priestName(l.userId), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),

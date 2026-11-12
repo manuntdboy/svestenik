@@ -199,8 +199,13 @@ select t.fails(format($$insert into storage.objects(bucket_id,name) values ('ava
 select t.fails($$update profile_details set name_day_day = null$$, 'имен ден без ден се отказва', 'check');
 select t.fails($$update profile_details set birth_date = '1800-01-01'$$, 'невъзможна дата се отказва', 'check');
 select t.as_user(:'B');
+select t.ok((select count(*) from profile_details where user_id = :'A') = 1
+            and (select count(*) from storage.objects where name = :'A' || '/avatar.jpg') = 1,
+            'колегата от храма вижда личния профил и снимката');
+select t.as_user(:'C');
 select t.ok((select count(*) from profile_details) = 0 and (select count(*) from storage.objects) = 0,
-            'личният профил и снимката не се виждат от колеги');
+            'извън храма не се виждат нито профилът, нито снимката');
+select t.as_user(:'B');
 select t.ok(t.rows($$update profile_details set three_names = 'x'$$) = 0, 'колега не променя чужд профил');
 select t.fails(format($$insert into profile_details(user_id,three_names) values (%L,'x')$$, :'A'),
                'не се записва профил от чуждо име', 'row-level security');

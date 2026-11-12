@@ -234,7 +234,7 @@ class MyProfileScreen extends StatelessWidget {
                   ]),
                 ),
                 const SizedBox(height: 12),
-                Text('Датите виждате само вие; телефона – и колегите от храма.',
+                Text('Тези данни и снимката виждат и свещениците от вашия храм.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: p.textMuted)),
               ],

@@ -121,7 +121,9 @@ class EventDetailScreen extends StatelessWidget {
                       s.isMine(e) ? '${s.priestName(e.assigneeId)} (аз)' : s.priestName(e.assigneeId),
                       trailing: PriestBadge(
                           name: s.priestName(e.assigneeId),
-                          color: p.priest(s.priestIndex(e.churchId, e.assigneeId)))),
+                          color: p.priest(s.priestIndex(e.churchId, e.assigneeId)),
+                          size: 40,
+                          userId: e.assigneeId)),
                   row('Къде', e.outsideChurch ? 'Извън храма' : 'В храма'),
                   if (e.outsideChurch && e.address.isNotEmpty) row('Адрес', e.address),
                   row('Напомняне', (reminderOptions[e.remindMinutes] ?? 'Без напомняне') + (e.alarm && e.remindMinutes != null ? ' · аларма' : '')),

@@ -55,7 +55,8 @@ class ChurchPriestsScreen extends StatelessWidget {
                         PriestBadge(
                             name: u.fullName,
                             color: p.priest(s.priestIndex(churchId, u.id)),
-                            size: 44),
+                            size: 48,
+                            userId: u.id),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Column(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 
@@ -227,11 +228,33 @@ class PriestBadge extends StatelessWidget {
   final String name;
   final Color color;
   final double size;
-  const PriestBadge({super.key, required this.name, required this.color, this.size = 32});
+  /// Ако е даден и свещеникът има снимка – показва снимката с рамка в цвета му.
+  final String? userId;
+  const PriestBadge(
+      {super.key, required this.name, required this.color, this.size = 32, this.userId});
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final scope = context.dependOnInheritedWidgetOfExactType<AppScope>();
+    final photo = userId == null ? null : scope?.notifier?.photoOf(userId);
+    if (photo != null) {
+      final ring = size >= 60 ? 4.0 : 2.0;
+      return Semantics(
+        label: name,
+        excludeSemantics: true,
+        child: Container(
+          width: size,
+          height: size,
+          padding: EdgeInsets.all(ring),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: ClipOval(
+            child: Image.memory(photo,
+                fit: BoxFit.cover, gaplessPlayback: true, cacheWidth: (size * 3).round()),
+          ),
+        ),
+      );
+    }
     return Semantics(
       label: name,
       excludeSemantics: true,

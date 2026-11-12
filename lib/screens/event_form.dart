@@ -256,7 +256,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 PriestBadge(
                     name: u.fullName,
                     color: p.priest(s.priestIndex(widget.draft.churchId, u.id)),
-                    size: 28),
+                    size: 32,
+                    userId: u.id),
                 const SizedBox(width: 10),
                 Flexible(
                   child: Text(

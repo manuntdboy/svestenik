@@ -88,7 +88,7 @@ class LeavesScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(children: [
             if (showName) ...[
-              PriestBadge(name: s.priestName(l.userId), color: p.priest(s.priestIndex(church, l.userId)), size: 32),
+              PriestBadge(name: s.priestName(l.userId), color: p.priest(s.priestIndex(church, l.userId)), size: 32, userId: l.userId),
               const SizedBox(width: 10),
             ],
             Expanded(

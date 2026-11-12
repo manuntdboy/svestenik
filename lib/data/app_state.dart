@@ -117,6 +117,10 @@ class AppState extends ChangeNotifier {
     currentUser = null;
     myDetails = ProfileDetails();
     myPhoto = null;
+    _myPhotoStamp = null;
+    _details.clear();
+    _photos.clear();
+    _photoStamp.clear();
     _profiles.clear();
     _churches.clear();
     _members.clear();
@@ -445,15 +449,64 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // Личните профили на колегите (виждат се в общ храм) и снимките им.
+  final Map<String, ProfileDetails> _details = {};
+  final Map<String, String> _detailsStamp = {};
+  final Map<String, Uint8List> _photos = {};
+  final Map<String, String> _photoStamp = {};
+  final Set<String> _photoLoading = {};
+  String? _myPhotoStamp;
+
+  ProfileDetails? detailsOf(String userId) =>
+      userId == currentUser?.id ? myDetails : _details[userId];
+
+  /// Снимката на свещеник (или null). Сваля се при първо поискване и при смяна.
+  Uint8List? photoOf(String? userId) {
+    if (userId == null) return null;
+    if (userId == currentUser?.id) return myPhoto;
+    final path = _details[userId]?.photoPath;
+    if (path == null) return null;
+    final stamp = '$path@${_detailsStamp[userId]}';
+    if (_photoStamp[userId] != stamp && !_photoLoading.contains(userId)) {
+      _photoLoading.add(userId);
+      unawaited(_downloadPhoto(userId, path, stamp));
+    }
+    return _photos[userId];
+  }
+
+  Future<void> _downloadPhoto(String userId, String path, String stamp) async {
+    try {
+      _photos[userId] = await _db.storage.from('avatars').download(path);
+    } catch (e) {
+      _photos.remove(userId);
+      debugPrint('Снимката не се свали: $e');
+    }
+    _photoStamp[userId] = stamp;
+    _photoLoading.remove(userId);
+    notifyListeners();
+  }
+
   Future<void> _loadDetails() async {
     try {
-      final row = await _db.from('profile_details').select().maybeSingle();
-      myDetails = row == null ? ProfileDetails() : ProfileDetails.fromRow(row);
+      final rows = await _db.from('profile_details').select();
+      _details.clear();
+      _detailsStamp.clear();
+      for (final r in rows) {
+        final id = r['user_id'] as String;
+        _details[id] = ProfileDetails.fromRow(r);
+        _detailsStamp[id] = r['updated_at']?.toString() ?? '';
+      }
+      final me = currentUser?.id;
+      myDetails = (me == null ? null : _details[me]) ?? ProfileDetails();
       final path = myDetails.photoPath;
-      myPhoto = path == null ? null : await _db.storage.from('avatars').download(path);
+      final stamp = path == null ? null : '$path@${_detailsStamp[me]}';
+      if (stamp != _myPhotoStamp) {
+        myPhoto = path == null ? null : await _db.storage.from('avatars').download(path);
+        _myPhotoStamp = stamp;
+      }
       notifyListeners();
     } catch (e) {
-      debugPrint('Личният профил не се зареди: $e');
+      debugPrint('Личните профили не се заредиха: $e');
     }
   }
 
@@ -481,6 +534,8 @@ class AppState extends ChangeNotifier {
       final d = myDetails.copy()..photoPath = path;
       await saveDetails(d);
       myPhoto = bytes;
+      _myPhotoStamp = null;
+      unawaited(_loadDetails());
       notifyListeners();
     } on AppError {
       rethrow;
