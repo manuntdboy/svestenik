@@ -94,6 +94,8 @@ jobs:
       # Към тестерите се изпраща само при ръчно пускане (Actions → Run workflow)
       # или когато съобщението на промяната съдържа „[тестери]“.
       SEND_TO_TESTERS: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[тестери]') }}
+      # „[аз]“ в съобщението – версията отива само до автора (имейлът е в секрета AUTHOR_EMAIL).
+      SEND_TO_ME: ${{ contains(github.event.head_commit.message, '[аз]') }}
       APK_NAME: kairos-${{ github.run_number }}.apk
     steps:
       - uses: actions/checkout@v4
@@ -175,8 +177,28 @@ jobs:
             --release-notes-file "$RUNNER_TEMP/notes.txt"
           rm -f "$RUNNER_TEMP/firebase-sa.json"
 
+      - name: Изпращане само до автора
+        if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS != 'true' && env.SEND_TO_ME == 'true'
+        env:
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          AUTHOR_EMAIL: ${{ secrets.AUTHOR_EMAIL }}
+        run: |
+          if [ -z "$AUTHOR_EMAIL" ]; then
+            echo "::error::Липсва секрет AUTHOR_EMAIL (GitHub → Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          python3 ci/release_notes.py "${{ github.run_number }}" > "$RUNNER_TEMP/notes.txt"
+          npx --yes firebase-tools@latest appdistribution:distribute "$APK_NAME" \
+            --app "$FIREBASE_APP_ID" \
+            --testers "$AUTHOR_EMAIL" \
+            --release-notes-file "$RUNNER_TEMP/notes.txt"
+          rm -f "$RUNNER_TEMP/firebase-sa.json"
+
       - name: Без изпращане към тестерите
-        if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS != 'true'
+        if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS != 'true' && env.SEND_TO_ME != 'true'
         run: echo "::notice::Версията е изградена, но не е изпратена към тестерите (няма „[тестери]“ в съобщението)."
 
       - name: Напомняне за Firebase
