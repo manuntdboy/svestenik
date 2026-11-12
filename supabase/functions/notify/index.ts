@@ -277,10 +277,19 @@ Deno.serve(async (req) => {
     data = { type: "event", event_id: ev.id, church_id: ev.church_id };
   }
 
+  // Дневник без лични данни: вид, колко получатели, устройства и изпратени.
+  const log = (o: Record<string, unknown>) => console.log("notify " + JSON.stringify({ type, ...o }));
+  const before = recipients.length;
   recipients = recipients.filter((r) => r && r !== caller.id);
-  if (recipients.length === 0) return json(200, { sent: 0, reason: "no_recipients" });
+  if (recipients.length === 0) {
+    log({ recipients: 0, self: before > 0 });
+    return json(200, { sent: 0, reason: "no_recipients" });
+  }
   const { data: tokens } = await admin.from("device_tokens").select("token").in("user_id", recipients);
-  if (!tokens || tokens.length === 0) return json(200, { sent: 0, reason: "no_devices" });
+  if (!tokens || tokens.length === 0) {
+    log({ recipients: recipients.length, devices: 0 });
+    return json(200, { sent: 0, reason: "no_devices" });
+  }
 
   const access = await fcmAccessToken(sa);
   let sent = 0;
@@ -305,9 +314,10 @@ Deno.serve(async (req) => {
       if (res.status === 404 || text.includes("UNREGISTERED") || text.includes("INVALID_ARGUMENT")) {
         await admin.from("device_tokens").delete().eq("token", token);
       } else {
-        console.error("FCM", res.status, text);
+        console.error("FCM", res.status, text.slice(0, 300));
       }
     }
   }
+  log({ recipients: recipients.length, devices: tokens.length, sent });
   return json(200, { sent });
 });
