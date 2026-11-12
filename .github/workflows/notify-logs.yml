@@ -21,7 +21,7 @@ jobs:
           HOURS: ${{ github.event.inputs.hours }}
         run: |
           python3 - <<'PY'
-          import json, os, urllib.parse, urllib.request, datetime as dt
+          import json, os, urllib.error, urllib.parse, urllib.request, datetime as dt
           ref, token = os.environ["REF"], os.environ["TOKEN"]
           end = dt.datetime.now(dt.timezone.utc)
           start = end - dt.timedelta(hours=float(os.environ.get("HOURS") or 6))
@@ -29,9 +29,14 @@ jobs:
               url = (f"https://api.supabase.com/v1/projects/{ref}/analytics/endpoints/logs.all?"
                      + urllib.parse.urlencode({"sql": sql,
                         "iso_timestamp_start": start.isoformat(), "iso_timestamp_end": end.isoformat()}))
-              req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-              with urllib.request.urlopen(req) as r:
-                  return json.load(r).get("result") or []
+              req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}",
+                                                         "User-Agent": "kairos-ci", "Accept": "application/json"})
+              try:
+                  with urllib.request.urlopen(req) as r:
+                      return json.load(r).get("result") or []
+              except urllib.error.HTTPError as e:
+                  print("Грешка", e.code, e.read()[:300])
+                  return []
           def ts(v):
               return dt.datetime.fromtimestamp(int(v) / 1e6, dt.timezone(dt.timedelta(hours=2))).strftime("%d.%m %H:%M:%S")
           print("== Извиквания (час по София, код) ==")
