@@ -211,7 +211,6 @@ class _CashScreenState extends State<CashScreen> {
     final s = AppScope.read(context);
     final church = s.currentChurchId!;
     final st = s.cashSettings(church);
-    final ctrl = TextEditingController(text: st.limitEur.toStringAsFixed(0));
     var bank = st.hasBank;
     final ok = await showDialog<bool>(
       context: context,
@@ -219,14 +218,9 @@ class _CashScreenState extends State<CashScreen> {
         builder: (ctx, set) => AlertDialog(
           title: const Text('Настройки на касата'),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Лимит за разход без одобрение (на ден, €)'),
-            const SizedBox(height: 6),
-            TextField(
-              controller: ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 12),
+            Text('Разход до 100 € на ден влиза без одобрение. Лимитът е еднакъв за всички храмове и не се променя.',
+                style: TextStyle(fontSize: 14, color: Palette.of(ctx).textMuted)),
+            const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: bank,
@@ -242,15 +236,9 @@ class _CashScreenState extends State<CashScreen> {
         ),
       ),
     );
-    final limit = parseAmount(ctrl.text);
-    ctrl.dispose();
     if (ok != true || !context.mounted) return;
-    if (limit == null || limit < 0) {
-      showMessage(context, 'Лимитът трябва да е число.');
-      return;
-    }
     try {
-      await s.saveCashSettings(church, limit, bank);
+      await s.saveCashSettings(church, 100, bank);
       if (context.mounted) showMessage(context, 'Настройките на касата са запазени.');
     } on AppError catch (e) {
       if (context.mounted) showMessage(context, e.message);

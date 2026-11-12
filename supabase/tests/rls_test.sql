@@ -465,7 +465,11 @@ select id as r1 from public.cash_reverse(:'i1', 'грешна сума') \gset
 select t.ok((select amount = -50 and status = 'pending' from cash_entries where id = :'r1'), 'сторното е обратен запис и чака одобрение');
 select t.fails(format($$select public.cash_reverse(%L, 'пак')$$, :'i1'), 'не се сторнира два пъти', 'already_reversed');
 select t.as_user(:'B');
-select t.fails(format('select public.cash_save_settings(%L, 1000, true)', :'cid2'), 'касиерът не сменя лимита', 'not_manager');
+select t.fails(format('select public.cash_save_settings(%L, 1000, true)', :'cid2'), 'касиерът не пипа настройките на касата', 'not_manager');
+select t.as_user(:'D');
+select public.cash_save_settings(:'cid2', 5000, true) \g /dev/null
+select t.ok((select limit_eur from cash_settings where church_id = :'cid2') = 100, 'лимитът остава 100 €, каквото и да се прати');
+select t.as_user(:'B');
 select public.cash_decide(:'t1', true, null) \g /dev/null
 select public.cash_decide(:'r1', true, null) \g /dev/null
 select t.ok((select reversed_by is not null from cash_entries where id = :'i1'), 'сторнираният запис е отбелязан');
