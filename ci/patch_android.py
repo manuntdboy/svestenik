@@ -6,6 +6,7 @@
 """
 import pathlib
 import re
+import shutil
 import sys
 
 root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")
@@ -48,6 +49,13 @@ if "ScheduledNotificationReceiver" not in m:
 if "showWhenLocked" not in m:
     m = re.sub(r'(<activity\b)', r'\1\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', m, count=1)
 manifest.write_text(m, encoding="utf-8")
+
+# ---------------------------------------------------------------- икона
+# Иконите (обикновена, адаптивна и едноцветна) са в ci/icons/res и заменят
+# тези от шаблона на Flutter.
+icons = pathlib.Path(__file__).parent / "icons" / "res"
+if icons.is_dir():
+    shutil.copytree(icons, root / "android/app/src/main/res", dirs_exist_ok=True)
 
 # ---------------------------------------------------------------- gradle
 g = gradle.read_text(encoding="utf-8")

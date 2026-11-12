@@ -29,6 +29,8 @@ class AppState extends ChangeNotifier {
   static const _kChurch = 'current_church';
   static const _kTheme = 'theme_mode';
   static const _kTextScale = 'text_scale';
+  static const _kRemember = 'remember_me';
+  static const _kLastUser = 'last_username';
 
   late SharedPreferences _prefs;
   SupabaseClient get _db => Supabase.instance.client;
@@ -43,6 +45,12 @@ class AppState extends ChangeNotifier {
   String? currentChurchId;
   ThemeMode themeMode = ThemeMode.system;
   double textScale = 1.0;
+
+  /// „Запомни ме“: ако е изключено, при следващо отваряне се иска вход.
+  bool rememberMe = true;
+
+  /// Последното потребителско име (попълва се на екрана за вход).
+  String lastUsername = '';
 
   /// true докато се зареждат данните след вход или стартиране.
   bool loading = false;
@@ -60,6 +68,8 @@ class AppState extends ChangeNotifier {
     themeMode = ThemeMode.values[_prefs.getInt(_kTheme) ?? 0];
     textScale = _prefs.getDouble(_kTextScale) ?? 1.0;
     currentChurchId = _prefs.getString(_kChurch);
+    rememberMe = _prefs.getBool(_kRemember) ?? true;
+    lastUsername = rememberMe ? (_prefs.getString(_kLastUser) ?? '') : '';
 
     _authSub = _db.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedOut && currentUser != null) {
@@ -67,6 +77,13 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
     });
+
+    // Без „Запомни ме“ сесията от предишното отваряне не се ползва.
+    if (_db.auth.currentSession != null && !rememberMe) {
+      try {
+        await _db.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {}
+    }
 
     if (_db.auth.currentSession != null) {
       loading = true;
@@ -221,8 +238,18 @@ class AppState extends ChangeNotifier {
   }
 
   /// Вход с потребителско име (или имейл) и парола.
-  Future<String?> login(String usernameOrEmail, String password) async {
+  Future<String?> login(String usernameOrEmail, String password,
+      {bool remember = true}) async {
     final id = usernameOrEmail.trim();
+    rememberMe = remember;
+    await _prefs.setBool(_kRemember, remember);
+    if (remember) {
+      lastUsername = id;
+      await _prefs.setString(_kLastUser, id);
+    } else {
+      lastUsername = '';
+      await _prefs.remove(_kLastUser);
+    }
     if (id.isEmpty || password.isEmpty) return 'Въведете потребителско име и парола.';
     try {
       if (id.contains('@')) {

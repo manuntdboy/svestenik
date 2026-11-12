@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/app_state.dart';
 import '../theme.dart';
@@ -16,8 +17,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final _user = TextEditingController();
   final _pass = TextEditingController();
   bool _show = false;
+  bool _remember = true;
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = AppScope.read(context);
+    _remember = s.rememberMe;
+    _user.text = s.lastUsername;
+  }
 
   @override
   void dispose() {
@@ -31,7 +41,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _busy = true;
       _error = null;
     });
-    final err = await AppScope.read(context).login(_user.text, _pass.text);
+    final err =
+        await AppScope.read(context).login(_user.text, _pass.text, remember: _remember);
+    // При успешен вход телефонът (Google или Samsung Pass) предлага да запази паролата.
+    if (err == null) TextInput.finishAutofillContext();
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -58,20 +71,18 @@ class _LoginScreenState extends State<LoginScreen> {
     final p = Palette.of(context);
     return Scaffold(
       body: SafeArea(
-        child: ListView(
+        child: AutofillGroup(
+          child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
           children: [
-            Container(
-              width: 64,
-              height: 76,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.only(top: 10),
-              decoration: BoxDecoration(
-                color: p.calendarTile,
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(32), bottom: Radius.circular(14)),
+            // Знакът на Кайрос (на мястото на предишния знак с календар).
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Semantics(
+                label: 'Кайрос',
+                image: true,
+                child: Image.asset('assets/logo-kairos.png', width: 76, height: 76),
               ),
-              child: Icon(Icons.calendar_month_outlined, size: 32, color: p.onCalendarTile),
             ),
             const SizedBox(height: 14),
             Text('Кайрос · тестова версия',
@@ -107,9 +118,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(onPressed: _forgot, child: const Text('Забравена парола?')),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => setState(() => _remember = !_remember),
+                    child: Row(children: [
+                      Checkbox(
+                        value: _remember,
+                        onChanged: (v) => setState(() => _remember = v ?? true),
+                      ),
+                      const Flexible(
+                        child: Text('Запомни ме',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      ),
+                    ]),
+                  ),
+                ),
+                TextButton(onPressed: _forgot, child: const Text('Забравена парола?')),
+              ],
             ),
             if (_error != null)
               Padding(
@@ -137,6 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ],
+        ),
         ),
       ),
     );

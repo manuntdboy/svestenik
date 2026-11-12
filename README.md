@@ -47,3 +47,12 @@ lib/
   widgets/common.dart    общи елементи и формати на дати
   screens/               екраните
 ```
+
+## Икона
+
+- `design/logo-kairos.svg` – цялата икона; `design/logo-kairos-foreground.svg` – знакът за адаптивната икона; `design/logo-kairos-monochrome.svg` – същият знак, само бял (Android 13+ теми).
+- `ci/icons/res/` – готовите PNG размери (mdpi–xxxhdpi), адаптивната икона (фон #2F5D8C) и едноцветната; `ci/patch_android.py` ги копира при изграждане.
+- `store/icon-512.png` – иконата за магазина 512×512.
+- `assets/logo-kairos.png` – знакът на екрана за вход.
+
+Пресъздаване след промяна на SVG: `rsvg-convert -w <размер> -h <размер> design/<файл>.svg -o <изход>.png` (размерите са 48/72/96/144/192 за обикновената и 108/162/216/324/432 за адаптивната).
