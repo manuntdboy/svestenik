@@ -125,7 +125,14 @@ class EventDetailScreen extends StatelessWidget {
                           size: 40,
                           userId: e.assigneeId)),
                   row('Къде', e.outsideChurch ? 'Извън храма' : 'В храма'),
-                  if (e.outsideChurch && e.address.isNotEmpty) row('Адрес', e.address),
+                  if (e.outsideChurch && e.address.isNotEmpty)
+                    row('Адрес', e.address,
+                        trailing: FilledButton.tonalIcon(
+                          style: FilledButton.styleFrom(minimumSize: const Size(44, 48)),
+                          onPressed: () => openInMaps(context, e.address),
+                          icon: const Icon(Icons.map_outlined),
+                          label: const Text('Карта'),
+                        )),
                   row('Напомняне', (reminderOptions[e.remindMinutes] ?? 'Без напомняне') + (e.alarm && e.remindMinutes != null ? ' · аларма' : '')),
                   row('Кой го вижда', e.shared ? 'Споделено с храма' : 'Само аз'),
                   // Кой е записал – вижда се от всички.

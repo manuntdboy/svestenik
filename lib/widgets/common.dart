@@ -300,30 +300,56 @@ class ContactButtons extends StatelessWidget {
     if (!ok && context.mounted) showMessage(context, 'Viber не е инсталиран на телефона.');
   }
 
+  static Future<void> whatsapp(BuildContext context, String phone) async {
+    final n = viberNumber(phone);
+    if (n == null) {
+      showMessage(context, 'Номерът не изглежда правилен за WhatsApp.');
+      return;
+    }
+    var ok = false;
+    try {
+      ok = await launchUrl(Uri.parse('https://wa.me/${n.substring(1)}'),
+          mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!ok && context.mounted) showMessage(context, 'WhatsApp не може да се отвори.');
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(minimumSize: const Size(44, 50)),
-          onPressed: () => call(context, phone),
-          icon: const Icon(Icons.call_rounded),
-          label: const Text('Обади се'),
-        ),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(44, 50),
-            backgroundColor: const Color(0xFF7360F2),
-            foregroundColor: Colors.white,
+    Widget btn(String label, IconData icon, VoidCallback onTap, {Color? bg}) => Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(44, 56),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              backgroundColor: bg,
+              foregroundColor: bg == null ? null : Colors.white,
+            ),
+            onPressed: onTap,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 22),
+              const SizedBox(height: 2),
+              Text(label, maxLines: 1, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            ]),
           ),
-          onPressed: () => viber(context, phone),
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
-          label: const Text('Viber'),
-        ),
-      ),
+        );
+    return Row(children: [
+      btn('Обади се', Icons.call_rounded, () => call(context, phone)),
+      const SizedBox(width: 8),
+      btn('Viber', Icons.chat_bubble_outline_rounded, () => viber(context, phone),
+          bg: const Color(0xFF7360F2)),
+      const SizedBox(width: 8),
+      btn('WhatsApp', Icons.chat_outlined, () => whatsapp(context, phone),
+          bg: const Color(0xFF1FA855)),
     ]);
   }
+}
+
+/// Отваря адреса в Google Maps (приложението или браузъра).
+Future<void> openInMaps(BuildContext context, String address) async {
+  final uri = Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': address});
+  var ok = false;
+  try {
+    ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
+  if (!ok && context.mounted) showMessage(context, 'Картата не може да се отвори.');
 }

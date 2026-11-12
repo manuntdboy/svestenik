@@ -104,6 +104,10 @@ class _WhatsNewBellState extends State<WhatsNewBell> {
 /// Прозорецът „Какво е новото“.
 Future<void> showWhatsNew(BuildContext context) async {
   final notes = await WhatsNew.load();
+  // Отметнатите проверки се пазят на телефона, отделно за всяка версия.
+  final prefs = await SharedPreferences.getInstance();
+  final key = 'whats_new_tested_$buildNumber';
+  final done = (prefs.getStringList(key) ?? const <String>[]).toSet();
   if (!context.mounted) return;
   await showModalBottomSheet<void>(
     context: context,
@@ -119,7 +123,7 @@ Future<void> showWhatsNew(BuildContext context) async {
               Expanded(child: Text(text, style: const TextStyle(fontSize: 16, height: 1.35))),
             ]),
           );
-      return DraggableScrollableSheet(
+      return StatefulBuilder(builder: (ctx, setSheet) => DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.85,
         maxChildSize: 0.95,
@@ -139,16 +143,41 @@ Future<void> showWhatsNew(BuildContext context) async {
             const SizedBox(height: 8),
             for (final a in notes.added) item(a, Icons.add_circle_outline_rounded, p.primary),
             const SizedBox(height: 12),
-            const Text('Какво да тествате', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            for (var i = 0; i < notes.test.length; i++)
-              item(notes.test[i], Icons.check_box_outline_blank_rounded, p.textMuted),
+            Row(children: [
+              const Expanded(
+                child: Text('Какво да тествате',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ),
+              Text('${notes.test.where(done.contains).length} от ${notes.test.length}',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.textMuted)),
+            ]),
+            Text('Отметнете всяка проверка, когато я изпробвате.',
+                style: TextStyle(fontSize: 14, color: p.textMuted)),
+            const SizedBox(height: 6),
+            for (final t in notes.test)
+              CheckboxListTile(
+                value: done.contains(t),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                visualDensity: VisualDensity.compact,
+                title: Text(t,
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.35,
+                      color: done.contains(t) ? p.textMuted : null,
+                      decoration: done.contains(t) ? TextDecoration.lineThrough : null,
+                    )),
+                onChanged: (v) {
+                  setSheet(() => v == true ? done.add(t) : done.remove(t));
+                  prefs.setStringList(key, done.toList());
+                },
+              ),
             const SizedBox(height: 8),
             Text('Пишете на Димитър за всичко, което не работи или обърква.',
                 style: TextStyle(fontSize: 15, color: p.textMuted)),
           ],
         ),
-      );
+      ));
     },
   );
 }

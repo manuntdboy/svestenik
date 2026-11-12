@@ -61,7 +61,13 @@ if 'android:scheme="viber"' not in m:
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
         </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
         <package android:name="com.viber.voip"/>
+        <package android:name="com.whatsapp"/>
+        <package android:name="com.google.android.apps.maps"/>
     </queries>
 </manifest>""", 1)
 manifest.write_text(m, encoding="utf-8")
