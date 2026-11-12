@@ -77,6 +77,8 @@ class EventDetailScreen extends StatelessWidget {
                     Text(fmtTime(e.startsAt),
                         style: const TextStyle(
                             fontSize: 56, height: 1.1, fontWeight: FontWeight.w800, letterSpacing: -2)),
+                    Text('до ${fmtTime(e.endsAt)} · ${fmtDuration(e.durationMinutes)}',
+                        style: TextStyle(fontSize: 16, color: p.heroMuted)),
                     const SizedBox(height: 6),
                     Text(e.forWhom.isEmpty ? e.kind.label : e.forWhom,
                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
@@ -84,6 +86,13 @@ class EventDetailScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (canEdit && s.overlapsFor(e).isNotEmpty) ...[
+              const SizedBox(height: 14),
+              OverlapNotice(
+                s.overlapsFor(e),
+                otherChurch: (o) => o.churchId == e.churchId ? '' : s.churchName(o.churchId),
+              ),
+            ],
             const SizedBox(height: 14),
             SurfaceCard(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

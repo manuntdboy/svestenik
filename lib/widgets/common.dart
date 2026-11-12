@@ -66,6 +66,67 @@ class KindChip extends StatelessWidget {
   }
 }
 
+/// „11:00 – 11:30“
+String fmtRange(ChurchEvent e) => '${fmtTime(e.startsAt)} – ${fmtTime(e.endsAt)}';
+
+/// Кратко описание на събитие за предупрежденията: „11:00 – 11:30 Кръщене, Иван Петров“
+String eventShortLabel(ChurchEvent e) {
+  final who = e.forWhom.isEmpty ? '' : ', ${e.forWhom}';
+  final day = sameDay(e.startsAt, DateTime.now()) ? '' : '${fmtDayLong(e.startsAt)}, ';
+  return '$day${fmtRange(e)} ${e.kind.label}$who';
+}
+
+/// Предупреждение, че събитието се застъпва с други събития.
+class OverlapNotice extends StatelessWidget {
+  final List<ChurchEvent> overlaps;
+  /// Име на храм за събитията от друг храм (по желание).
+  final String Function(ChurchEvent)? otherChurch;
+  const OverlapNotice(this.overlaps, {super.key, this.otherChurch});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final bg = p.dark ? const Color(0xFF3F3420) : const Color(0xFFFFF1CC);
+    final fg = p.dark ? const Color(0xFFEBCF9C) : const Color(0xFF5C3F08);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: fg.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: fg, size: 26),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    overlaps.length == 1
+                        ? 'Застъпва се с друго събитие'
+                        : 'Застъпва се с ${overlaps.length} събития',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fg)),
+                const SizedBox(height: 4),
+                for (final o in overlaps)
+                  Text(
+                      eventShortLabel(o) +
+                          (otherChurch == null || otherChurch!(o).isEmpty
+                              ? ''
+                              : ' (${otherChurch!(o)})'),
+                      style: TextStyle(fontSize: 15, color: fg)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class YellowTag extends StatelessWidget {
   final String text;
   const YellowTag(this.text, {super.key});

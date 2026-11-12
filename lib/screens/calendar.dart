@@ -154,6 +154,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             past: e.startsAt.isBefore(now),
             isNext: e.id == nextId,
             owner: e.ownerId == s.currentUser?.id ? null : s.ownerName(e),
+            overlapping: s.canEdit(e) && s.overlapsFor(e).isNotEmpty,
           ),
         ),
     ];
@@ -423,8 +424,13 @@ class _EventRow extends StatelessWidget {
   final bool past;
   final bool isNext;
   final String? owner;
+  final bool overlapping;
   const _EventRow(
-      {required this.event, required this.past, required this.isNext, this.owner});
+      {required this.event,
+      required this.past,
+      required this.isNext,
+      this.owner,
+      this.overlapping = false});
 
   @override
   Widget build(BuildContext context) {
@@ -458,11 +464,18 @@ class _EventRow extends StatelessWidget {
             children: [
               SizedBox(
                 width: 64,
-                child: Text(fmtTime(e.startsAt),
-                    style: TextStyle(
-                        fontSize: dark ? 24 : 20,
-                        fontWeight: FontWeight.w800,
-                        color: past ? p.textMuted : mainColor)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(fmtTime(e.startsAt),
+                        style: TextStyle(
+                            fontSize: dark ? 24 : 20,
+                            fontWeight: FontWeight.w800,
+                            color: past ? p.textMuted : mainColor)),
+                    Text('до ${fmtTime(e.endsAt)}',
+                        style: TextStyle(fontSize: 13, color: subColor)),
+                  ],
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -483,6 +496,22 @@ class _EventRow extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             color: mainColor)),
                     Text(details, style: TextStyle(fontSize: 14, color: subColor)),
+                    if (overlapping && !past)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 18, color: dark ? Palette.yellow : const Color(0xFF8A5A00)),
+                          const SizedBox(width: 4),
+                          Text('Застъпва се с друго събитие',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: dark
+                                      ? Palette.yellow
+                                      : (p.dark ? const Color(0xFFEBCF9C) : const Color(0xFF8A5A00)))),
+                        ]),
+                      ),
                   ],
                 ),
               ),

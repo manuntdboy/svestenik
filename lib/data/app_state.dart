@@ -242,6 +242,25 @@ class AppState extends ChangeNotifier {
     return visibleEvents.where((e) => e.startsAt.isAfter(now)).firstOrNull;
   }
 
+  /// Моите събития (във всички мои храмове), които се застъпват по време с [e].
+  /// Самото [e] не се брои.
+  List<ChurchEvent> overlapsFor(ChurchEvent e) {
+    final u = currentUser;
+    if (u == null) return [];
+    final myChurchIds = myChurches.map((c) => c.id).toSet();
+    return _events
+        .where((x) =>
+            x.id != e.id &&
+            x.ownerId == u.id &&
+            myChurchIds.contains(x.churchId) &&
+            x.overlaps(e))
+        .toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  String churchName(String churchId) =>
+      _churches.where((c) => c.id == churchId).firstOrNull?.name ?? '';
+
   ChurchEvent? eventById(String id) => _events.where((e) => e.id == id).firstOrNull;
 
   String ownerName(ChurchEvent e) =>

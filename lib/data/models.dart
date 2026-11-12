@@ -108,6 +108,21 @@ enum EventKind {
       EventKind.values.firstWhere((k) => k.name == n, orElse: () => EventKind.drugo);
 }
 
+/// Продължителност на събитие по подразбиране и стъпка за промяна (минути).
+const defaultDurationMinutes = 30;
+const durationStepMinutes = 15;
+const minDurationMinutes = 15;
+const maxDurationMinutes = 12 * 60;
+
+/// „30 мин“, „1 ч“, „1 ч 15 мин“
+String fmtDuration(int minutes) {
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  if (h == 0) return '$m мин';
+  if (m == 0) return '$h ч';
+  return '$h ч $m мин';
+}
+
 /// Варианти за напомняне (в минути). null = без напомняне.
 const reminderOptions = <int?, String>{
   null: 'Без напомняне',
@@ -124,6 +139,7 @@ class ChurchEvent {
   final String churchId;
   EventKind kind;
   DateTime startsAt;
+  int durationMinutes;
   String forWhom;
   String phone;
   bool outsideChurch;
@@ -138,6 +154,7 @@ class ChurchEvent {
     required this.churchId,
     required this.kind,
     required this.startsAt,
+    this.durationMinutes = defaultDurationMinutes,
     this.forWhom = '',
     this.phone = '',
     this.outsideChurch = false,
@@ -146,6 +163,12 @@ class ChurchEvent {
     this.shared = false,
     this.note = '',
   });
+
+  DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
+
+  /// Застъпват ли се двете събития по време (допиране не се брои).
+  bool overlaps(ChurchEvent other) =>
+      startsAt.isBefore(other.endsAt) && other.startsAt.isBefore(endsAt);
 
   String get placeLabel => outsideChurch
       ? (address.isEmpty ? 'Извън храма' : address)
@@ -157,6 +180,7 @@ class ChurchEvent {
         'churchId': churchId,
         'kind': kind.name,
         'startsAt': startsAt.toIso8601String(),
+        'durationMinutes': durationMinutes,
         'forWhom': forWhom,
         'phone': phone,
         'outsideChurch': outsideChurch,
@@ -172,6 +196,8 @@ class ChurchEvent {
         churchId: j['churchId'] as String,
         kind: EventKind.fromName(j['kind'] as String),
         startsAt: DateTime.parse(j['startsAt'] as String),
+        // По-старите записи нямат продължителност – приемаме 30 минути.
+        durationMinutes: (j['durationMinutes'] as int?) ?? defaultDurationMinutes,
         forWhom: (j['forWhom'] as String?) ?? '',
         phone: (j['phone'] as String?) ?? '',
         outsideChurch: (j['outsideChurch'] as bool?) ?? false,

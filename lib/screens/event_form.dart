@@ -18,6 +18,7 @@ class EventFormScreen extends StatefulWidget {
 class _EventFormScreenState extends State<EventFormScreen> {
   late EventKind _kind = widget.draft.kind;
   late DateTime _start = widget.draft.startsAt;
+  late int _duration = widget.draft.durationMinutes;
   late bool _outside = widget.draft.outsideChurch;
   late int? _remind = widget.draft.remindMinutes;
   late bool _shared = widget.draft.shared;
@@ -44,7 +45,20 @@ class _EventFormScreenState extends State<EventFormScreen> {
     );
     if (d != null) {
       setState(() => _start = DateTime(d.year, d.month, d.day, _start.hour, _start.minute));
+      _announceOverlap();
     }
+  }
+
+  /// Казва веднага, ако избраният час се застъпва с друго събитие.
+  void _announceOverlap() {
+    if (!mounted) return;
+    final overlaps = AppScope.read(context).overlapsFor(_probe);
+    if (overlaps.isEmpty) return;
+    showMessage(
+        context,
+        overlaps.length == 1
+            ? 'Внимание: по това време имате ${eventShortLabel(overlaps.first)}'
+            : 'Внимание: по това време имате ${overlaps.length} други събития');
   }
 
   Future<void> _pickTime() async {
@@ -56,13 +70,66 @@ class _EventFormScreenState extends State<EventFormScreen> {
     );
     if (t != null) {
       setState(() => _start = DateTime(_start.year, _start.month, _start.day, t.hour, t.minute));
+      _announceOverlap();
     }
   }
 
+  /// Временно копие с текущите дата, час и продължителност – за проверка за застъпване.
+  ChurchEvent get _probe => ChurchEvent(
+        id: widget.draft.id,
+        ownerId: widget.draft.ownerId,
+        churchId: widget.draft.churchId,
+        kind: _kind,
+        startsAt: _start,
+        durationMinutes: _duration,
+      );
+
+  void _changeDuration(int delta) {
+    final before = AppScope.read(context).overlapsFor(_probe).length;
+    setState(() {
+      _duration = (_duration + delta).clamp(minDurationMinutes, maxDurationMinutes);
+    });
+    // При удължаване съобщаваме само ако се появи ново застъпване.
+    if (AppScope.read(context).overlapsFor(_probe).length > before) _announceOverlap();
+  }
+
   Future<void> _save() async {
+    final state = AppScope.read(context);
+    final overlaps = state.overlapsFor(_probe);
+    if (overlaps.isNotEmpty) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Застъпване'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('В ${fmtRange(_probe)} вече имате:', style: const TextStyle(fontSize: 17)),
+              const SizedBox(height: 8),
+              for (final o in overlaps)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('• ${eventShortLabel(o)}',
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false), child: const Text('Промени часа')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Запази въпреки това')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
     final e = widget.draft
       ..kind = _kind
       ..startsAt = _start
+      ..durationMinutes = _duration
       ..forWhom = _forWhom.text.trim()
       ..phone = _phone.text.trim()
       ..outsideChurch = _outside
@@ -71,7 +138,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       ..shared = _shared
       ..note = _note.text.trim();
     final nav = Navigator.of(context);
-    await AppScope.read(context).saveEvent(e);
+    await state.saveEvent(e);
     nav.pop(true);
   }
 
@@ -104,6 +171,56 @@ class _EventFormScreenState extends State<EventFormScreen> {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
         ),
       ]),
+    );
+  }
+
+  Widget _durationControl() {
+    final p = Palette.of(context);
+    Widget stepButton(IconData icon, String tooltip, VoidCallback? onTap) => IconButton(
+          tooltip: tooltip,
+          onPressed: onTap,
+          icon: Icon(icon, size: 26),
+          style: IconButton.styleFrom(
+            fixedSize: const Size(56, 56),
+            backgroundColor: p.surface,
+            foregroundColor: p.primary,
+            disabledForegroundColor: p.border,
+            side: BorderSide(color: p.border),
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: p.surfaceAlt,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        children: [
+          stepButton(
+              Icons.remove_rounded,
+              'С $durationStepMinutes минути по-кратко',
+              _duration > minDurationMinutes
+                  ? () => _changeDuration(-durationStepMinutes)
+                  : null),
+          Expanded(
+            child: Column(
+              children: [
+                Text(fmtDuration(_duration),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                Text('до ${fmtTime(_start.add(Duration(minutes: _duration)))}',
+                    style: TextStyle(fontSize: 15, color: p.textMuted)),
+              ],
+            ),
+          ),
+          stepButton(
+              Icons.add_rounded,
+              'С $durationStepMinutes минути по-дълго',
+              _duration < maxDurationMinutes
+                  ? () => _changeDuration(durationStepMinutes)
+                  : null),
+        ],
+      ),
     );
   }
 
@@ -190,6 +307,21 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     _pickerButton(fmtTime(_start), Icons.schedule_outlined, _pickTime)),
               ),
             ]),
+            // Предупреждението е точно под датата и часа, за да се види веднага.
+            Builder(builder: (context) {
+              final s = AppScope.of(context);
+              final overlaps = s.overlapsFor(_probe);
+              if (overlaps.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: OverlapNotice(
+                  overlaps,
+                  otherChurch: (o) =>
+                      o.churchId == widget.draft.churchId ? '' : s.churchName(o.churchId),
+                ),
+              );
+            }),
+            _section('Продължителност', _durationControl()),
             _section(
               'За кого',
               TextField(
