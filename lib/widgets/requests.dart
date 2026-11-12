@@ -5,6 +5,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import 'common.dart';
+import '../screens/cash.dart' show CashReviewCard;
 
 final _fmtDm = DateFormat('d MMMM', 'bg');
 final _fmtSeen = DateFormat('d MMMM, HH:mm', 'bg');
@@ -524,6 +525,8 @@ List<Widget> requestCards(AppState s) {
       Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: DeclinedReviewCard(key: ValueKey('dr${e.id}'), event: e)),
+    for (final c in s.cashToDecide(church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: CashReviewCard(key: ValueKey('cs${c.id}'), entry: c)),
     for (final l in s.pendingLeaves(church))
       Padding(
           padding: const EdgeInsets.only(bottom: 12), child: LeaveReviewCard(key: ValueKey('lv${l.id}'), leave: l)),

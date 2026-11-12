@@ -10,6 +10,7 @@ import 'my_profile.dart';
 import '../widgets/requests.dart';
 import '../widgets/whats_new.dart';
 import 'event_form.dart';
+import 'cash.dart';
 
 /// Начален екран – табло, вариант Б.
 class HomeScreen extends StatelessWidget {
@@ -142,10 +143,8 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         const Expanded(child: _SoonTile(Icons.menu_book_outlined, 'Регистър')),
                         const SizedBox(height: 12),
-                        // Касата е само за председателя и касиерите.
-                        Expanded(
-                            child: _SoonTile(Icons.payments_outlined, 'Каса',
-                                locked: !s.canSeeCash(s.currentChurchId!))),
+                        // Каса: председател и касиер – цялата; свещеник – предава приходи.
+                        Expanded(child: _CashTile(churchId: s.currentChurchId!)),
                       ],
                     ),
                   ),
@@ -309,6 +308,61 @@ class _CalendarTile extends StatelessWidget {
                           fontSize: 20, fontWeight: FontWeight.w700, color: p.onCalendarTile)),
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CashTile extends StatelessWidget {
+  final String churchId;
+  const _CashTile({required this.churchId});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final holder = s.canSeeCash(churchId);
+    final waiting = holder ? s.cashToDecide(churchId).length : 0;
+    final (cash, bank) = cashBalance(s.cashEntries(churchId));
+    return Material(
+      color: p.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: BorderSide(color: p.border)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashScreen())),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: p.chipBg, borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.payments_outlined, size: 22, color: p.chipText),
+                ),
+                const Spacer(),
+                if (waiting > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: Palette.yellow, borderRadius: BorderRadius.circular(11)),
+                    child: Text('$waiting чака',
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700, color: Palette.onYellow)),
+                  ),
+              ]),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Каса', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(holder ? fmtEur(cash + bank) : 'Предай приход',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: p.textMuted)),
+              ]),
             ],
           ),
         ),

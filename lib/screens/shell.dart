@@ -9,6 +9,7 @@ import '../data/notifier.dart';
 import '../theme.dart';
 import 'alarm_ring.dart';
 import 'calendar.dart';
+import 'cash.dart';
 import 'event_detail.dart';
 import 'leaves.dart';
 import 'home.dart';
@@ -90,7 +91,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     if (!mounted) return;
     final type = data['type'] ?? '';
     final eventId = data['event_id'];
-    if (type.startsWith('leave_')) {
+    if (type == 'cash') {
+      nav.push(MaterialPageRoute(builder: (_) => const CashScreen()));
+    } else if (type.startsWith('leave_')) {
       final rid = data['request_id'];
       nav.push(MaterialPageRoute(
           builder: (_) => rid == null ? const LeavesScreen() : LeaveRequestScreen(requestId: rid)));

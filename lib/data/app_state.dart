@@ -43,6 +43,8 @@ class AppState extends ChangeNotifier {
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
   final List<LeaveRequest> _leaves = [];
+  final List<CashEntry> _cash = [];
+  final Map<String, CashSettings> _cashSettings = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
 
@@ -120,6 +122,8 @@ class AppState extends ChangeNotifier {
     myDetails = ProfileDetails();
     myPhoto = null;
     _myPhotoStamp = null;
+    _cash.clear();
+    _cashSettings.clear();
     _details.clear();
     _photos.clear();
     _photoStamp.clear();
@@ -147,6 +151,8 @@ class AppState extends ChangeNotifier {
         _db.from('events').select().order('starts_at'),
         _db.from('leave_requests').select().order('start_date'),
         _db.from('event_confirmations').select(),
+        _db.from('cash_entries').select(),
+        _db.from('cash_settings').select(),
       ]);
       _profiles
         ..clear()
@@ -164,6 +170,12 @@ class AppState extends ChangeNotifier {
       _leaves
         ..clear()
         ..addAll(results[4].map(LeaveRequest.fromRow));
+      _cash
+        ..clear()
+        ..addAll(results[6].map(CashEntry.fromRow));
+      _cashSettings
+        ..clear()
+        ..addEntries(results[7].map((r) => MapEntry(r['church_id'] as String, CashSettings.fromRow(r))));
       _confirmations.clear();
       for (final r in results[5]) {
         (_confirmations[r['event_id'] as String] ??= {})[r['user_id'] as String] =
@@ -217,6 +229,14 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
+    if (t.contains('not_cash_holder')) return 'Само касиерът и председателят могат да направят това.';
+    if (t.contains('own_entry')) return 'Свой запис не може да одобрите – одобрява го другият.';
+    if (t.contains('not_cashier')) return 'Приходите от свещениците ги приема касиерът.';
+    if (t.contains('no_bank')) return 'Банковата сметка не е включена в настройките на касата.';
+    if (t.contains('bad_amount')) return 'Въведете сума, по-голяма от нула.';
+    if (t.contains('already_reversed')) return 'Записът вече е сторниран.';
+    if (t.contains('not_reversible')) return 'Този запис не може да се сторнира.';
+    if (t.contains('reason_required')) return 'Напишете причина за сторното.';
     if (t.contains('not_church_event')) return 'Това събитие не изисква потвърждение.';
     if (t.contains('one_cashier')) {
       return 'В храма вече има касиер. Първо махнете правото на сегашния касиер.';
@@ -584,6 +604,112 @@ class AppState extends ChangeNotifier {
 
   /// Касиер: достъп до касата (председателят винаги има).
   bool canSeeCash(String churchId) => hasPermission(churchId, 'cash');
+
+  // ------------------------------------------------------------------
+  // Каса
+  // ------------------------------------------------------------------
+  CashSettings cashSettings(String churchId) => _cashSettings[churchId] ?? const CashSettings();
+
+  /// Назначеният касиер (не председателят) или null.
+  String? cashierOf(String churchId) => _members
+      .where((m) =>
+          m.churchId == churchId && m.isActive && !m.isManager && m.permissions.contains('cash'))
+      .firstOrNull
+      ?.userId;
+
+  bool _isHolder(String churchId, String userId) => hasPermission(churchId, 'cash', userId: userId);
+
+  /// Записите, които виждам (целия храм за касиер/председател, иначе своите).
+  List<CashEntry> cashEntries(String churchId) => _cash.where((e) => e.churchId == churchId).toList()
+    ..sort((a, b) {
+      final d = b.date.compareTo(a.date);
+      return d != 0 ? d : b.createdAt.compareTo(a.createdAt);
+    });
+
+  List<CashEntry> myCashEntries(String churchId) =>
+      cashEntries(churchId).where((e) => e.createdBy == currentUser?.id).toList();
+
+  /// Мога ли да реша чакащия запис (същото правило като на сървъра).
+  bool canDecideCash(CashEntry e) {
+    final me = currentUser?.id;
+    if (me == null || !e.isPending || e.createdBy == me || !canSeeCash(e.churchId)) return false;
+    if (e.book == CashBook.income && !e.isReversal && !_isHolder(e.churchId, e.createdBy)) {
+      final cashier = cashierOf(e.churchId);
+      return cashier == null || cashier == me;
+    }
+    return true;
+  }
+
+  List<CashEntry> cashToDecide(String churchId) =>
+      cashEntries(churchId).where(canDecideCash).toList().reversed.toList();
+
+  Future<CashEntry> addCash({
+    required CashBook book,
+    required double amount,
+    required String category,
+    String categoryOther = '',
+    String note = '',
+    String account = 'cash',
+    String? direction,
+    String? eventId,
+    DateTime? date,
+  }) async {
+    String iso(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    try {
+      final row = await _db.rpc('cash_add', params: {
+        'p_church': currentChurchId,
+        'p_book': book.name,
+        'p_amount': amount,
+        'p_category': category,
+        'p_category_other': categoryOther,
+        'p_note': note,
+        'p_account': account,
+        'p_direction': direction,
+        'p_event': eventId,
+        'p_date': date == null ? null : iso(date),
+      });
+      final e = CashEntry.fromRow(Map<String, dynamic>.from(row as Map));
+      _cash.add(e);
+      notifyListeners();
+      if (e.isPending) unawaited(_invokeNotify({'type': 'cash_pending', 'entry_id': e.id}));
+      return e;
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
+  Future<void> decideCash(CashEntry e, bool approve, {String reason = ''}) async {
+    try {
+      await _db.rpc('cash_decide', params: {'p_entry': e.id, 'p_approve': approve, 'p_reason': reason});
+      await refresh();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+    unawaited(_invokeNotify({'type': 'cash_decided', 'entry_id': e.id}));
+  }
+
+  Future<CashEntry> reverseCash(CashEntry e, String reason) async {
+    try {
+      final row = await _db.rpc('cash_reverse', params: {'p_entry': e.id, 'p_reason': reason});
+      final r = CashEntry.fromRow(Map<String, dynamic>.from(row as Map));
+      await refresh();
+      if (r.isPending) unawaited(_invokeNotify({'type': 'cash_pending', 'entry_id': r.id}));
+      return r;
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
+  Future<void> saveCashSettings(String churchId, double limit, bool hasBank) async {
+    try {
+      await _db.rpc('cash_save_settings',
+          params: {'p_church': churchId, 'p_limit': limit, 'p_has_bank': hasBank});
+      await refresh();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
 
   /// Председателят дава или отнема право на свещеник.
   Future<void> setPermission(String churchId, String userId, String perm, bool on) async {

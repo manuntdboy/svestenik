@@ -557,3 +557,169 @@ class LeaveRequest {
         status: LeaveStatus.fromName(r['status'] as String?),
       );
 }
+
+// ---------------------------------------------------------------------
+// Каса
+// ---------------------------------------------------------------------
+enum CashBook {
+  income('Приход', 'Приходна книга', 'П'),
+  expense('Разход', 'Разходна книга', 'Р'),
+  transfer('Банка', 'Движения с банката', 'Б');
+
+  final String label;
+  final String bookName;
+  final String prefix;
+  const CashBook(this.label, this.bookName, this.prefix);
+
+  static CashBook fromName(String? n) =>
+      CashBook.values.firstWhere((b) => b.name == n, orElse: () => CashBook.income);
+}
+
+const incomeCategories = [
+  'Свещи',
+  'Треби',
+  'Дарение',
+  'Записки и помени',
+  'Наем',
+  'Друго',
+];
+
+const expenseCategories = [
+  'Заплати и възнаграждения',
+  'Ток',
+  'Вода',
+  'Отопление',
+  'Ремонти и поддръжка',
+  'Свещи (доставка)',
+  'Вноска към митрополията',
+  'Канцеларски',
+  'Друго',
+];
+
+/// Вид приход по подразбиране за проведено събитие.
+String incomeCategoryFor(EventKind k) => switch (k) {
+      EventKind.sluzhba || EventKind.arhiereyska => 'Свещи',
+      EventKind.panihida => 'Записки и помени',
+      EventKind.drugo => 'Друго',
+      _ => 'Треби',
+    };
+
+class CashEntry {
+  final String id;
+  final String churchId;
+  final CashBook book;
+  final int? number;
+  final double amount; // сторното е с отрицателна сума
+  final String account; // 'cash' или 'bank'
+  final String? direction; // 'to_bank' / 'from_bank' за движенията с банката
+  final String category;
+  final String categoryOther;
+  final String note;
+  final DateTime date;
+  final String? eventId;
+  final String createdBy;
+  final DateTime createdAt;
+  final String status; // pending / approved / returned
+  final String? autoReason; // holder / under_limit / single
+  final String? decidedBy;
+  final String returnReason;
+  final String? reverses;
+  final String? reversedBy;
+
+  CashEntry({
+    required this.id,
+    required this.churchId,
+    required this.book,
+    this.number,
+    required this.amount,
+    this.account = 'cash',
+    this.direction,
+    required this.category,
+    this.categoryOther = '',
+    this.note = '',
+    required this.date,
+    this.eventId,
+    required this.createdBy,
+    required this.createdAt,
+    this.status = 'pending',
+    this.autoReason,
+    this.decidedBy,
+    this.returnReason = '',
+    this.reverses,
+    this.reversedBy,
+  });
+
+  bool get isPending => status == 'pending';
+  bool get isApproved => status == 'approved';
+  bool get isReturned => status == 'returned';
+  bool get isReversal => reverses != null;
+
+  /// „П-12“, „Р-3“ – номерът в книгата (след влизане в нея).
+  String get ref => number == null ? '' : '${book.prefix}-$number';
+
+  String get categoryLabel => category == 'Друго' && categoryOther.isNotEmpty ? categoryOther : category;
+
+  String get kindLabel => isReversal
+      ? 'Сторно'
+      : book == CashBook.transfer
+          ? (direction == 'from_bank' ? 'Теглене от банката' : 'Внасяне в банката')
+          : book.label;
+
+  /// Как се отразява на брой и банка (само одобрените).
+  (double cash, double bank) get effect {
+    if (!isApproved) return (0, 0);
+    switch (book) {
+      case CashBook.income:
+        return account == 'bank' ? (0, amount) : (amount, 0);
+      case CashBook.expense:
+        return account == 'bank' ? (0, -amount) : (-amount, 0);
+      case CashBook.transfer:
+        return direction == 'from_bank' ? (amount, -amount) : (-amount, amount);
+    }
+  }
+
+  factory CashEntry.fromRow(Map<String, dynamic> r) => CashEntry(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        book: CashBook.fromName(r['book'] as String?),
+        number: r['number'] as int?,
+        amount: (r['amount'] as num).toDouble(),
+        account: (r['account'] as String?) ?? 'cash',
+        direction: r['direction'] as String?,
+        category: (r['category'] as String?) ?? 'Друго',
+        categoryOther: (r['category_other'] as String?) ?? '',
+        note: (r['note'] as String?) ?? '',
+        date: DateTime.parse(r['entry_date'] as String),
+        eventId: r['event_id'] as String?,
+        createdBy: (r['created_by'] as String?) ?? '',
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        status: (r['status'] as String?) ?? 'pending',
+        autoReason: r['auto_reason'] as String?,
+        decidedBy: r['decided_by'] as String?,
+        returnReason: (r['return_reason'] as String?) ?? '',
+        reverses: r['reverses'] as String?,
+        reversedBy: r['reversed_by'] as String?,
+      );
+}
+
+class CashSettings {
+  final double limitEur;
+  final bool hasBank;
+  const CashSettings({this.limitEur = 100, this.hasBank = false});
+
+  factory CashSettings.fromRow(Map<String, dynamic> r) => CashSettings(
+        limitEur: (r['limit_eur'] as num?)?.toDouble() ?? 100,
+        hasBank: (r['has_bank'] as bool?) ?? false,
+      );
+}
+
+/// Баланс на касата: брой, банка и общо.
+(double cash, double bank) cashBalance(Iterable<CashEntry> entries) {
+  var c = 0.0, b = 0.0;
+  for (final e in entries) {
+    final (dc, db) = e.effect;
+    c += dc;
+    b += db;
+  }
+  return (c, b);
+}

@@ -410,6 +410,71 @@ select t.as_user(:'A');
 select t.fails('select * from notify_log', 'дневникът на известията не се чете от потребител');
 select t.fails($$insert into notify_log(type, status) values ('x', 200)$$, 'и не се пише от потребител');
 
+\echo '== Каса'
+select t.as_user(:'D');
+select id as cid2, join_code as code2 from public.create_church('Св. Георги', 'Казанлък', 'Казанлък') \gset
+select t.as_user(:'C');
+select public.join_church(:'code2') \g /dev/null
+select t.as_user(:'B');
+select public.join_church(:'code2') \g /dev/null
+select t.as_user(:'D');
+select public.approve_member(:'cid2', :'C') \g /dev/null
+select public.approve_member(:'cid2', :'B') \g /dev/null
+-- Само председател (няма касиер): разходът влиза веднага.
+select id as x1 from public.cash_add(:'cid2','expense',500,'Ремонти',null,'покрив','cash',null,null,null) \gset
+select t.ok((select status = 'approved' and auto_reason = 'single' and number = 1 from cash_entries where id = :'x1'),
+            'без касиер: разходът на председателя влиза веднага (Р-1)');
+select t.as_user(:'C');
+select id as i1 from public.cash_add(:'cid2','income',50,'Треби',null,'кръщене','cash',null,null,null) \gset
+select t.ok((select status from cash_entries where id = :'i1') = 'pending', 'приход от свещеник чака приемане');
+select t.ok((select count(*) from cash_entries where church_id = :'cid2') = 1, 'свещеникът вижда само своите записи');
+select t.fails(format($$select public.cash_add(%L,'expense',10,'Друго',null,null,'cash',null,null,null)$$, :'cid2'),
+               'свещеник не въвежда разход', 'not_cash_holder');
+select t.fails(format($$select public.cash_decide(%L, true, null)$$, :'i1'), 'свещеник не приема приходи', 'not_cash_holder');
+select t.fails(format($$insert into cash_entries(church_id,book,amount,category) values (%L,'income',1,'x')$$, :'cid2'),
+               'записи не се пишат директно', 'row-level security');
+select t.ok(t.rows(format($$update cash_entries set amount = 1 where id = %L$$, :'i1')) = 0, 'записи не се променят директно');
+select t.as_user(:'D');
+select t.ok((select number from public.cash_decide(:'i1', true, null)) = 1, 'председателят (без касиер) приема прихода – П-1');
+-- Назначаваме касиер: вече са нужни двама.
+select public.set_member_permission(:'cid2', :'B', 'cash', true) \g /dev/null
+select id as x2 from public.cash_add(:'cid2','expense',80,'Свещи',null,null,'cash',null,null,null) \gset
+select id as x3 from public.cash_add(:'cid2','expense',30,'Свещи',null,null,'cash',null,null,null) \gset
+select id as x4 from public.cash_add(:'cid2','expense',200,'Заплати',null,null,'cash',null,null,null) \gset
+select t.ok((select status = 'approved' and auto_reason = 'under_limit' from cash_entries where id = :'x2'),
+            'разход до 100 € влиза веднага');
+select t.ok((select status from cash_entries where id = :'x3') = 'pending', 'над дневния лимит (80 + 30) чака одобрение');
+select t.ok((select status from cash_entries where id = :'x4') = 'pending', 'разход над 100 € чака одобрение');
+select t.fails(format($$select public.cash_decide(%L, true, null)$$, :'x4'), 'никой не одобрява своя разход', 'own_entry');
+select t.as_user(:'C');
+select id as i2 from public.cash_add(:'cid2','income',20,'Свещи',null,null,'cash',null,null,null) \gset
+select t.as_user(:'D');
+select t.fails(format($$select public.cash_decide(%L, true, null)$$, :'i2'), 'при касиер приходите ги приема касиерът', 'not_cashier');
+select t.as_user(:'B');
+select t.ok(public.cash_holder(:'cid2'), 'касиерът има достъп до касата');
+select t.ok((select number from public.cash_decide(:'i2', true, null)) = 2, 'касиерът приема прихода – П-2');
+select t.ok((select number from public.cash_decide(:'x4', true, null)) = 3, 'касиерът одобрява разхода на председателя – Р-3');
+select t.ok((select status from public.cash_decide(:'x3', false, 'двойно')) = 'returned', 'касиерът връща разход с причина');
+select t.fails(format($$select public.cash_add(%L,'transfer',300,'Банка',null,null,'cash','to_bank',null,null)$$, :'cid2'),
+               'без включена банка няма банкови движения', 'no_bank');
+select t.as_user(:'D');
+select public.cash_save_settings(:'cid2', 100, true) \g /dev/null
+select id as t1 from public.cash_add(:'cid2','transfer',300,'Внасяне',null,null,'cash','to_bank',null,null) \gset
+select t.ok((select status from cash_entries where id = :'t1') = 'pending', 'внасяне в банката чака другия');
+select id as r1 from public.cash_reverse(:'i1', 'грешна сума') \gset
+select t.ok((select amount = -50 and status = 'pending' from cash_entries where id = :'r1'), 'сторното е обратен запис и чака одобрение');
+select t.fails(format($$select public.cash_reverse(%L, 'пак')$$, :'i1'), 'не се сторнира два пъти', 'already_reversed');
+select t.as_user(:'B');
+select t.fails(format('select public.cash_save_settings(%L, 1000, true)', :'cid2'), 'касиерът не сменя лимита', 'not_manager');
+select public.cash_decide(:'t1', true, null) \g /dev/null
+select public.cash_decide(:'r1', true, null) \g /dev/null
+select t.ok((select reversed_by is not null from cash_entries where id = :'i1'), 'сторнираният запис е отбелязан');
+select t.ok((select sum(amount) from cash_entries where church_id = :'cid2' and book = 'income' and status = 'approved') = 20
+            and (select sum(amount) from cash_entries where church_id = :'cid2' and book = 'expense' and status = 'approved') = 780,
+            'книгите се сумират вярно (приходи 20, разходи 780)');
+select t.as_user(:'A');
+select t.ok((select count(*) from cash_entries where church_id = :'cid2') = 0, 'друг храм не вижда касата');
+
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

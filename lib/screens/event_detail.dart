@@ -4,6 +4,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'cash.dart';
 import 'event_form.dart';
 import '../widgets/requests.dart';
 
@@ -286,6 +287,20 @@ class _StatusButtons extends StatelessWidget {
     }
     try {
       await s.setStatus(event, st);
+      if (context.mounted && st == EventStatus.done && s.myChurches.any((c) => c.id == event.churchId)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Отбелязано като проведено.', style: TextStyle(fontSize: 16)),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'Запиши приход',
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => CashEntryForm(holder: s.canSeeCash(event.churchId), event: event))),
+          ),
+        ));
+        return;
+      }
       if (context.mounted) {
         showMessage(
             context,
@@ -303,11 +318,28 @@ class _StatusButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (event.status != EventStatus.planned) {
-      return OutlinedButton.icon(
-        onPressed: () => _set(context, EventStatus.planned),
-        icon: const Icon(Icons.undo_rounded),
-        label: const Text('Върни като предстоящо'),
-      );
+      final s = AppScope.of(context);
+      final inChurch = s.myChurches.any((c) => c.id == event.churchId);
+      final hasIncome = s.cashEntries(event.churchId).any((x) => x.eventId == event.id && !x.isReturned);
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (event.status == EventStatus.done && inChurch && !hasIncome) ...[
+          FilledButton.tonalIcon(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => CashEntryForm(holder: s.canSeeCash(event.churchId), event: event))),
+            icon: const Icon(Icons.payments_outlined),
+            label: const Text('Запиши приход от събитието'),
+          ),
+          const SizedBox(height: 10),
+        ],
+        OutlinedButton.icon(
+          onPressed: () => _set(context, EventStatus.planned),
+          icon: const Icon(Icons.undo_rounded),
+          label: const Text('Върни като предстоящо'),
+        ),
+      ]);
     }
     return Row(children: [
       Expanded(

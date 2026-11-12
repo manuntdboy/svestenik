@@ -267,4 +267,43 @@ void main() {
       expect(EventKind.fromName('arhiereyska'), EventKind.arhiereyska);
     });
   });
+
+  group('Каса', () {
+    CashEntry ce(CashBook b, double a, {String st = 'approved', String acc = 'cash', String? dir}) => CashEntry(
+        id: 'x',
+        churchId: 'c',
+        book: b,
+        amount: a,
+        account: acc,
+        direction: dir,
+        category: 'Друго',
+        date: DateTime(2026, 11, 13),
+        createdBy: 'u',
+        createdAt: DateTime(2026, 11, 13),
+        status: st);
+    test('балансът: приходи, разходи, сторно, банка', () {
+      final list = [
+        ce(CashBook.income, 50),
+        ce(CashBook.income, -50), // сторно
+        ce(CashBook.income, 20),
+        ce(CashBook.expense, 80),
+        ce(CashBook.expense, 200, st: 'pending'), // не се брои
+        ce(CashBook.income, 1000, acc: 'bank'),
+        ce(CashBook.transfer, 300, dir: 'to_bank'),
+      ];
+      final (cash, bank) = cashBalance(list);
+      expect(cash, 20 - 80 - 300);
+      expect(bank, 1000 + 300);
+    });
+    test('номер в книгата и вид', () {
+      final e = CashEntry.fromRow({
+        'id': '1', 'church_id': 'c', 'book': 'expense', 'number': 3, 'amount': 12.5,
+        'category': 'Друго', 'category_other': 'Хор', 'entry_date': '2026-11-13',
+        'created_by': 'u', 'created_at': '2026-11-13T10:00:00Z', 'status': 'approved',
+      });
+      expect(e.ref, 'Р-3');
+      expect(e.categoryLabel, 'Хор');
+      expect(incomeCategoryFor(EventKind.krashtene), 'Треби');
+    });
+  });
 }

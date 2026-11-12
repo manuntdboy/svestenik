@@ -209,6 +209,38 @@ async function handle(req: Request): Promise<Response> {
       text = `${period} · ${callerName}`;
     }
     data = { type, church_id: lv.church_id, request_id: lv.id };
+  } else if (type === "cash_pending" || type === "cash_decided") {
+    // Каса: чакащ запис → до този, който трябва да го реши; решение → до въвелия.
+    const entryId = String(body.entry_id ?? "");
+    const { data: ce } = await admin.from("cash_entries").select("*").eq("id", entryId).maybeSingle();
+    if (!ce) return json(404, { error: "not_found" });
+    const eur = new Intl.NumberFormat("bg-BG", { style: "currency", currency: "EUR" }).format(Math.abs(Number(ce.amount)));
+    const what = ce.reverses ? "Сторно" : ce.book === "income" ? "Приход" : ce.book === "expense" ? "Разход"
+      : ce.direction === "to_bank" ? "Внасяне в банката" : "Теглене от банката";
+    const cat = ce.category === "Друго" && ce.category_other ? ce.category_other : ce.category;
+    const { data: members } = await admin.from("church_members").select("user_id, role, permissions")
+      .eq("church_id", ce.church_id).eq("status", "active");
+    const holders = (members ?? []).filter((m) => m.role === "manager" || (m.permissions ?? []).includes("cash"));
+    const cashier = (members ?? []).find((m) => m.role !== "manager" && (m.permissions ?? []).includes("cash"));
+    if (type === "cash_pending") {
+      if (ce.created_by !== caller.id || ce.status !== "pending") return json(403, { error: "forbidden" });
+      const creatorHolder = holders.some((m) => m.user_id === caller.id);
+      if (ce.book === "income" && !ce.reverses && !creatorHolder) {
+        recipients = cashier ? [cashier.user_id] : holders.map((m) => m.user_id);
+      } else {
+        recipients = holders.map((m) => m.user_id);
+      }
+      title = `Каса: ${what.toLowerCase()} чака одобрение`;
+      text = `${eur} · ${cat} · ${callerName}`;
+    } else {
+      if (ce.decided_by !== caller.id) return json(403, { error: "forbidden" });
+      recipients = [ce.created_by];
+      const ok = ce.status === "approved";
+      title = ok ? `Каса: ${what.toLowerCase()} е ${ce.book === "income" && !ce.reverses ? "приет" : "одобрен"}`
+        : `Каса: ${what.toLowerCase()} е върнат`;
+      text = `${eur} · ${cat}${ok ? "" : ce.return_reason ? " · " + ce.return_reason : ""} · ${callerName}`;
+    }
+    data = { type: "cash", church_id: ce.church_id, entry_id: ce.id };
   } else if (type === "church_event" || type === "event_confirmed") {
     // Архиерейска Литургия: при записване – до всички свещеници в храма;
     // при потвърждение – до записалия.
