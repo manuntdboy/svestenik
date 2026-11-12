@@ -626,6 +626,7 @@ class CashEntry {
   final String returnReason;
   final String? reverses;
   final String? reversedBy;
+  final bool backdated; // със задна дата в приключен месец
 
   CashEntry({
     required this.id,
@@ -648,7 +649,11 @@ class CashEntry {
     this.returnReason = '',
     this.reverses,
     this.reversedBy,
+    this.backdated = false,
+    this.decidedAt,
   });
+
+  final DateTime? decidedAt;
 
   bool get isPending => status == 'pending';
   bool get isApproved => status == 'approved';
@@ -703,8 +708,60 @@ class CashEntry {
         returnReason: (r['return_reason'] as String?) ?? '',
         reverses: r['reverses'] as String?,
         reversedBy: r['reversed_by'] as String?,
+        backdated: (r['backdated'] as bool?) ?? false,
+        decidedAt: r['decided_at'] == null ? null : DateTime.parse(r['decided_at'] as String).toLocal(),
       );
 }
+
+/// Месец в касата: чака одобрение или приключен.
+class CashPeriod {
+  final String churchId;
+  final DateTime month; // първо число
+  final String status; // pending / closed
+  final String? requestedBy;
+  final DateTime requestedAt;
+  final String? approvedBy;
+  final DateTime? approvedAt;
+  final bool single;
+
+  CashPeriod({
+    required this.churchId,
+    required this.month,
+    required this.status,
+    this.requestedBy,
+    required this.requestedAt,
+    this.approvedBy,
+    this.approvedAt,
+    this.single = false,
+  });
+
+  bool get isClosed => status == 'closed';
+
+  factory CashPeriod.fromRow(Map<String, dynamic> r) => CashPeriod(
+        churchId: r['church_id'] as String,
+        month: DateTime.parse(r['month'] as String),
+        status: (r['status'] as String?) ?? 'pending',
+        requestedBy: r['requested_by'] as String?,
+        requestedAt: DateTime.parse(r['requested_at'] as String).toLocal(),
+        approvedBy: r['approved_by'] as String?,
+        approvedAt: r['approved_at'] == null ? null : DateTime.parse(r['approved_at'] as String).toLocal(),
+        single: (r['single'] as bool?) ?? false,
+      );
+}
+
+/// Сума по вид за одобрените записи от книга в период [from, to).
+Map<String, double> cashByCategory(Iterable<CashEntry> entries, CashBook book, DateTime from, DateTime to) {
+  final m = <String, double>{};
+  for (final e in entries) {
+    if (!e.isApproved || e.book != book || e.date.isBefore(from) || !e.date.isBefore(to)) continue;
+    m[e.categoryLabel] = (m[e.categoryLabel] ?? 0) + e.amount;
+  }
+  m.removeWhere((_, v) => v.abs() < 0.005);
+  return m;
+}
+
+double cashTotal(Iterable<CashEntry> entries, CashBook book, DateTime from, DateTime to) =>
+    cashByCategory(entries, book, from, to).values.fold(0.0, (a, b) => a + b);
 
 class CashSettings {
   final double limitEur;

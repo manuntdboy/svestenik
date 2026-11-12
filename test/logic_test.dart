@@ -306,4 +306,23 @@ void main() {
       expect(incomeCategoryFor(EventKind.krashtene), 'Треби');
     });
   });
+
+  group('Каса – справки', () {
+    CashEntry e(CashBook b, double a, String cat, DateTime d, {String st = 'approved'}) => CashEntry(
+        id: '$a$cat', churchId: 'c', book: b, amount: a, category: cat, date: d,
+        createdBy: 'u', createdAt: d, status: st);
+    test('по видове за месеца, със сторно и без чакащи', () {
+      final list = [
+        e(CashBook.income, 100, 'Свещи', DateTime(2026, 11, 2)),
+        e(CashBook.income, -20, 'Свещи', DateTime(2026, 11, 5)),
+        e(CashBook.income, 50, 'Треби', DateTime(2026, 11, 30)),
+        e(CashBook.income, 70, 'Треби', DateTime(2026, 12, 1)),
+        e(CashBook.income, 999, 'Треби', DateTime(2026, 11, 3), st: 'pending'),
+        e(CashBook.opening, 5000, 'Начално салдо', DateTime(2026, 11, 1)),
+      ];
+      final m = cashByCategory(list, CashBook.income, DateTime(2026, 11, 1), DateTime(2026, 12, 1));
+      expect(m, {'Свещи': 80.0, 'Треби': 50.0});
+      expect(cashTotal(list, CashBook.income, DateTime(2026, 11, 1), DateTime(2026, 12, 1)), 130);
+    });
+  });
 }

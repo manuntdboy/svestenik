@@ -45,6 +45,7 @@ class AppState extends ChangeNotifier {
   final List<LeaveRequest> _leaves = [];
   final List<CashEntry> _cash = [];
   final Map<String, CashSettings> _cashSettings = {};
+  final List<CashPeriod> _periods = [];
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
 
@@ -124,6 +125,7 @@ class AppState extends ChangeNotifier {
     _myPhotoStamp = null;
     _cash.clear();
     _cashSettings.clear();
+    _periods.clear();
     _details.clear();
     _photos.clear();
     _photoStamp.clear();
@@ -153,6 +155,7 @@ class AppState extends ChangeNotifier {
         _db.from('event_confirmations').select(),
         _db.from('cash_entries').select(),
         _db.from('cash_settings').select(),
+        _db.from('cash_periods').select(),
       ]);
       _profiles
         ..clear()
@@ -176,6 +179,9 @@ class AppState extends ChangeNotifier {
       _cashSettings
         ..clear()
         ..addEntries(results[7].map((r) => MapEntry(r['church_id'] as String, CashSettings.fromRow(r))));
+      _periods
+        ..clear()
+        ..addAll(results[8].map(CashPeriod.fromRow));
       _confirmations.clear();
       for (final r in results[5]) {
         (_confirmations[r['event_id'] as String] ??= {})[r['user_id'] as String] =
@@ -229,6 +235,10 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
+    if (t.contains('month_not_over')) return 'Приключва се само изминал месец.';
+    if (t.contains('pending_in_month')) return 'В този месец има чакащи записи – първо ги решете.';
+    if (t.contains('already_closed')) return 'Месецът вече е приключен или чака одобрение.';
+    if (t.contains('future_date')) return 'Датата не може да е в бъдещето.';
     if (t.contains('opening_exists')) return 'Началното салдо вече е въведено. Ако е грешно, сторнирайте го.';
     if (t.contains('not_cash_holder')) return 'Само касиерът и председателят могат да направят това.';
     if (t.contains('own_entry')) return 'Свой запис не може да одобрите – одобрява го другият.';
@@ -629,6 +639,55 @@ class AppState extends ChangeNotifier {
 
   List<CashEntry> myCashEntries(String churchId) =>
       cashEntries(churchId).where((e) => e.createdBy == currentUser?.id).toList();
+
+  // ---- приключване на месеци
+  CashPeriod? periodOf(String churchId, DateTime d) => _periods
+      .where((p) => p.churchId == churchId && p.month.year == d.year && p.month.month == d.month)
+      .firstOrNull;
+
+  bool isMonthClosed(String churchId, DateTime d) => periodOf(churchId, d)?.isClosed ?? false;
+
+  /// Месец, чакащ моето одобрение (председателят).
+  List<CashPeriod> closesToApprove(String churchId) => isManagerOf(churchId)
+      ? _periods
+          .where((p) => p.churchId == churchId && !p.isClosed && p.requestedBy != currentUser?.id)
+          .toList()
+      : [];
+
+  /// Мога ли да поискам приключване (касиерът; без касиер – председателят).
+  bool canRequestClose(String churchId) {
+    final cashier = cashierOf(churchId);
+    return cashier == null ? isManagerOf(churchId) : cashier == currentUser?.id;
+  }
+
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> requestClose(String churchId, DateTime month) async {
+    final m = DateTime(month.year, month.month, 1);
+    try {
+      final row = await _db.rpc('cash_close_request', params: {'p_church': churchId, 'p_month': _iso(m)});
+      await refresh();
+      final st = (row as Map)['status'];
+      if (st == 'pending') {
+        unawaited(_invokeNotify({'type': 'cash_close_pending', 'church_id': churchId, 'month': _iso(m)}));
+      }
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
+  Future<void> decideClose(String churchId, DateTime month, bool approve) async {
+    final m = DateTime(month.year, month.month, 1);
+    try {
+      await _db.rpc('cash_close_decide', params: {'p_church': churchId, 'p_month': _iso(m), 'p_approve': approve});
+      await refresh();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+    unawaited(_invokeNotify(
+        {'type': 'cash_close_decided', 'church_id': churchId, 'month': _iso(m), 'approved': approve}));
+  }
 
   /// Въведеното начално салдо за сметката (чакащо или влязло) или null.
   CashEntry? openingFor(String churchId, String account) => _cash

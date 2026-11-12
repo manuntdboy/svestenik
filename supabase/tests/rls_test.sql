@@ -490,6 +490,24 @@ select t.as_user(:'D');
 select t.fails(format($$select public.cash_reverse(%L, 'смяна')$$, :'o1'), 'началното салдо не се сторнира', 'not_reversible');
 select t.fails(format($$select public.cash_add(%L,'opening',5,'Начално салдо',null,null,'cash',null,null,null)$$, :'cid2'),
                'началното салдо е еднократно', 'opening_exists');
+-- Приключване на месец и задна дата
+select (date_trunc('month', current_date) - interval '1 month')::date as prev \gset
+select t.as_user(:'D');
+select t.fails(format('select public.cash_close_request(%L, %L)', :'cid2', :'prev'), 'при касиер месеца го приключва касиерът', 'not_cashier');
+select t.as_user(:'B');
+select t.fails(format('select public.cash_close_request(%L, current_date)', :'cid2'), 'текущ месец не се приключва', 'month_not_over');
+select t.ok((select status from public.cash_close_request(:'cid2', :'prev')) = 'pending', 'касиерът иска приключване');
+select t.fails(format('select public.cash_close_decide(%L, %L, true)', :'cid2', :'prev'), 'касиерът не одобрява сам', 'not_manager');
+select t.as_user(:'C');
+select t.fails(format('select public.cash_close_request(%L, %L)', :'cid2', :'prev'), 'свещеник не приключва', 'not_cash_holder');
+select t.as_user(:'D');
+select t.ok(public.cash_close_decide(:'cid2', :'prev', true) = 'closed', 'председателят одобрява – месецът е приключен');
+select id as bd from public.cash_add(:'cid2','expense',10,'Свещи',null,'забравена бележка','cash',null,null,:'prev') \gset
+select t.ok((select status = 'pending' and backdated from cash_entries where id = :'bd'),
+            'разход със задна дата в приключен месец чака одобрение дори под лимита');
+select t.as_user(:'B');
+select t.ok((select status from public.cash_decide(:'bd', true, null)) = 'approved', 'касиерът одобрява записа със задна дата');
+select t.fails(format('select public.cash_close_request(%L, %L)', :'cid2', :'prev'), 'месецът не се приключва два пъти', 'already_closed');
 select t.as_user(:'A');
 select t.ok((select count(*) from cash_entries where church_id = :'cid2') = 0, 'друг храм не вижда касата');
 

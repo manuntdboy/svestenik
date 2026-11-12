@@ -5,6 +5,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'cash_more.dart';
 
 final _eur = NumberFormat.currency(locale: 'bg', symbol: '€', decimalDigits: 2);
 final _day = DateFormat('d MMMM y', 'bg');
@@ -36,6 +37,7 @@ class CashScreen extends StatefulWidget {
 
 class _CashScreenState extends State<CashScreen> {
   CashBook? _tab = CashBook.income; // null = чакащи и върнати
+  CashFilter _filter = const CashFilter();
 
   @override
   Widget build(BuildContext context) {
@@ -86,9 +88,11 @@ class _CashScreenState extends State<CashScreen> {
     final returned = all.where((e) => e.isReturned).toList();
     final tabs = [CashBook.income, CashBook.expense, if (st.hasBank) CashBook.transfer, null];
     if (!tabs.contains(_tab)) _tab = CashBook.income;
-    final shown = _tab == null
-        ? [...waiting, ...returned]
-        : all.where((e) => e.isApproved && e.book == _tab).toList();
+    final shown = (_tab == null
+            ? [...waiting, ...returned]
+            : all.where((e) => e.isApproved && e.book == _tab).toList())
+        .where(_filter.matches)
+        .toList();
     final pendingCount = all.where((e) => e.isPending).length;
     final monthIn = _sumMonth(all, CashBook.income);
     final monthOut = _sumMonth(all, CashBook.expense);
@@ -166,6 +170,33 @@ class _CashScreenState extends State<CashScreen> {
                 ? 'Няма назначен касиер: председателят води касата сам и разходите влизат направо.'
                 : 'Разход до ${fmtEur(st.limitEur)} на ден влиза направо; над това чака другия от двамата.',
             style: TextStyle(fontSize: 14, color: p.textMuted)),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+              onPressed: () =>
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CashReportScreen())),
+              icon: const Icon(Icons.bar_chart_rounded),
+              label: const Text('Справки'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+              onPressed: () =>
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CashMonthsScreen())),
+              icon: Badge(
+                isLabelVisible: s.closesToApprove(church).isNotEmpty,
+                child: const Icon(Icons.lock_clock_outlined),
+              ),
+              label: const Text('Месеци'),
+            ),
+          ),
+        ]),
+        for (final per in s.closesToApprove(church))
+          Padding(padding: const EdgeInsets.only(top: 12), child: CloseMonthCard(period: per)),
         if (toDecide.isNotEmpty) ...[
           const SizedBox(height: 16),
           const Text('Чакат вашето решение', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
@@ -193,18 +224,51 @@ class _CashScreenState extends State<CashScreen> {
           ]);
         }),
         const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.only(left: 12),
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(border: Border(left: BorderSide(color: bookColor(context, _tab), width: 5))),
-          child: Text(_tab == null ? 'Чакащи и върнати' : _tab!.bookName,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-        ),
+        Row(children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.only(left: 12),
+              decoration:
+                  BoxDecoration(border: Border(left: BorderSide(color: bookColor(context, _tab), width: 5))),
+              child: Text(_tab == null ? 'Чакащи и върнати' : _tab!.bookName,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              final f = await showCashFilter(context, _filter, church);
+              if (f != null) setState(() => _filter = f);
+            },
+            icon: Icon(_filter.isActive ? Icons.filter_alt_rounded : Icons.filter_alt_outlined),
+            label: Text(_filter.isActive ? 'Филтър (${_filter.count})' : 'Филтър'),
+          ),
+        ]),
+        if (_filter.isActive)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(spacing: 8, runSpacing: 6, children: [
+              for (final c in _filter.describe(s))
+                Chip(label: Text(c), visualDensity: VisualDensity.compact),
+              ActionChip(
+                avatar: const Icon(Icons.close_rounded, size: 18),
+                label: const Text('Изчисти'),
+                onPressed: () => setState(() => _filter = const CashFilter()),
+              ),
+              Chip(
+                  label: Text('Общо: ${fmtEur(shown.fold(0.0, (a, e) => a + e.amount))}'),
+                  visualDensity: VisualDensity.compact),
+            ]),
+          ),
+        const SizedBox(height: 10),
         if (shown.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Text(
-                _tab == null ? 'Няма чакащи или върнати записи.' : 'Още няма записи в тази книга.',
+                _filter.isActive
+                    ? 'Няма записи по този филтър.'
+                    : _tab == null
+                        ? 'Няма чакащи или върнати записи.'
+                        : 'Още няма записи в тази книга.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
           ),
         for (final e in shown) CashRow(entry: e),
@@ -354,7 +418,7 @@ class CashRow extends StatelessWidget {
     final e = entry;
     final sign = e.book == CashBook.expense ? -1 : 1;
     final shownAmount = e.book == CashBook.transfer ? e.amount : e.amount * sign;
-    final status = e.isPending
+    final status0 = e.isPending
         ? 'чака одобрение'
         : e.isReturned
             ? 'върнат'
@@ -365,6 +429,7 @@ class CashRow extends StatelessWidget {
                     : e.autoReason == 'under_limit'
                         ? 'под лимита'
                         : '';
+    final status = [if (e.backdated) 'задна дата', if (status0.isNotEmpty) status0].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -452,7 +517,12 @@ Future<void> showCashEntry(BuildContext context, CashEntry e) async {
             if (e.book != CashBook.transfer) row('Сметка', e.account == 'bank' ? 'Банка' : 'Брой'),
             if (e.note.isNotEmpty) row('Бележка', e.note),
             if (ev != null) row('Събитие', '${ev.kind.label} · ${fmtDayLong(ev.startsAt)}'),
-            row('Въведе', '${s.priestName(e.createdBy)} · ${_stamp.format(e.createdAt)}'),
+            if (e.backdated) row('Задна дата', 'Записан в приключен месец – с второ одобрение'),
+            const SizedBox(height: 8),
+            const Text('История', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            ..._history(ctx, s, e),
+            const SizedBox(height: 8),
             row(
                 'Състояние',
                 e.isPending
@@ -496,6 +566,45 @@ Future<void> showCashEntry(BuildContext context, CashEntry e) async {
       );
     },
   );
+}
+
+List<Widget> _history(BuildContext context, AppState s, CashEntry e) {
+  final p = Palette.of(context);
+  final steps = <(IconData, Color, String, DateTime?)>[
+    (Icons.edit_note_rounded, p.primary, 'Въведе ${s.priestName(e.createdBy)}', e.createdAt),
+    if (e.isApproved && e.autoReason == null)
+      (Icons.check_circle_rounded, Colors.green.shade600, 'Одобри ${s.priestName(e.decidedBy ?? '')}', e.decidedAt),
+    if (e.isApproved && e.autoReason == 'holder')
+      (Icons.check_circle_rounded, Colors.green.shade600, 'Влезе в книгата (въведен от касата)', e.decidedAt),
+    if (e.isApproved && e.autoReason == 'under_limit')
+      (Icons.check_circle_outline_rounded, Colors.green.shade600, 'Влезе в книгата – под лимита', e.decidedAt),
+    if (e.isApproved && e.autoReason == 'single')
+      (Icons.check_circle_outline_rounded, Colors.orange.shade700, 'Влезе без второ одобрение', e.decidedAt),
+    if (e.isReturned)
+      (Icons.undo_rounded, Theme.of(context).colorScheme.error,
+          'Върна ${s.priestName(e.decidedBy ?? '')}${e.returnReason.isEmpty ? '' : ': ${e.returnReason}'}', e.decidedAt),
+  ];
+  final rev = s.cashEntries(e.churchId).where((x) => x.reverses == e.id).firstOrNull;
+  if (rev != null) {
+    steps.add((
+      Icons.replay_rounded,
+      Theme.of(context).colorScheme.error,
+      'Сторно от ${s.priestName(rev.createdBy)}${rev.isPending ? ' – чака одобрение' : rev.ref.isEmpty ? '' : ' (${rev.ref})'}',
+      rev.createdAt
+    ));
+  }
+  return [
+    for (final (icon, color, text, at) in steps)
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600))),
+          if (at != null) Text(_stamp.format(at), style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+        ]),
+      ),
+  ];
 }
 
 Future<String?> _askReason(BuildContext context, String title, String hint) async {
@@ -808,7 +917,7 @@ class _CashEntryFormState extends State<CashEntryForm> {
                   final d = await showDatePicker(
                     context: context,
                     initialDate: _date,
-                    firstDate: DateTime(DateTime.now().year - 1),
+                    firstDate: DateTime(DateTime.now().year - 2),
                     lastDate: DateTime.now().add(const Duration(days: 1)),
                   );
                   if (d != null) setState(() => _date = d);
@@ -836,6 +945,21 @@ class _CashEntryFormState extends State<CashEntryForm> {
                   ],
                   selected: {_account},
                   onSelectionChanged: (v) => setState(() => _account = v.first),
+                ),
+              ),
+            if (s.isMonthClosed(s.currentChurchId!, _date))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                      color: Palette.yellow.withValues(alpha: .25),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Palette.yellow)),
+                  child: Text(
+                      'Месецът на тази дата е приключен. Записът ще е „със задна дата“ и '
+                      '${s.cashierOf(s.currentChurchId!) == null ? 'ще бъде отбелязан така' : 'ще чака одобрение от другия от двамата'}.',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ),
             section(

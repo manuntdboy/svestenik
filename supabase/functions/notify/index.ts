@@ -209,6 +209,29 @@ async function handle(req: Request): Promise<Response> {
       text = `${period} · ${callerName}`;
     }
     data = { type, church_id: lv.church_id, request_id: lv.id };
+  } else if (type === "cash_close_pending" || type === "cash_close_decided") {
+    // Приключване на месец: касиерът иска → председателят; решение → касиерът.
+    const churchId = String(body.church_id ?? "");
+    const month = String(body.month ?? "");
+    const { data: members } = await admin.from("church_members").select("user_id, role, permissions")
+      .eq("church_id", churchId).eq("status", "active");
+    const me = (members ?? []).find((m) => m.user_id === caller.id);
+    const label = new Date(month + "T12:00:00Z").toLocaleDateString("bg-BG", { month: "long", year: "numeric" });
+    if (type === "cash_close_pending") {
+      const { data: per } = await admin.from("cash_periods").select("*")
+        .eq("church_id", churchId).eq("month", month).maybeSingle();
+      if (!per || per.requested_by !== caller.id || per.status !== "pending") return json(403, { error: "forbidden" });
+      recipients = (members ?? []).filter((m) => m.role === "manager").map((m) => m.user_id);
+      title = "Каса: приключване на месеца";
+      text = `${callerName} иска да приключи ${label} – моля, одобрете`;
+    } else {
+      if (!me || me.role !== "manager") return json(403, { error: "forbidden" });
+      const cashier = (members ?? []).find((m) => m.role !== "manager" && (m.permissions ?? []).includes("cash"));
+      recipients = cashier ? [cashier.user_id] : [];
+      title = body.approved ? `Каса: ${label} е приключен` : `Каса: приключването на ${label} е върнато`;
+      text = callerName;
+    }
+    data = { type: "cash", church_id: churchId };
   } else if (type === "cash_pending" || type === "cash_decided") {
     // Каса: чакащ запис → до този, който трябва да го реши; решение → до въвелия.
     const entryId = String(body.entry_id ?? "");
