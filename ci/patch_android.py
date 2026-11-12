@@ -17,6 +17,8 @@ m = manifest.read_text(encoding="utf-8")
 m = re.sub(r'android:label="[^"]*"', 'android:label="Кайрос"', m, count=1)
 
 permissions = """
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
