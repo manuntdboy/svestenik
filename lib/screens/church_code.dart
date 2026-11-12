@@ -104,7 +104,7 @@ class ChurchCodeScreen extends StatelessWidget {
                             Text(u.fullName,
                                 style:
                                     const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                            Text(m.isManager ? 'Управител' : 'Свещеник',
+                            Text(m.isManager ? 'Председател' : 'Свещеник',
                                 style: TextStyle(fontSize: 14, color: p.textMuted)),
                           ],
                         ),

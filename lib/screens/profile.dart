@@ -45,7 +45,7 @@ class ProfileScreen extends StatelessWidget {
             children: [
               Text(church.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               Text(church.place, style: TextStyle(fontSize: 15, color: p.textMuted)),
-              Text(s.isManagerOf(church.id) ? 'Вие сте управител' : 'Свещеник',
+              Text(s.isManagerOf(church.id) ? 'Вие сте председател' : 'Свещеник',
                   style: TextStyle(fontSize: 15, color: p.textMuted)),
               const SizedBox(height: 12),
               OutlinedButton(

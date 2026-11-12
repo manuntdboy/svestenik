@@ -33,7 +33,7 @@ create table public.churches (
 
 -- ---------------------------------------------------------------------
 -- Членство: кой свещеник в кой храм и с каква роля.
--- manager = управител (председател), priest = свещеник
+-- manager = председател, priest = свещеник
 -- ---------------------------------------------------------------------
 create table public.church_members (
   church_id  uuid not null references public.churches (id) on delete cascade,
@@ -233,7 +233,7 @@ create policy events_insert on public.events for insert to authenticated
 create policy events_update on public.events for update to authenticated
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid() and public.is_member(church_id));
--- Изтрива собственикът; управителят – само споделени събития в своя храм
+-- Изтрива собственикът; председателят – само споделени събития в своя храм
 create policy events_delete on public.events for delete to authenticated
   using (owner_id = auth.uid()
          or (visibility = 'church' and public.is_manager(church_id)));
