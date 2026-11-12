@@ -19,15 +19,6 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       HOURS: ${{ github.event.inputs.hours }}
     steps:
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Имена на тайните на функциите (без стойностите)
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" 2>&1 | sed -E 's/[0-9a-f]{32,}/<digest>/g' || true
-
       - name: Извличане
         run: |
           if [ -n "$SUPABASE_DB_URL" ]; then
