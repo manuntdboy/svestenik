@@ -3,10 +3,15 @@
 /// Сан на свещенослужителя. Стои пред името: „Протойерей Тодор Чобанов“.
 enum ClergyRank {
   deacon('deacon', 'Дякон'),
+  hierodeacon('hierodeacon', 'Йеродякон'),
   protodeacon('protodeacon', 'Протодякон'),
+  archdeacon('archdeacon', 'Архидякон'),
   priest('priest', 'Иерей'),
+  hieromonk('hieromonk', 'Йеромонах'),
   archpriest('archpriest', 'Протойерей'),
-  stavrophor('stavrophor', 'Свещеноиконом');
+  stavrophor('stavrophor', 'Свещеноиконом'),
+  archimandrite('archimandrite', 'Архимандрит'),
+  bishop('bishop', 'Епископ');
 
   final String code;
   final String label;
@@ -20,7 +25,8 @@ enum ClergyRank {
 /// пред него стои избраният сан („о. Тодор“ → „Протойерей Тодор“).
 const clergyTitleWords = {
   'о.', 'о', 'отец', 'свещеник', 'иерей', 'йерей', 'протойерей', 'протоиерей',
-  'дякон', 'протодякон', 'свещеноиконом', 'ставрофор',
+  'дякон', 'протодякон', 'свещеноиконом', 'ставрофор', 'йеродякон', 'иеродякон',
+  'архидякон', 'йеромонах', 'иеромонах', 'архимандрит', 'епископ', 'владика',
 };
 
 String withRank(ClergyRank? rank, String name) {

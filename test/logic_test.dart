@@ -216,6 +216,8 @@ void main() {
       expect(withRank(ClergyRank.archpriest, 'о.Тодор Чобанов'), 'Протойерей Тодор Чобанов');
       expect(withRank(ClergyRank.stavrophor, 'Отец Георги'), 'Свещеноиконом Георги');
       expect(withRank(ClergyRank.priest, 'Иерей Иван'), 'Иерей Иван');
+      expect(withRank(ClergyRank.archimandrite, 'Йеромонах Серафим'), 'Архимандрит Серафим');
+      expect(withRank(ClergyRank.bishop, 'о. Николай'), 'Епископ Николай');
     });
     test('без сан името остава', () {
       expect(withRank(null, 'о. Тодор Чобанов'), 'о. Тодор Чобанов');

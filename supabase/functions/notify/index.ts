@@ -9,11 +9,13 @@ import { importPKCS8, SignJWT } from "npm:jose@5";
 
 // Сан пред името – същото правило като в приложението (models.dart withRank).
 const RANKS: Record<string, string> = {
-  deacon: "Дякон", protodeacon: "Протодякон", priest: "Иерей",
-  archpriest: "Протойерей", stavrophor: "Свещеноиконом",
+  deacon: "Дякон", hierodeacon: "Йеродякон", protodeacon: "Протодякон", archdeacon: "Архидякон",
+  priest: "Иерей", hieromonk: "Йеромонах", archpriest: "Протойерей", stavrophor: "Свещеноиконом",
+  archimandrite: "Архимандрит", bishop: "Епископ",
 };
 const TITLE_WORDS = new Set(["о.", "о", "отец", "свещеник", "иерей", "йерей", "протойерей", "протоиерей",
-  "дякон", "протодякон", "свещеноиконом", "ставрофор"]);
+  "дякон", "протодякон", "свещеноиконом", "ставрофор", "йеродякон", "иеродякон",
+  "архидякон", "йеромонах", "иеромонах", "архимандрит", "епископ", "владика"]);
 function withRank(rank: string | null | undefined, name: string): string {
   const label = rank ? RANKS[rank] : undefined;
   if (!label) return name;
