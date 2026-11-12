@@ -472,6 +472,20 @@ select t.ok((select reversed_by is not null from cash_entries where id = :'i1'),
 select t.ok((select sum(amount) from cash_entries where church_id = :'cid2' and book = 'income' and status = 'approved') = 20
             and (select sum(amount) from cash_entries where church_id = :'cid2' and book = 'expense' and status = 'approved') = 780,
             'книгите се сумират вярно (приходи 20, разходи 780)');
+select t.as_user(:'D');
+select id as o1 from public.cash_add(:'cid2','opening',1000,'Начално салдо',null,null,'cash',null,null,null) \gset
+select t.ok((select status from cash_entries where id = :'o1') = 'pending', 'началното салдо чака касиера');
+select t.fails(format($$select public.cash_add(%L,'opening',5,'Начално салдо',null,null,'cash',null,null,null)$$, :'cid2'),
+               'само едно начално салдо за брой', 'opening_exists');
+select t.as_user(:'C');
+select t.fails(format($$select public.cash_add(%L,'opening',5,'Начално салдо',null,null,'cash',null,null,null)$$, :'cid2'),
+               'свещеник не въвежда начално салдо', 'not_cash_holder');
+select t.as_user(:'B');
+select t.ok((select number from public.cash_decide(:'o1', true, null)) = 1, 'касиерът потвърждава началното салдо – Н-1');
+select t.as_user(:'D');
+select t.fails(format($$select public.cash_reverse(%L, 'смяна')$$, :'o1'), 'началното салдо не се сторнира', 'not_reversible');
+select t.fails(format($$select public.cash_add(%L,'opening',5,'Начално салдо',null,null,'cash',null,null,null)$$, :'cid2'),
+               'началното салдо е еднократно', 'opening_exists');
 select t.as_user(:'A');
 select t.ok((select count(*) from cash_entries where church_id = :'cid2') = 0, 'друг храм не вижда касата');
 

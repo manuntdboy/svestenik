@@ -104,6 +104,19 @@ class _CashScreenState extends State<CashScreen> {
             ]),
           ]),
         ),
+        for (final o in all.where((e) => e.book == CashBook.opening && e.isApproved))
+          Padding(padding: const EdgeInsets.only(top: 10), child: CashRow(entry: o)),
+        if (s.openingAccountsLeft(church).isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const CashEntryForm(holder: true, startWith: CashBook.opening))),
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('Въведи началното салдо'),
+            ),
+          ),
         const SizedBox(height: 10),
         Text(
             s.cashierOf(church) == null
@@ -341,7 +354,11 @@ Future<void> showCashEntry(BuildContext context, CashEntry e) async {
               Expanded(child: Text(b, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
             ]),
           );
-      final canReverse = s.canSeeCash(e.churchId) && e.isApproved && !e.isReversal && e.reversedBy == null;
+      final canReverse = s.canSeeCash(e.churchId) &&
+          e.isApproved &&
+          !e.isReversal &&
+          e.reversedBy == null &&
+          e.book != CashBook.opening;
       final ev = e.eventId == null ? null : s.eventById(e.eventId!);
       return SafeArea(
         child: SingleChildScrollView(
@@ -510,14 +527,18 @@ class _CashReviewCardState extends State<CashReviewCard> {
 class CashEntryForm extends StatefulWidget {
   final bool holder;
   final ChurchEvent? event; // приход от проведено събитие
-  const CashEntryForm({super.key, required this.holder, this.event});
+  final CashBook startWith;
+  const CashEntryForm({super.key, required this.holder, this.event, this.startWith = CashBook.income});
 
   @override
   State<CashEntryForm> createState() => _CashEntryFormState();
 }
 
 class _CashEntryFormState extends State<CashEntryForm> {
-  CashBook _book = CashBook.income;
+  late CashBook _book = widget.startWith;
+  late String _account = widget.startWith == CashBook.opening
+      ? (AppScope.read(context).openingAccountsLeft(AppScope.read(context).currentChurchId!).firstOrNull ?? 'cash')
+      : 'cash';
   String _direction = 'to_bank';
   late String _category = widget.event == null ? incomeCategories.first : incomeCategoryFor(widget.event!.kind);
   final _amount = TextEditingController();
@@ -527,7 +548,6 @@ class _CashEntryFormState extends State<CashEntryForm> {
           ? ''
           : [widget.event!.kind.label, if (widget.event!.forWhom.isNotEmpty) widget.event!.forWhom].join(' · '));
   late DateTime _date = widget.event?.startsAt ?? DateTime.now();
-  String _account = 'cash';
   bool _saving = false;
 
   @override
@@ -551,6 +571,14 @@ class _CashEntryFormState extends State<CashEntryForm> {
       showMessage(context, 'Напишете какъв е видът („Друго“).');
       return;
     }
+    if (_book == CashBook.opening) {
+      final ok = await confirm(
+          context,
+          'Началното салдо е еднократно',
+          '${fmtEur(amount)} ${_account == 'bank' ? 'в банката' : 'в брой'}. След като влезе, не може да се променя.',
+          'Запиши');
+      if (!ok || !mounted) return;
+    }
     setState(() => _saving = true);
     final nav = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -558,8 +586,12 @@ class _CashEntryFormState extends State<CashEntryForm> {
       final e = await s.addCash(
         book: _book,
         amount: amount,
-        category: _book == CashBook.transfer ? (_direction == 'to_bank' ? 'Внасяне' : 'Теглене') : _category,
-        categoryOther: _category == 'Друго' ? _other.text.trim() : '',
+        category: _book == CashBook.transfer
+            ? (_direction == 'to_bank' ? 'Внасяне' : 'Теглене')
+            : _book == CashBook.opening
+                ? 'Начално салдо'
+                : _category,
+        categoryOther: _category == 'Друго' && _book != CashBook.opening ? _other.text.trim() : '',
         note: _note.text.trim(),
         account: _account,
         direction: _book == CashBook.transfer ? _direction : null,
@@ -587,7 +619,12 @@ class _CashEntryFormState extends State<CashEntryForm> {
     final st = s.cashSettings(s.currentChurchId!);
     final fieldStyle = const TextStyle(fontSize: 18, fontWeight: FontWeight.w600);
     final books = widget.holder
-        ? [CashBook.income, CashBook.expense, if (st.hasBank) CashBook.transfer]
+        ? [
+            CashBook.income,
+            CashBook.expense,
+            if (st.hasBank) CashBook.transfer,
+            if (widget.event == null && s.openingAccountsLeft(s.currentChurchId!).isNotEmpty) CashBook.opening,
+          ]
         : [CashBook.income];
     Widget section(String label, Widget child) => Padding(
           padding: const EdgeInsets.only(bottom: 16),
@@ -606,12 +643,22 @@ class _CashEntryFormState extends State<CashEntryForm> {
                   showSelectedIcon: false,
                   segments: [
                     for (final b in books)
-                      ButtonSegment(value: b, label: Text(b == CashBook.transfer ? 'Банка' : b.label)),
+                      ButtonSegment(
+                          value: b,
+                          label: Text(b == CashBook.transfer
+                              ? 'Банка'
+                              : b == CashBook.opening
+                                  ? 'Начало'
+                                  : b.label)),
                   ],
                   selected: {_book},
                   onSelectionChanged: (v) => setState(() {
                     _book = v.first;
                     _category = _cats.first;
+                    if (_book == CashBook.opening) {
+                      final left = s.openingAccountsLeft(s.currentChurchId!);
+                      if (left.isNotEmpty && !left.contains(_account)) _account = left.first;
+                    }
                   }),
                 ),
               ),
@@ -638,7 +685,16 @@ class _CashEntryFormState extends State<CashEntryForm> {
                 decoration: const InputDecoration(hintText: '0,00', suffixText: '€'),
               ),
             ),
-            if (_book != CashBook.transfer) ...[
+            if (_book == CashBook.opening)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                    'Колко пари има касата в деня, от който започвате да я водите в Кайрос. '
+                    'Въвежда се само веднъж${st.hasBank ? ' за брой и веднъж за банката' : ''} и после '
+                    'не може да се променя. Не се брои като приход.',
+                    style: TextStyle(fontSize: 15, color: p.textMuted)),
+              ),
+            if (_book != CashBook.transfer && _book != CashBook.opening) ...[
               section(
                 'Вид',
                 DropdownButtonFormField<String>(
@@ -684,9 +740,17 @@ class _CashEntryFormState extends State<CashEntryForm> {
                 'Сметка',
                 SegmentedButton<String>(
                   showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 'cash', label: Text('Брой')),
-                    ButtonSegment(value: 'bank', label: Text('Банка')),
+                  segments: [
+                    ButtonSegment(
+                        value: 'cash',
+                        label: const Text('Брой'),
+                        enabled: _book != CashBook.opening ||
+                            s.openingAccountsLeft(s.currentChurchId!).contains('cash')),
+                    ButtonSegment(
+                        value: 'bank',
+                        label: const Text('Банка'),
+                        enabled: _book != CashBook.opening ||
+                            s.openingAccountsLeft(s.currentChurchId!).contains('bank')),
                   ],
                   selected: {_account},
                   onSelectionChanged: (v) => setState(() => _account = v.first),
@@ -707,6 +771,10 @@ class _CashEntryFormState extends State<CashEntryForm> {
                     ? 'Приходът отива при касиера и влиза в Приходната книга, щом го приеме.'
                     : _book == CashBook.income
                         ? 'Приходът влиза направо в Приходната книга.'
+                        : _book == CashBook.opening
+                            ? (s.cashierOf(s.currentChurchId!) == null
+                                ? 'Началното салдо влиза направо.'
+                                : 'Началното салдо чака потвърждение от другия от двамата.')
                         : s.cashierOf(s.currentChurchId!) == null
                             ? 'Няма касиер: записът влиза направо, отбелязан „без второ одобрение“.'
                             : _book == CashBook.expense

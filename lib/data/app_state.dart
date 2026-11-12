@@ -229,6 +229,7 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
+    if (t.contains('opening_exists')) return 'Началното салдо вече е въведено. Ако е грешно, сторнирайте го.';
     if (t.contains('not_cash_holder')) return 'Само касиерът и председателят могат да направят това.';
     if (t.contains('own_entry')) return 'Свой запис не може да одобрите – одобрява го другият.';
     if (t.contains('not_cashier')) return 'Приходите от свещениците ги приема касиерът.';
@@ -628,6 +629,18 @@ class AppState extends ChangeNotifier {
 
   List<CashEntry> myCashEntries(String churchId) =>
       cashEntries(churchId).where((e) => e.createdBy == currentUser?.id).toList();
+
+  /// Въведеното начално салдо за сметката (чакащо или влязло) или null.
+  CashEntry? openingFor(String churchId, String account) => _cash
+      .where((e) =>
+          e.churchId == churchId && e.book == CashBook.opening && e.account == account && !e.isReturned)
+      .firstOrNull;
+
+  /// За кои сметки още може да се въведе начално салдо (еднократно).
+  List<String> openingAccountsLeft(String churchId) => [
+        if (openingFor(churchId, 'cash') == null) 'cash',
+        if (cashSettings(churchId).hasBank && openingFor(churchId, 'bank') == null) 'bank',
+      ];
 
   /// Мога ли да реша чакащия запис (същото правило като на сървъра).
   bool canDecideCash(CashEntry e) {

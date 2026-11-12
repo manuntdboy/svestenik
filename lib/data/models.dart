@@ -564,7 +564,8 @@ class LeaveRequest {
 enum CashBook {
   income('Приход', 'Приходна книга', 'П'),
   expense('Разход', 'Разходна книга', 'Р'),
-  transfer('Банка', 'Движения с банката', 'Б');
+  transfer('Банка', 'Движения с банката', 'Б'),
+  opening('Начално салдо', 'Начално салдо', 'Н');
 
   final String label;
   final String bookName;
@@ -657,7 +658,9 @@ class CashEntry {
   /// „П-12“, „Р-3“ – номерът в книгата (след влизане в нея).
   String get ref => number == null ? '' : '${book.prefix}-$number';
 
-  String get categoryLabel => category == 'Друго' && categoryOther.isNotEmpty ? categoryOther : category;
+  String get categoryLabel => book == CashBook.opening
+      ? (account == 'bank' ? 'Начално салдо · банка' : 'Начално салдо · брой')
+      : category == 'Друго' && categoryOther.isNotEmpty ? categoryOther : category;
 
   String get kindLabel => isReversal
       ? 'Сторно'
@@ -670,6 +673,7 @@ class CashEntry {
     if (!isApproved) return (0, 0);
     switch (book) {
       case CashBook.income:
+      case CashBook.opening:
         return account == 'bank' ? (0, amount) : (amount, 0);
       case CashBook.expense:
         return account == 'bank' ? (0, -amount) : (-amount, 0);

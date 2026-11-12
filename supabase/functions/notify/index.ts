@@ -215,7 +215,7 @@ async function handle(req: Request): Promise<Response> {
     const { data: ce } = await admin.from("cash_entries").select("*").eq("id", entryId).maybeSingle();
     if (!ce) return json(404, { error: "not_found" });
     const eur = new Intl.NumberFormat("bg-BG", { style: "currency", currency: "EUR" }).format(Math.abs(Number(ce.amount)));
-    const what = ce.reverses ? "Сторно" : ce.book === "income" ? "Приход" : ce.book === "expense" ? "Разход"
+ const what = ce.reverses ? "Сторно" : ce.book === "opening" ? "Начално салдо" : ce.book === "income" ? "Приход" : ce.book === "expense" ? "Разход"
       : ce.direction === "to_bank" ? "Внасяне в банката" : "Теглене от банката";
     const cat = ce.category === "Друго" && ce.category_other ? ce.category_other : ce.category;
     const { data: members } = await admin.from("church_members").select("user_id, role, permissions")
