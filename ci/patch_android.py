@@ -50,6 +50,20 @@ if "ScheduledNotificationReceiver" not in m:
 # Алармата може да се покаже върху заключения екран.
 if "showWhenLocked" not in m:
     m = re.sub(r'(<activity\b)', r'\1\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', m, count=1)
+# Видимост към Viber и телефона (бутоните „Viber“ и „Обади се“), Android 11+.
+if 'android:scheme="viber"' not in m:
+    m = m.replace("</manifest>", """    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="viber"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <package android:name="com.viber.voip"/>
+    </queries>
+</manifest>""", 1)
 manifest.write_text(m, encoding="utf-8")
 
 # ---------------------------------------------------------------- икона

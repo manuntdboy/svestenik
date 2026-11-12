@@ -96,6 +96,17 @@ class PriestProfileScreen extends StatelessWidget {
                 label: const Text('Промени името'),
               ),
             ],
+            if (u.phone.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              SurfaceCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text('Телефон', style: TextStyle(fontSize: 14, color: p.textMuted)),
+                  Text(u.phone, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 10),
+                  ContactButtons(u.phone),
+                ]),
+              ),
+            ],
             const SizedBox(height: 20),
             SurfaceCard(
               child: Column(

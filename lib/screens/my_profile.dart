@@ -209,6 +209,9 @@ class MyProfileScreen extends StatelessWidget {
                     border: Border.all(color: p.border),
                   ),
                   child: Column(children: [
+                    row(Icons.call_outlined, blueBg, p.primary, 'Телефон',
+                        (s.currentUser?.phone ?? '').isEmpty ? 'Не е въведен' : s.currentUser!.phone),
+                    divider(),
                     row(Icons.cake_outlined, blueBg, p.primary, 'Дата на раждане',
                         fmtDateFull(d.birthDate)),
                     divider(),
@@ -231,7 +234,7 @@ class MyProfileScreen extends StatelessWidget {
                   ]),
                 ),
                 const SizedBox(height: 12),
-                Text('Тези данни виждате само вие.',
+                Text('Датите виждате само вие; телефона – и колегите от храма.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: p.textMuted)),
               ],

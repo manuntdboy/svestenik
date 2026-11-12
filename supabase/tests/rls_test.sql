@@ -377,6 +377,14 @@ select t.ok(t.rows(format($$update profiles set rank = 'deacon' where id = %L$$,
 select t.as_user(:'A');
 select t.ok((select rank from profiles where id = :'B') = 'archpriest', 'колегата вижда сана');
 
+-- Телефон на свещеника
+select t.as_user(:'B');
+select t.rows(format($$update profiles set phone = '0888 123 456' where id = %L$$, :'B')) \g /dev/null
+select t.ok((select phone from profiles where id = :'B') = '0888 123 456', 'свещеникът си въвежда телефон');
+select t.fails(format($$update profiles set phone = 'обади ми се' where id = %L$$, :'B'), 'невалиден телефон се отказва');
+select t.ok(t.rows(format($$update profiles set phone = '0899 000 000' where id = %L$$, :'A')) = 0, 'не може да се смени телефонът на друг');
+select t.as_user(:'A');
+select t.ok((select phone from profiles where id = :'B') = '0888 123 456', 'колегата вижда телефона');
 select t.as_user(:'A');
 select t.fails('select * from notify_log', 'дневникът на известията не се чете от потребител');
 select t.fails($$insert into notify_log(type, status) values ('x', 200)$$, 'и не се пише от потребител');

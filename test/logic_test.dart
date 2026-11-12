@@ -229,4 +229,15 @@ void main() {
       expect(ClergyRank.fromCode('x'), isNull);
     });
   });
+
+  group('Номер за Viber', () {
+    test('български номера стават международни', () {
+      expect(viberNumber('0888 123 456'), '+359888123456');
+      expect(viberNumber('+359 888 123 456'), '+359888123456');
+      expect(viberNumber('00359888123456'), '+359888123456');
+      expect(viberNumber('359888123456'), '+359888123456');
+      expect(viberNumber('0888-12-34-56'), '+359888123456');
+      expect(viberNumber('123'), isNull);
+    });
+  });
 }

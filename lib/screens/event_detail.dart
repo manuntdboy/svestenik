@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
@@ -11,12 +10,6 @@ import '../widgets/requests.dart';
 class EventDetailScreen extends StatelessWidget {
   final String eventId;
   const EventDetailScreen({super.key, required this.eventId});
-
-  Future<void> _call(BuildContext context, String phone) async {
-    final uri = Uri(scheme: 'tel', path: phone.replaceAll(' ', ''));
-    final ok = await launchUrl(uri);
-    if (!ok && context.mounted) showMessage(context, 'Не може да се отвори телефонът.');
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,14 +110,13 @@ class EventDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Column(
                 children: [
-                  if (e.phone.isNotEmpty)
-                    row('Телефон', e.phone,
-                        trailing: FilledButton.icon(
-                          style: FilledButton.styleFrom(minimumSize: const Size(44, 48)),
-                          onPressed: () => _call(context, e.phone),
-                          icon: const Icon(Icons.call_rounded),
-                          label: const Text('Обади се'),
-                        )),
+                  if (e.phone.isNotEmpty) ...[
+                    row('Телефон', e.phone),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: ContactButtons(e.phone),
+                    ),
+                  ],
                   row('Свещеник',
                       s.isMine(e) ? '${s.priestName(e.assigneeId)} (аз)' : s.priestName(e.assigneeId),
                       trailing: PriestBadge(

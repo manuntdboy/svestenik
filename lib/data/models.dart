@@ -45,12 +45,23 @@ String withRank(ClergyRank? rank, String name) {
   return words.isEmpty ? rank.label : '${rank.label} ${words.join(' ')}';
 }
 
+/// Номер за Viber: международен вид с „+“ (0888… → +359888…).
+String? viberNumber(String phone) {
+  var n = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+  if (n.startsWith('00')) n = '+${n.substring(2)}';
+  if (n.startsWith('0')) n = '+359${n.substring(1)}';
+  if (!n.startsWith('+')) n = n.startsWith('359') ? '+$n' : '+359$n';
+  return RegExp(r'^\+[0-9]{8,15}$').hasMatch(n) ? n : null;
+}
+
 class AppUser {
   final String id;
   final String username;
   /// Името, както е въведено (без сана).
   final String name;
   final ClergyRank? rank;
+  /// Телефон за колегите (по желание).
+  final String phone;
   final String email;
 
   AppUser({
@@ -58,6 +69,7 @@ class AppUser {
     required this.username,
     required String fullName,
     this.rank,
+    this.phone = '',
     this.email = '',
   }) : name = fullName;
 
@@ -69,6 +81,7 @@ class AppUser {
         username: r['username'] as String,
         fullName: r['full_name'] as String,
         rank: ClergyRank.fromCode(r['rank']),
+        phone: (r['phone'] as String?) ?? '',
         email: email,
       );
 }

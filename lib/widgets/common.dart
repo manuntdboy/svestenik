@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/models.dart';
 import '../theme.dart';
@@ -244,5 +245,62 @@ class PriestBadge extends StatelessWidget {
                 fontSize: size * 0.4, fontWeight: FontWeight.w800, color: p.onPriest())),
       ),
     );
+  }
+}
+
+
+/// Бутони „Обади се“ и „Viber“ за телефонен номер.
+class ContactButtons extends StatelessWidget {
+  final String phone;
+  const ContactButtons(this.phone, {super.key});
+
+  static Future<void> call(BuildContext context, String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
+    var ok = false;
+    try {
+      ok = await launchUrl(uri);
+    } catch (_) {}
+    if (!ok && context.mounted) showMessage(context, 'Не може да се отвори телефонът.');
+  }
+
+  static Future<void> viber(BuildContext context, String phone) async {
+    final n = viberNumber(phone);
+    if (n == null) {
+      showMessage(context, 'Номерът не изглежда правилен за Viber.');
+      return;
+    }
+    var ok = false;
+    try {
+      ok = await launchUrl(Uri.parse('viber://chat?number=${Uri.encodeComponent(n)}'),
+          mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!ok && context.mounted) showMessage(context, 'Viber не е инсталиран на телефона.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size(44, 50)),
+          onPressed: () => call(context, phone),
+          icon: const Icon(Icons.call_rounded),
+          label: const Text('Обади се'),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(44, 50),
+            backgroundColor: const Color(0xFF7360F2),
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => viber(context, phone),
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          label: const Text('Viber'),
+        ),
+      ),
+    ]);
   }
 }

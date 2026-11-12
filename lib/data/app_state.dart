@@ -541,11 +541,17 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Сменя сана (или го маха с null).
-  Future<void> setRank(ClergyRank? rank) async {
+  /// Сменя сана (или го маха с null) и телефона за колегите.
+  Future<void> setRankAndPhone(ClergyRank? rank, String phone) async {
+    final ph = phone.trim();
     try {
-      await _db.from('profiles').update({'rank': rank?.code}).eq('id', currentUser!.id);
+      await _db
+          .from('profiles')
+          .update({'rank': rank?.code, 'phone': ph.isEmpty ? null : ph}).eq('id', currentUser!.id);
       await refresh();
+    } on PostgrestException catch (e) {
+      if (e.message.contains('phone')) throw AppError('Телефонът не изглежда правилен.');
+      throw AppError(_friendly(e));
     } catch (e) {
       throw AppError(_friendly(e));
     }

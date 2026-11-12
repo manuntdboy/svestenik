@@ -18,11 +18,13 @@ class _MyProfileEditScreenState extends State<MyProfileEditScreen> {
   late final _d = AppScope.read(context).myDetails.copy();
   late final _names = TextEditingController(text: _d.threeNames);
   late ClergyRank? _rank = AppScope.read(context).currentUser?.rank;
+  late final _phone = TextEditingController(text: AppScope.read(context).currentUser?.phone ?? '');
   bool _saving = false;
 
   @override
   void dispose() {
     _names.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -63,7 +65,9 @@ class _MyProfileEditScreenState extends State<MyProfileEditScreen> {
     final nav = Navigator.of(context);
     final s = AppScope.read(context);
     try {
-      if (_rank != s.currentUser?.rank) await s.setRank(_rank);
+      if (_rank != s.currentUser?.rank || _phone.text.trim() != (s.currentUser?.phone ?? '')) {
+        await s.setRankAndPhone(_rank, _phone.text);
+      }
       await s.saveDetails(_d);
       nav.pop();
     } on AppError catch (e) {
@@ -165,6 +169,19 @@ class _MyProfileEditScreenState extends State<MyProfileEditScreen> {
               decoration: const InputDecoration(hintText: 'Име Презиме Фамилия'),
             ),
             const SizedBox(height: 16),
+            const FieldLabel('Телефон'),
+            TextField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              decoration: const InputDecoration(hintText: 'например 0888 123 456'),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 16),
+              child: Text(
+                  'По желание. Виждат го само свещениците от вашия храм – за „Обади се“ и „Viber“.',
+                  style: TextStyle(fontSize: 14, color: Palette.of(context).textMuted)),
+            ),
             _dateField(
               'Дата на раждане',
               fmtDateFull(_d.birthDate),
