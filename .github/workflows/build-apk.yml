@@ -24,10 +24,10 @@ jobs:
           version: latest
 
       - name: Свързване с проекта
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Прилагане на промените по базата
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD"
 
       - name: Качване на функцията за вход
         run: supabase functions deploy login --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
