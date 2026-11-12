@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Icon(Icons.calendar_month_outlined, size: 32, color: p.onCalendarTile),
             ),
             const SizedBox(height: 14),
-            Text('Свещеник · тестова версия',
+            Text('Кайрос · тестова версия',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.textMuted)),
             const SizedBox(height: 14),
             const Text('Добре дошли',

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:svestenik/data/models.dart';
+import 'package:kairos/data/models.dart';
 
 void main() {
   test('събитие се записва и чете обратно', () {

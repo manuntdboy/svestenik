@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Firebase се включва само когато тайните са добавени в GitHub Secrets.
+      HAS_FIREBASE: ${{ secrets.FIREBASE_APP_ID != '' && secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+      APK_NAME: kairos-${{ github.run_number }}.apk
     steps:
       - uses: actions/checkout@v4
 
@@ -27,9 +31,9 @@ jobs:
       - name: Създаване на Android частта
         run: |
           flutter --version
-          flutter create . --platforms=android --org bg.svestenik --project-name svestenik
+          flutter create . --platforms=android --org bg.kairos --project-name kairos
           rm -f test/widget_test.dart   # примерен тест от шаблона, не ни трябва
-          # Име на приложението, известия, настройки за изграждане
+          # Име на приложението, пакет, известия, настройки за изграждане
           python3 ci/patch_android.py .
           cat android/settings.gradle.kts
 
@@ -47,13 +51,33 @@ jobs:
         run: flutter build apk --release --build-number=${{ github.run_number }}
 
       - name: Преименуване
-        run: cp build/app/outputs/flutter-apk/app-release.apk svestenik-${{ github.run_number }}.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
 
-      - name: Публикуване за сваляне от телефона
+      - name: Публикуване в GitHub Releases (резервно)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Тестова версия ${{ github.run_number }}
           body: Свалете файла .apk на телефона и го отворете, за да се инсталира.
           prerelease: true
-          files: svestenik-${{ github.run_number }}.apk
+          files: ${{ env.APK_NAME }}
+
+      - name: Изпращане към Firebase App Distribution
+        if: env.HAS_FIREBASE == 'true'
+        env:
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          printf 'Версия %s\n\n%s\n' "${{ github.run_number }}" "${COMMIT_MESSAGE:-Ръчно изграждане}" > "$RUNNER_TEMP/notes.txt"
+          npx --yes firebase-tools@latest appdistribution:distribute "$APK_NAME" \
+            --app "$FIREBASE_APP_ID" \
+            --groups "testers" \
+            --release-notes-file "$RUNNER_TEMP/notes.txt"
+          rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Напомняне за Firebase
+        if: env.HAS_FIREBASE != 'true'
+        run: echo "::notice::Firebase App Distribution не е настроен (липсват FIREBASE_APP_ID и FIREBASE_SERVICE_ACCOUNT). APK е само в GitHub Releases."

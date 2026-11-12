@@ -1,5 +1,5 @@
-name: svestenik
-description: "Календар за свещеници – тестова версия, данните са само на телефона."
+name: kairos
+description: "Кайрос – календар за свещеници."
 publish_to: 'none'
 version: 0.1.0+1
 

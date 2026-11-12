@@ -14,7 +14,7 @@ gradle = root / "android/app/build.gradle.kts"
 
 # ---------------------------------------------------------------- manifest
 m = manifest.read_text(encoding="utf-8")
-m = m.replace('android:label="svestenik"', 'android:label="Свещеник"')
+m = re.sub(r'android:label="[^"]*"', 'android:label="Кайрос"', m, count=1)
 
 permissions = """
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -49,6 +49,8 @@ if "isCoreLibraryDesugaringEnabled" not in g:
         g = g.replace("android {", "android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }", 1)
 if "multiDexEnabled" not in g:
     g = re.sub(r"defaultConfig\s*\{", "defaultConfig {\n        multiDexEnabled = true", g, count=1)
+# Постоянно име на пакета (по него Android и Firebase познават приложението).
+g = re.sub(r'applicationId\s*=\s*"[^"]*"', 'applicationId = "bg.kairos.app"', g)
 # Известията искат поне compileSdk 37.
 g = re.sub(r"compileSdk\s*=\s*flutter\.compileSdkVersion",
            "compileSdk = maxOf(flutter.compileSdkVersion, 37)", g)

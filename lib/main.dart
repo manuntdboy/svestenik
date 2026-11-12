@@ -29,7 +29,7 @@ class SvestenikApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     return MaterialApp(
-      title: 'Свещеник',
+      title: 'Кайрос',
       debugShowCheckedModeBanner: false,
       locale: const Locale('bg'),
       supportedLocales: const [Locale('bg')],

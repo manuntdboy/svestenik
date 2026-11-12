@@ -49,7 +49,7 @@ class ChurchCodeScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     color: Colors.white, // QR кодът се чете най-добре на бяло
                     child: QrImageView(
-                      data: 'SVESTENIK:${church.joinCode}',
+                      data: 'KAIROS:${church.joinCode}',
                       version: QrVersions.auto,
                       size: 180,
                     ),
