@@ -406,6 +406,23 @@ class _PriestsStrip extends StatelessWidget {
                   children: [
                     const Text('Свещеници в храма',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    Builder(builder: (context) {
+                      final now = DateTime.now();
+                      final resting = s
+                          .leavesOn(churchId, now)
+                          .where((l) => l.status == LeaveStatus.approved)
+                          .map((l) => s.priestName(l.userId))
+                          .toList();
+                      if (resting.isEmpty) return const SizedBox.shrink();
+                      return Row(children: [
+                        Icon(Icons.beach_access_rounded, size: 16, color: p.textMuted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text('Днес почива: ${resting.join(', ')}',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textMuted)),
+                        ),
+                      ]);
+                    }),
                     Row(children: [
                       Text('Вашият цвят ', style: TextStyle(fontSize: 14, color: p.textMuted)),
                       Container(

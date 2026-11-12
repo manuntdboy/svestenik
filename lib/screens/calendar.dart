@@ -52,6 +52,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final s = AppScope.of(context);
+    // Одобрени почивки в деня – цветът на почиващия свещеник.
+    List<Color> leavesFor(DateTime d) => [
+          for (final l in s.leavesOn(s.currentChurchId!, d).where((l) => l.status == LeaveStatus.approved))
+            p.priest(s.priestIndex(l.churchId, l.userId)),
+        ];
     List<Color> dotsFor(DateTime d) => [
           for (final id in s.priestsOn(d)) p.priest(s.priestIndex(s.currentChurchId!, id)),
         ];
@@ -96,6 +101,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 weekStart: _weekStart,
                 selected: _selected,
                 dots: dotsFor,
+                leaves: leavesFor,
                 onSelect: (d) => setState(() => _selected = d),
               )
             else
@@ -103,6 +109,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 month: _selected,
                 selected: _selected,
                 dots: dotsFor,
+                leaves: leavesFor,
                 onSelect: (d) => setState(() {
                   _selected = d;
                   _view = CalView.day;
@@ -294,12 +301,14 @@ class _DayCell extends StatelessWidget {
   final DateTime day;
   final bool selected;
   final List<Color> dots;
+  final List<Color> leaves;
   final bool dimmed;
   final VoidCallback onTap;
   const _DayCell(
       {required this.day,
       required this.selected,
       required this.dots,
+      this.leaves = const [],
       required this.onTap,
       this.dimmed = false});
 
@@ -310,7 +319,8 @@ class _DayCell extends StatelessWidget {
     final label = DateFormat('EEEE, d MMMM', 'bg').format(day) +
         (today ? ', днес' : '') +
         (selected ? ', избран' : '') +
-        (dots.isNotEmpty ? ', има събития' : '');
+        (dots.isNotEmpty ? ', има събития' : '') +
+        (leaves.isNotEmpty ? ', почивка' : '');
     return Semantics(
       label: label,
       button: true,
@@ -342,19 +352,22 @@ class _DayCell extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          // Точки под деня: по една в цвета на всеки свещеник със събитие.
+          // Точки под деня: по една в цвета на всеки свещеник със събитие;
+          // плажен чадър в цвета на свещеника, който почива.
           SizedBox(
-            height: 7,
+            height: 12,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final c in dots.take(3))
+                for (final c in dots.take(leaves.isEmpty ? 3 : 2))
                   Container(
                     width: 7,
                     height: 7,
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(shape: BoxShape.circle, color: c),
                   ),
+                if (leaves.isNotEmpty)
+                  Icon(Icons.beach_access_rounded, size: 12, color: leaves.first),
               ],
             ),
           ),
@@ -368,11 +381,13 @@ class _WeekStrip extends StatelessWidget {
   final DateTime weekStart;
   final DateTime selected;
   final List<Color> Function(DateTime) dots;
+  final List<Color> Function(DateTime) leaves;
   final ValueChanged<DateTime> onSelect;
   const _WeekStrip(
       {required this.weekStart,
       required this.selected,
       required this.dots,
+      required this.leaves,
       required this.onSelect});
 
   @override
@@ -400,6 +415,7 @@ class _WeekStrip extends StatelessWidget {
                     day: d,
                     selected: sameDay(d, selected),
                     dots: dots(d),
+                    leaves: leaves(d),
                     onTap: () => onSelect(d),
                   ),
                 ],
@@ -415,11 +431,13 @@ class _MonthGrid extends StatelessWidget {
   final DateTime month;
   final DateTime selected;
   final List<Color> Function(DateTime) dots;
+  final List<Color> Function(DateTime) leaves;
   final ValueChanged<DateTime> onSelect;
   const _MonthGrid(
       {required this.month,
       required this.selected,
       required this.dots,
+      required this.leaves,
       required this.onSelect});
 
   @override
@@ -462,6 +480,7 @@ class _MonthGrid extends StatelessWidget {
                           day: d,
                           selected: sameDay(d, selected),
                           dots: dots(d),
+                    leaves: leaves(d),
                           dimmed: d.month != month.month,
                           onTap: () => onSelect(d),
                         ),
