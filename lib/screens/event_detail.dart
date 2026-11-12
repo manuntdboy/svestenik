@@ -198,7 +198,7 @@ class EventDetailScreen extends StatelessWidget {
                   final nav = Navigator.of(context);
                   final ok = await confirm(
                       context, 'Изтриване', 'Събитието ще бъде изтрито.', 'Изтрий');
-                  if (!ok) return;
+                  if (!ok || !context.mounted) return;
                   final messenger = ScaffoldMessenger.of(context);
                   try {
                     await s.deleteEvent(e.id);
