@@ -1,17 +1,68 @@
 // Модели на данните. Пазят се в Supabase (PostgreSQL).
 
+/// Сан на свещенослужителя. Стои пред името: „Протойерей Тодор Чобанов“.
+enum ClergyRank {
+  deacon('deacon', 'Дякон'),
+  protodeacon('protodeacon', 'Протодякон'),
+  priest('priest', 'Иерей'),
+  archpriest('archpriest', 'Протойерей'),
+  stavrophor('stavrophor', 'Свещеноиконом');
+
+  final String code;
+  final String label;
+  const ClergyRank(this.code, this.label);
+
+  static ClergyRank? fromCode(Object? c) =>
+      ClergyRank.values.where((r) => r.code == c).firstOrNull;
+}
+
+/// Думи за обръщение/сан, които се махат от началото на името, когато
+/// пред него стои избраният сан („о. Тодор“ → „Протойерей Тодор“).
+const clergyTitleWords = {
+  'о.', 'о', 'отец', 'свещеник', 'иерей', 'йерей', 'протойерей', 'протоиерей',
+  'дякон', 'протодякон', 'свещеноиконом', 'ставрофор',
+};
+
+String withRank(ClergyRank? rank, String name) {
+  if (rank == null) return name;
+  var words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  while (words.isNotEmpty) {
+    final w = words.first.toLowerCase();
+    if (clergyTitleWords.contains(w)) {
+      words = words.sublist(1);
+    } else if (w.startsWith('о.') && w.length > 2) {
+      words = [words.first.substring(2), ...words.sublist(1)];
+    } else {
+      break;
+    }
+  }
+  return words.isEmpty ? rank.label : '${rank.label} ${words.join(' ')}';
+}
+
 class AppUser {
   final String id;
   final String username;
-  final String fullName;
+  /// Името, както е въведено (без сана).
+  final String name;
+  final ClergyRank? rank;
   final String email;
 
-  AppUser({required this.id, required this.username, required this.fullName, this.email = ''});
+  AppUser({
+    required this.id,
+    required this.username,
+    required String fullName,
+    this.rank,
+    this.email = '',
+  }) : name = fullName;
+
+  /// Името за показване – със сана отпред, ако е избран.
+  String get fullName => withRank(rank, name);
 
   factory AppUser.fromRow(Map<String, dynamic> r, {String email = ''}) => AppUser(
         id: r['id'] as String,
         username: r['username'] as String,
         fullName: r['full_name'] as String,
+        rank: ClergyRank.fromCode(r['rank']),
         email: email,
       );
 }

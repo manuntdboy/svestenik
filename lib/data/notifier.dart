@@ -87,9 +87,9 @@ class Notifier {
           androidFullScreenIntent: true,
           androidStopAlarmOnTermination: false,
           allowAlarmOverlap: true,
-          volumeSettings: const VolumeSettings.fade(
+          volumeSettings: VolumeSettings.fade(
             volume: 0.9,
-            fadeDuration: Duration(seconds: 3),
+            fadeDuration: const Duration(seconds: 3),
             volumeEnforced: true,
           ),
           notificationSettings: NotificationSettings(

@@ -7,6 +7,27 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "npm:jose@5";
 
+// Сан пред името – същото правило като в приложението (models.dart withRank).
+const RANKS: Record<string, string> = {
+  deacon: "Дякон", protodeacon: "Протодякон", priest: "Иерей",
+  archpriest: "Протойерей", stavrophor: "Свещеноиконом",
+};
+const TITLE_WORDS = new Set(["о.", "о", "отец", "свещеник", "иерей", "йерей", "протойерей", "протоиерей",
+  "дякон", "протодякон", "свещеноиконом", "ставрофор"]);
+function withRank(rank: string | null | undefined, name: string): string {
+  const label = rank ? RANKS[rank] : undefined;
+  if (!label) return name;
+  let words = name.trim().split(/\s+/).filter((w) => w);
+  while (words.length) {
+    const w = words[0].toLowerCase();
+    if (TITLE_WORDS.has(w)) words = words.slice(1);
+    else if (w.startsWith("о.") && w.length > 2) words = [words[0].slice(2), ...words.slice(1)];
+    else break;
+  }
+  return words.length ? `${label} ${words.join(" ")}` : label;
+}
+
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
@@ -93,8 +114,8 @@ Deno.serve(async (req) => {
     return json(500, { error: "fcm_not_configured" });
   }
 
-  const { data: callerProfile } = await admin.from("profiles").select("full_name").eq("id", caller.id).maybeSingle();
-  const callerName = callerProfile?.full_name ?? "";
+  const { data: callerProfile } = await admin.from("profiles").select("full_name, rank").eq("id", caller.id).maybeSingle();
+  const callerName = withRank(callerProfile?.rank, callerProfile?.full_name ?? "");
 
   // Кому и какво пращаме.
   let recipients: string[] = [];
@@ -204,8 +225,8 @@ Deno.serve(async (req) => {
       recipients = [...(managers ?? []).map((m) => m.user_id), ev.owner_id];
       let sub = "";
       if (ev.proposed_substitute) {
-        const { data: sp } = await admin.from("profiles").select("full_name").eq("id", ev.proposed_substitute).maybeSingle();
-        if (sp?.full_name) sub = ` · предлага ${sp.full_name}`;
+        const { data: sp } = await admin.from("profiles").select("full_name, rank").eq("id", ev.proposed_substitute).maybeSingle();
+        if (sp?.full_name) sub = ` · предлага ${withRank(sp.rank, sp.full_name)}`;
       }
       title = `${callerName} отказа: ${kind}`;
       text = [when, ev.decline_reason].filter(Boolean).join(" · ") + sub;

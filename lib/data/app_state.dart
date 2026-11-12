@@ -541,6 +541,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Сменя сана (или го маха с null).
+  Future<void> setRank(ClergyRank? rank) async {
+    try {
+      await _db.from('profiles').update({'rank': rank?.code}).eq('id', currentUser!.id);
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   Church? get currentChurch =>
       myChurches.where((c) => c.id == currentChurchId).firstOrNull;
 

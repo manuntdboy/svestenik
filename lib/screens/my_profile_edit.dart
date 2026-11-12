@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'my_profile.dart';
@@ -16,6 +17,7 @@ class MyProfileEditScreen extends StatefulWidget {
 class _MyProfileEditScreenState extends State<MyProfileEditScreen> {
   late final _d = AppScope.read(context).myDetails.copy();
   late final _names = TextEditingController(text: _d.threeNames);
+  late ClergyRank? _rank = AppScope.read(context).currentUser?.rank;
   bool _saving = false;
 
   @override
@@ -59,8 +61,10 @@ class _MyProfileEditScreenState extends State<MyProfileEditScreen> {
     setState(() => _saving = true);
     _d.threeNames = _names.text;
     final nav = Navigator.of(context);
+    final s = AppScope.read(context);
     try {
-      await AppScope.read(context).saveDetails(_d);
+      if (_rank != s.currentUser?.rank) await s.setRank(_rank);
+      await s.saveDetails(_d);
       nav.pop();
     } on AppError catch (e) {
       if (!mounted) return;
@@ -132,6 +136,27 @@ class _MyProfileEditScreenState extends State<MyProfileEditScreen> {
               ]),
             ),
             const SizedBox(height: 24),
+            const FieldLabel('Сан'),
+            DropdownButtonFormField<ClergyRank?>(
+              initialValue: _rank,
+              isExpanded: true,
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('Не е избран')),
+                for (final r in ClergyRank.values)
+                  DropdownMenuItem(value: r, child: Text(r.label)),
+              ],
+              onChanged: (v) => setState(() => _rank = v),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 16),
+              child: Text(
+                  'Стои пред името ви навсякъде в Кайрос, например „Протойерей Тодор Чобанов“.',
+                  style: TextStyle(fontSize: 14, color: Palette.of(context).textMuted)),
+            ),
             const FieldLabel('Три имена'),
             TextField(
               controller: _names,

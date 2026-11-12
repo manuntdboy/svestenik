@@ -365,6 +365,15 @@ select t.ok((select seen_at from events where id = :'ev3') is not null, 'зап�
 select t.rows(format($$update events set assignee_id = %L where id = %L$$, :'C', :'ev3')) \g /dev/null
 select t.ok((select seen_at from events where id = :'ev3') is null, 'при прехвърляне „видяно“ се нулира');
 
+-- Сан
+select t.as_user(:'B');
+select t.rows(format($$update profiles set rank = 'archpriest' where id = %L$$, :'B')) \g /dev/null
+select t.ok((select rank from profiles where id = :'B') = 'archpriest', 'свещеникът си избира сан');
+select t.fails(format($$update profiles set rank = 'patriarch' where id = %L$$, :'B'), 'непознат сан се отказва');
+select t.ok(t.rows(format($$update profiles set rank = 'deacon' where id = %L$$, :'A')) = 0, 'не може да се смени санът на друг');
+select t.as_user(:'A');
+select t.ok((select rank from profiles where id = :'B') = 'archpriest', 'колегата вижда сана');
+
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

@@ -126,7 +126,8 @@ class MyProfileScreen extends StatelessWidget {
             ? 'Председател'
             : (s.canSeeCash(church.id) ? 'Свещеник · касиер' : 'Свещеник');
     final days = d.daysToNameDay();
-    final name = d.threeNames.trim().isNotEmpty ? d.threeNames : (s.currentUser?.fullName ?? '');
+    final name = withRank(s.currentUser?.rank,
+        d.threeNames.trim().isNotEmpty ? d.threeNames : (s.currentUser?.name ?? ''));
 
     Widget row(IconData icon, Color iconBg, Color iconFg, String label, String value,
             {Widget? trailing}) =>

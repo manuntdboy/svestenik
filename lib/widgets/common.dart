@@ -215,7 +215,7 @@ Future<bool> confirm(BuildContext context, String title, String body, String act
 String priestInitials(String fullName) {
   final words = fullName
       .split(RegExp(r'\s+'))
-      .where((w) => w.isNotEmpty && !{'отец', 'о.', 'свещеник', 'протойерей', 'иерей'}.contains(w.toLowerCase()))
+      .where((w) => w.isNotEmpty && !clergyTitleWords.contains(w.toLowerCase()))
       .toList();
   if (words.isEmpty) return fullName.isEmpty ? '?' : fullName[0].toUpperCase();
   return words.take(2).map((w) => w[0].toUpperCase()).join();

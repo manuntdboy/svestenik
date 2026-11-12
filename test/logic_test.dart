@@ -209,4 +209,22 @@ void main() {
       expect(l.status, LeaveStatus.approved);
     });
   });
+
+  group('Сан пред името', () {
+    test('о. се заменя със сана', () {
+      expect(withRank(ClergyRank.archpriest, 'о. Тодор Чобанов'), 'Протойерей Тодор Чобанов');
+      expect(withRank(ClergyRank.archpriest, 'о.Тодор Чобанов'), 'Протойерей Тодор Чобанов');
+      expect(withRank(ClergyRank.stavrophor, 'Отец Георги'), 'Свещеноиконом Георги');
+      expect(withRank(ClergyRank.priest, 'Иерей Иван'), 'Иерей Иван');
+    });
+    test('без сан името остава', () {
+      expect(withRank(null, 'о. Тодор Чобанов'), 'о. Тодор Чобанов');
+      final u = AppUser(id: '1', username: 't', fullName: 'Тодор Чобанов', rank: ClergyRank.deacon);
+      expect(u.fullName, 'Дякон Тодор Чобанов');
+      expect(u.name, 'Тодор Чобанов');
+      expect(priestInitials(u.fullName), 'ТЧ');
+      expect(ClergyRank.fromCode('protodeacon'), ClergyRank.protodeacon);
+      expect(ClergyRank.fromCode('x'), isNull);
+    });
+  });
 }

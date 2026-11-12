@@ -91,7 +91,7 @@ class PriestProfileScreen extends StatelessWidget {
             if (me) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: () => _editName(context, u.fullName),
+                onPressed: () => _editName(context, u.name),
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('Промени името'),
               ),
