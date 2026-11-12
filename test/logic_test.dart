@@ -240,4 +240,21 @@ void main() {
       expect(viberNumber('123'), isNull);
     });
   });
+
+  group('Адрес извън храма', () {
+    test('пълен адрес и търсене в картата', () {
+      final e = ev(outside: true)
+        ..address = 'ул. Иван Вазов 12'
+        ..addressExtra = 'бл. 5, ап. 9'
+        ..addressTown = 'гр. Пловдив';
+      expect(e.fullAddress, 'ул. Иван Вазов 12, бл. 5, ап. 9, гр. Пловдив');
+      expect(e.placeLabel, e.fullAddress);
+      expect(e.mapsQuery('гр. София'), 'ул. Иван Вазов 12, гр. Пловдив, България');
+      e.addressTown = '';
+      expect(e.mapsQuery('гр. София'), 'ул. Иван Вазов 12, гр. София, България');
+      final back = ChurchEvent.fromRow({...e.toRow(), 'address_town': 'с. Белащица'});
+      expect(back.addressTown, 'с. Белащица');
+      expect(back.addressExtra, 'бл. 5, ап. 9');
+    });
+  });
 }

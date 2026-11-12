@@ -125,11 +125,11 @@ class EventDetailScreen extends StatelessWidget {
                           size: 40,
                           userId: e.assigneeId)),
                   row('Къде', e.outsideChurch ? 'Извън храма' : 'В храма'),
-                  if (e.outsideChurch && e.address.isNotEmpty)
-                    row('Адрес', e.address,
+                  if (e.outsideChurch && e.fullAddress.isNotEmpty)
+                    row('Адрес', e.fullAddress,
                         trailing: FilledButton.tonalIcon(
                           style: FilledButton.styleFrom(minimumSize: const Size(44, 48)),
-                          onPressed: () => openInMaps(context, e.address),
+                          onPressed: () => openInMaps(context, e.mapsQuery(s.churchSettlement(e.churchId))),
                           icon: const Icon(Icons.map_outlined),
                           label: const Text('Карта'),
                         )),

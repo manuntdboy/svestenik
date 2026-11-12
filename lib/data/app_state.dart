@@ -770,7 +770,7 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now();
     final qDigits = q.replaceAll(' ', '');
     bool hit(ChurchEvent e) =>
-        [e.forWhom, e.address, e.note, e.kind.label, priestName(e.assigneeId)]
+        [e.forWhom, e.fullAddress, e.note, e.kind.label, priestName(e.assigneeId)]
             .any((f) => f.toLowerCase().contains(q)) ||
         (qDigits.isNotEmpty && e.phone.replaceAll(' ', '').contains(qDigits));
     final found = visibleEvents.where(hit).toList();
@@ -1088,6 +1088,10 @@ class AppState extends ChangeNotifier {
   /// Трият записалият и председателят (споделени събития).
   bool canDelete(ChurchEvent e) =>
       e.ownerId == currentUser?.id || (e.shared && isManagerOf(e.churchId));
+
+  /// Населеното място на храма (за адреса по подразбиране и картата).
+  String churchSettlement(String churchId) =>
+      _churches.where((c) => c.id == churchId).firstOrNull?.settlement ?? '';
 
   ChurchEvent newEventDraft(DateTime day) {
     final now = DateTime.now();

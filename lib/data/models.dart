@@ -246,7 +246,9 @@ class ChurchEvent {
   String forWhom;
   String phone;
   bool outsideChurch;
-  String address;
+  String address; // улица / квартал и номер
+  String addressTown; // населено място
+  String addressExtra; // блок, вход, етаж, ап.
   int? remindMinutes;
   bool alarm; // true = напомнянето звъни като будилник
   bool shared; // false = лично, true = споделено с храма
@@ -271,6 +273,8 @@ class ChurchEvent {
     this.phone = '',
     this.outsideChurch = false,
     this.address = '',
+    this.addressTown = '',
+    this.addressExtra = '',
     this.remindMinutes = 60,
     this.alarm = false,
     this.shared = false,
@@ -308,14 +312,27 @@ class ChurchEvent {
         phone: phone,
         outsideChurch: outsideChurch,
         address: address,
+        addressTown: addressTown,
+        addressExtra: addressExtra,
         remindMinutes: remindMinutes,
         alarm: alarm,
         shared: shared,
         note: note,
       );
 
+  /// Пълният адрес за показване: улица, блок/ап., населено място.
+  String get fullAddress =>
+      [address, addressExtra, addressTown].map((x) => x.trim()).where((x) => x.isNotEmpty).join(', ');
+
+  /// Текст за търсене в картата (без блок/апартамент, които я объркват).
+  String mapsQuery(String fallbackTown) => [
+        address.trim(),
+        addressTown.trim().isNotEmpty ? addressTown.trim() : fallbackTown.trim(),
+        'България',
+      ].where((x) => x.isNotEmpty).join(', ');
+
   String get placeLabel => outsideChurch
-      ? (address.isEmpty ? 'Извън храма' : address)
+      ? (fullAddress.isEmpty ? 'Извън храма' : fullAddress)
       : 'В храма';
 
   Map<String, dynamic> toJson() => {
@@ -329,6 +346,8 @@ class ChurchEvent {
         'phone': phone,
         'outsideChurch': outsideChurch,
         'address': address,
+        'address_town': addressTown.isEmpty ? null : addressTown,
+        'address_extra': addressExtra.isEmpty ? null : addressExtra,
         'remindMinutes': remindMinutes,
         'alarm': alarm,
         'shared': shared,
@@ -348,6 +367,8 @@ class ChurchEvent {
         'contact_phone': phone,
         'outside_church': outsideChurch,
         'address': address,
+        'address_town': addressTown,
+        'address_extra': addressExtra,
         'remind_minutes': remindMinutes,
         'alarm': alarm,
         'visibility': shared ? 'church' : 'private',
@@ -367,6 +388,8 @@ class ChurchEvent {
         phone: (r['contact_phone'] as String?) ?? '',
         outsideChurch: (r['outside_church'] as bool?) ?? false,
         address: (r['address'] as String?) ?? '',
+        addressTown: (r['address_town'] as String?) ?? '',
+        addressExtra: (r['address_extra'] as String?) ?? '',
         remindMinutes: r['remind_minutes'] as int?,
         alarm: (r['alarm'] as bool?) ?? false,
         shared: r['visibility'] == 'church',
@@ -391,6 +414,8 @@ class ChurchEvent {
         phone: (j['phone'] as String?) ?? '',
         outsideChurch: (j['outsideChurch'] as bool?) ?? false,
         address: (j['address'] as String?) ?? '',
+        addressTown: (j['address_town'] as String?) ?? '',
+        addressExtra: (j['address_extra'] as String?) ?? '',
         remindMinutes: j['remindMinutes'] as int?,
         alarm: (j['alarm'] as bool?) ?? false,
         shared: (j['shared'] as bool?) ?? false,
