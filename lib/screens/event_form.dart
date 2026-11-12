@@ -34,16 +34,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
   final _forWhomFocus = FocusNode();
   late final _phone = TextEditingController(text: widget.draft.phone);
   late final _address = TextEditingController(text: widget.draft.address);
-  late final _town = TextEditingController(
-      text: widget.draft.addressTown.isNotEmpty || widget.draft.address.isNotEmpty
-          ? widget.draft.addressTown
-          : AppScope.read(context).churchSettlement(widget.draft.churchId));
-  late final _extra = TextEditingController(text: widget.draft.addressExtra);
   late final _note = TextEditingController(text: widget.draft.note);
 
   @override
   void dispose() {
-    for (final c in [_forWhom, _phone, _address, _town, _extra, _note]) {
+    for (final c in [_forWhom, _phone, _address, _note]) {
       c.dispose();
     }
     _forWhomFocus.dispose();
@@ -181,8 +176,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       ..phone = _phone.text.trim()
       ..outsideChurch = _outside
       ..address = _outside ? _address.text.trim() : ''
-      ..addressTown = _outside ? _town.text.trim() : ''
-      ..addressExtra = _outside ? _extra.text.trim() : ''
+
       ..remindMinutes = _remind
       ..alarm = _remind != null && _alarm
       ..assigneeId = _assignee
@@ -532,60 +526,17 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 'Къде',
                 _twoWay('В храма', 'Извън храма', _outside,
                     (v) => setState(() => _outside = v))),
-            if (_outside) ...[
+            if (_outside)
               _section(
-                'Населено място',
-                TextField(
-                  controller: _town,
-                  textCapitalization: TextCapitalization.words,
-                  style: fieldStyle,
-                  decoration: const InputDecoration(hintText: 'например гр. Пловдив или с. Белащица'),
-                ),
-              ),
-              _section(
-                'Улица / квартал и номер',
+                'Адрес',
                 TextField(
                   controller: _address,
                   textCapitalization: TextCapitalization.sentences,
                   style: fieldStyle,
                   maxLines: 2,
                   minLines: 1,
-                  decoration: const InputDecoration(hintText: 'например ул. „Иван Вазов“ 12'),
                 ),
               ),
-              _section(
-                'Блок, вход, етаж, ап. (по желание)',
-                TextField(
-                  controller: _extra,
-                  style: fieldStyle,
-                  decoration: const InputDecoration(hintText: 'например бл. 5, вх. Б, ет. 3, ап. 9'),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () {
-                    final probe = ChurchEvent(
-                      id: 'x',
-                      ownerId: '',
-                      churchId: widget.draft.churchId,
-                      kind: _kind,
-                      startsAt: _start,
-                      address: _address.text,
-                      addressTown: _town.text,
-                    );
-                    if (_address.text.trim().isEmpty && _town.text.trim().isEmpty) {
-                      showMessage(context, 'Въведете адреса.');
-                      return;
-                    }
-                    openInMaps(context,
-                        probe.mapsQuery(AppScope.read(context).churchSettlement(widget.draft.churchId)));
-                  },
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text('Провери в картата'),
-                ),
-              ),
-            ],
             _section(
               'Напомняне',
               DropdownButtonFormField<int?>(

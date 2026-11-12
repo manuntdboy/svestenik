@@ -129,7 +129,7 @@ class EventDetailScreen extends StatelessWidget {
                     row('Адрес', e.fullAddress,
                         trailing: FilledButton.tonalIcon(
                           style: FilledButton.styleFrom(minimumSize: const Size(44, 48)),
-                          onPressed: () => openInMaps(context, e.mapsQuery(s.churchSettlement(e.churchId))),
+                          onPressed: () => openInMaps(context, e.fullAddress),
                           icon: const Icon(Icons.map_outlined),
                           label: const Text('Карта'),
                         )),
