@@ -120,7 +120,11 @@ class MyProfileScreen extends StatelessWidget {
     final s = AppScope.of(context);
     final d = s.myDetails;
     final church = s.currentChurch;
-    final role = church != null && s.isManagerOf(church.id) ? 'Председател' : 'Свещеник';
+    final role = church == null
+        ? 'Свещеник'
+        : s.isManagerOf(church.id)
+            ? 'Председател'
+            : (s.canSeeCash(church.id) ? 'Свещеник · касиер' : 'Свещеник');
     final days = d.daysToNameDay();
     final name = d.threeNames.trim().isNotEmpty ? d.threeNames : (s.currentUser?.fullName ?? '');
 

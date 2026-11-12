@@ -48,18 +48,21 @@ class Membership {
   final String role; // 'manager' (председател) или 'priest'
   final DateTime joinedAt;
   final String status; // 'active' или 'pending' (чака одобрение)
+  final List<String> permissions; // напр. 'cash' = касиер
 
   Membership(
       {required this.churchId,
       required this.userId,
       required this.role,
       DateTime? joinedAt,
-      this.status = 'active'})
+      this.status = 'active',
+      this.permissions = const []})
       : joinedAt = joinedAt ?? DateTime(2000);
 
   bool get isManager => role == 'manager' && isActive;
   bool get isActive => status == 'active';
   bool get isPending => status == 'pending';
+  bool get isCashier => permissions.contains('cash');
 
   factory Membership.fromRow(Map<String, dynamic> r) => Membership(
         churchId: r['church_id'] as String,
@@ -67,6 +70,7 @@ class Membership {
         role: r['role'] as String,
         joinedAt: DateTime.tryParse((r['joined_at'] as String?) ?? ''),
         status: (r['status'] as String?) ?? 'active',
+        permissions: ((r['permissions'] as List?) ?? const []).cast<String>(),
       );
 }
 

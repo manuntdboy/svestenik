@@ -489,6 +489,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Има ли свещеникът право [perm] в храма. Председателят има всички.
+  bool hasPermission(String churchId, String perm, {String? userId}) {
+    final uid = userId ?? currentUser?.id;
+    final m = _members
+        .where((m) => m.churchId == churchId && m.userId == uid && m.isActive)
+        .firstOrNull;
+    if (m == null) return false;
+    return m.isManager || m.permissions.contains(perm);
+  }
+
+  /// Касиер: достъп до касата (председателят винаги има).
+  bool canSeeCash(String churchId) => hasPermission(churchId, 'cash');
+
+  /// Председателят дава или отнема право на свещеник.
+  Future<void> setPermission(String churchId, String userId, String perm, bool on) async {
+    try {
+      await _db.rpc('set_member_permission',
+          params: {'p_church': churchId, 'p_user': userId, 'p_perm': perm, 'p_on': on});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Сменя името, което виждат колегите.
   Future<void> updateFullName(String name) async {
     final n = name.trim();

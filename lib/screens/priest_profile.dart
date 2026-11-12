@@ -74,7 +74,7 @@ class PriestProfileScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
             Text(
-                [m.isManager ? 'Председател' : 'Свещеник', s.churchName(churchId)].join(' · '),
+                [m.isManager ? 'Председател' : (m.isCashier ? 'Свещеник · касиер' : 'Свещеник'), s.churchName(churchId)].join(' · '),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
             const SizedBox(height: 8),
@@ -162,6 +162,38 @@ class PriestProfileScreen extends StatelessWidget {
                 child: Text('Личните му събития не се виждат – само споделените с храма.',
                     style: TextStyle(fontSize: 14, color: p.textMuted)),
               ),
+            if (canRemove && !m.isManager) ...[
+              const SizedBox(height: 20),
+              const Text('Права', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: p.border),
+                ),
+                child: SwitchListTile(
+                  value: m.isCashier,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  title: const Text('Касиер',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  subtitle: Text('Вижда и води касата на храма. Останалите свещеници нямат достъп.',
+                      style: TextStyle(fontSize: 15, color: p.textMuted)),
+                  onChanged: (v) async {
+                    try {
+                      await s.setPermission(churchId, u.id, 'cash', v);
+                      if (context.mounted) {
+                        showMessage(context,
+                            v ? '${u.fullName} вече е касиер.' : '${u.fullName} вече не е касиер.');
+                      }
+                    } on AppError catch (e) {
+                      if (context.mounted) showMessage(context, e.message);
+                    }
+                  },
+                ),
+              ),
+            ],
             if (canRemove) ...[
               const SizedBox(height: 24),
               TextButton.icon(

@@ -63,7 +63,7 @@ class ChurchPriestsScreen extends StatelessWidget {
                             children: [
                               Text(u.id == s.currentUser?.id ? '${u.fullName} (аз)' : u.fullName,
                                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                              Text(m.isManager ? 'Председател' : 'Свещеник',
+                              Text(m.isManager ? 'Председател' : (m.isCashier ? 'Свещеник · касиер' : 'Свещеник'),
                                   style: TextStyle(fontSize: 15, color: p.textMuted)),
                               Builder(builder: (context) {
                                 final n = s.visibleEvents

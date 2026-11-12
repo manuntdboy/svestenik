@@ -127,13 +127,16 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   Expanded(child: _CalendarTile(count: todayCount, onTap: openCalendar)),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(child: _SoonTile(Icons.menu_book_outlined, 'Регистър')),
-                        SizedBox(height: 12),
-                        Expanded(child: _SoonTile(Icons.payments_outlined, 'Каса')),
+                        const Expanded(child: _SoonTile(Icons.menu_book_outlined, 'Регистър')),
+                        const SizedBox(height: 12),
+                        // Касата е само за председателя и касиерите.
+                        Expanded(
+                            child: _SoonTile(Icons.payments_outlined, 'Каса',
+                                locked: !s.canSeeCash(s.currentChurchId!))),
                       ],
                     ),
                   ),
@@ -308,13 +311,14 @@ class _CalendarTile extends StatelessWidget {
 class _SoonTile extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _SoonTile(this.icon, this.label);
+  final bool locked;
+  const _SoonTile(this.icon, this.label, {this.locked = false});
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     return Semantics(
-      label: '$label, скоро',
+      label: locked ? '$label, само за председател и касиер' : '$label, скоро',
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -341,13 +345,20 @@ class _SoonTile extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration:
                       BoxDecoration(color: p.chipBg, borderRadius: BorderRadius.circular(11)),
-                  child: Text('Скоро',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600, color: p.chipText)),
+                  child: locked
+                      ? Icon(Icons.lock_outline_rounded, size: 16, color: p.chipText)
+                      : Text('Скоро',
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600, color: p.chipText)),
                 ),
               ],
             ),
-            Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              if (locked)
+                Text('Председател и касиер',
+                    style: TextStyle(fontSize: 13, color: p.textMuted)),
+            ]),
           ],
         ),
       ),
