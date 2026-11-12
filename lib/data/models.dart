@@ -96,6 +96,8 @@ enum EventKind {
   panihida('Панихида'),
   vodosvet('Водосвет'),
   sluzhba('Служба'),
+  izpoved('Изповед'),
+  maslosvet('Маслосвет'),
   drugo('Друго');
 
   final String label;
