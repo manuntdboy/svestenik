@@ -194,6 +194,60 @@ class PriestProfileScreen extends StatelessWidget {
                 ),
               ),
             ],
+            if (canRemove && !m.isManager) ...[
+              const SizedBox(height: 20),
+              const Text('Председателство', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Builder(builder: (context) {
+                final church = s.myChurches.firstWhere((c) => c.id == churchId);
+                final pendingHere = church.pendingChairId == u.id;
+                final pendingOther = church.pendingChairId != null && !pendingHere;
+                if (pendingHere) {
+                  return SurfaceCard(
+                    radius: 18,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      const YellowTag('Чака отговор'),
+                      const SizedBox(height: 8),
+                      Text('Предложихте ${u.fullName} за председател. Щом приеме, става председател, '
+                          'а вие – редови свещеник.',
+                          style: TextStyle(fontSize: 15, color: p.textMuted)),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: () async {
+                          try {
+                            await s.cancelChairTransfer(churchId);
+                            if (context.mounted) showMessage(context, 'Предложението е оттеглено.');
+                          } on AppError catch (e) {
+                            if (context.mounted) showMessage(context, e.message);
+                          }
+                        },
+                        child: const Text('Оттегли предложението'),
+                      ),
+                    ]),
+                  );
+                }
+                return OutlinedButton.icon(
+                  icon: const Icon(Icons.workspace_premium_outlined),
+                  label: const Text('Направи председател'),
+                  onPressed: () async {
+                    final ok = await confirm(
+                        context,
+                        'Смяна на председателя',
+                        '${u.fullName} ще получи предложение да стане председател на ${church.name}. '
+                            'Ако приеме, той получава председателските права, а вие ставате редови свещеник.'
+                            '${pendingOther ? ' Сегашното предложение за ${s.priestName(church.pendingChairId!)} ще бъде заменено.' : ''}',
+                        'Изпрати предложението');
+                    if (!ok || !context.mounted) return;
+                    try {
+                      await s.proposeChair(churchId, u.id);
+                      if (context.mounted) showMessage(context, 'Предложението е изпратено на ${u.fullName}.');
+                    } on AppError catch (e) {
+                      if (context.mounted) showMessage(context, e.message);
+                    }
+                  },
+                );
+              }),
+            ],
             if (canRemove) ...[
               const SizedBox(height: 24),
               TextButton.icon(

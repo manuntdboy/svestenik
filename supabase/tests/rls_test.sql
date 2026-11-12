@@ -308,6 +308,44 @@ select t.as_user(:'A');
 select public.cancel_leave(:'lv1') \g /dev/null
 select t.ok((select count(*) from leave_requests where id = :'lv1') = 0, 'председателят отменя одобрена почивка');
 
+\echo '== Смяна на председателя'
+select t.as_user(:'B');
+select t.fails(format('select public.propose_chair(%L,%L)', :'cid', :'B'), 'свещеник не предлага председател', 'not_manager');
+select t.fails(format('select public.respond_chair(%L,true)', :'cid'), 'без предложение не може да се приеме', 'no_offer');
+select t.as_user(:'A');
+select t.fails(format('select public.propose_chair(%L,%L)', :'cid', :'D'), 'не се предлага човек извън храма', 'bad_substitute');
+select t.fails(format('select public.propose_chair(%L,%L)', :'cid', :'A'), 'председателят не предлага себе си', 'already_chair');
+select public.propose_chair(:'cid', :'B') \g /dev/null
+select t.ok((select pending_chair from churches where id = :'cid') = :'B', 'предложението е записано');
+select t.as_user(:'C');
+select t.fails(format('select public.respond_chair(%L,true)', :'cid'), 'трети не може да приеме вместо предложения', 'no_offer');
+select t.as_user(:'B');
+select public.respond_chair(:'cid', false) \g /dev/null
+select t.ok((select pending_chair from churches where id = :'cid') is null and public.is_manager(:'cid') = false,
+            'отказ: нищо не се сменя');
+select t.as_user(:'A');
+select t.ok(public.is_manager(:'cid'), 'председателят остава след отказа');
+select public.propose_chair(:'cid', :'B') \g /dev/null
+select public.cancel_chair_transfer(:'cid') \g /dev/null
+select t.as_user(:'B');
+select t.fails(format('select public.respond_chair(%L,true)', :'cid'), 'оттеглено предложение не може да се приеме', 'no_offer');
+select t.as_user(:'A');
+select public.propose_chair(:'cid', :'B') \g /dev/null
+select t.as_user(:'B');
+select public.respond_chair(:'cid', true) \g /dev/null
+select t.ok(public.is_manager(:'cid'), 'новият председател има председателски права');
+select t.ok(public.has_permission(:'cid', 'cash'), 'новият председател вижда касата');
+select t.as_user(:'A');
+select t.ok(not public.is_manager(:'cid') and public.is_member(:'cid'), 'досегашният председател е редови свещеник');
+select t.fails(format('select public.regenerate_join_code(%L)', :'cid'), 'досегашният вече не сменя кода', 'not_manager');
+select t.ok((select count(*) from church_members where church_id = :'cid' and role = 'manager') = 1, 'председателят е само един');
+-- връщаме Георги за председател, за да остане тестът ясен
+select t.as_user(:'B');
+select public.propose_chair(:'cid', :'A') \g /dev/null
+select t.as_user(:'A');
+select public.respond_chair(:'cid', true) \g /dev/null
+select t.ok(public.is_manager(:'cid'), 'председателството се връща по същия начин');
+
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

@@ -130,6 +130,37 @@ Deno.serve(async (req) => {
     title = "Одобрен сте";
     text = `${callerName} ви одобри в ${church?.name ?? "храма"}. Отворете Кайрос.`;
     data = { type, church_id: churchId };
+  } else if (type === "chair_proposed" || type === "chair_responded") {
+    const churchId = String(body.church_id ?? "");
+    const { data: church } = await admin.from("churches").select("name,pending_chair,chair_proposed_by")
+      .eq("id", churchId).maybeSingle();
+    if (!church) return json(404, { error: "not_found" });
+    if (type === "chair_proposed") {
+      const { data: me } = await admin.from("church_members").select("role,status")
+        .eq("church_id", churchId).eq("user_id", caller.id).maybeSingle();
+      if (!me || me.role !== "manager" || me.status !== "active" || !church.pending_chair) {
+        return json(403, { error: "forbidden" });
+      }
+      recipients = [church.pending_chair];
+      title = "Предложение да станете председател";
+      text = `${callerName} ви предлага за председател на ${church.name}. Отворете Кайрос, за да отговорите.`;
+    } else {
+      const proposer = String(body.proposer_id ?? "");
+      const accepted = body.accepted === true;
+      const { data: me } = await admin.from("church_members").select("role")
+        .eq("church_id", churchId).eq("user_id", caller.id).maybeSingle();
+      // при приемане извикващият вече е председател; при отказ – не
+      if (!me || (accepted && me.role !== "manager")) return json(403, { error: "forbidden" });
+      const { data: prop } = await admin.from("church_members").select("user_id")
+        .eq("church_id", churchId).eq("user_id", proposer).maybeSingle();
+      if (!prop) return json(403, { error: "forbidden" });
+      recipients = [proposer];
+      title = accepted ? `${callerName} е новият председател` : `${callerName} отказа председателството`;
+      text = accepted
+        ? `Вие вече сте редови свещеник в ${church.name}.`
+        : `Остава председател на ${church.name} както досега.`;
+    }
+    data = { type, church_id: churchId };
   } else if (type === "leave_request" || type === "leave_decided") {
     const requestId = String(body.request_id ?? "");
     const { data: lv } = await admin.from("leave_requests").select("*").eq("id", requestId).maybeSingle();

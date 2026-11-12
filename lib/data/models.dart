@@ -22,6 +22,8 @@ class Church {
   final String settlement;
   final String municipality;
   String joinCode;
+  final String? pendingChairId; // предложен за председател, чака отговор
+  final String? chairProposedById;
 
   Church({
     required this.id,
@@ -29,6 +31,8 @@ class Church {
     required this.settlement,
     required this.municipality,
     required this.joinCode,
+    this.pendingChairId,
+    this.chairProposedById,
   });
 
   String get place => '$settlement, общ. $municipality';
@@ -39,6 +43,8 @@ class Church {
         settlement: r['settlement'] as String,
         municipality: r['municipality'] as String,
         joinCode: r['join_code'] as String,
+        pendingChairId: r['pending_chair'] as String?,
+        chairProposedById: r['chair_proposed_by'] as String?,
       );
 }
 

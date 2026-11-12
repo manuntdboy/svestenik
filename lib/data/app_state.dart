@@ -202,6 +202,8 @@ class AppState extends ChangeNotifier {
     if (t.contains('not_pending')) return 'Събитието вече не чака потвърждение.';
     if (t.contains('not_declined')) return 'Отказът вече е решен.';
     if (t.contains('bad_substitute')) return 'Изберете свещеник от храма.';
+    if (t.contains('no_offer')) return 'Предложението вече не е активно.';
+    if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
@@ -811,6 +813,51 @@ class AppState extends ChangeNotifier {
       unawaited(_invokeNotify({'type': 'event', 'event_id': e.id, 'change': 'created'}));
     }
     unawaited(rescheduleReminders());
+  }
+
+  // ------------------------------------------------------------------
+  // Смяна на председателя
+  // ------------------------------------------------------------------
+  /// Храмове, в които ми предлагат да стана председател.
+  List<Church> get chairOffers =>
+      myChurches.where((c) => c.pendingChairId == currentUser?.id).toList();
+
+  Future<void> proposeChair(String churchId, String userId) async {
+    try {
+      await _db.rpc('propose_chair', params: {'p_church': churchId, 'p_user': userId});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'chair_proposed', 'church_id': churchId}));
+  }
+
+  Future<void> cancelChairTransfer(String churchId) async {
+    try {
+      await _db.rpc('cancel_chair_transfer', params: {'p_church': churchId});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Приемам или отказвам председателството.
+  Future<void> respondChair(String churchId, bool accept) async {
+    final String? proposer;
+    try {
+      proposer = await _db.rpc('respond_chair', params: {'p_church': churchId, 'p_accept': accept}) as String?;
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    if (proposer != null) {
+      unawaited(_invokeNotify({
+        'type': 'chair_responded',
+        'church_id': churchId,
+        'proposer_id': proposer,
+        'accepted': accept,
+      }));
+    }
   }
 
   // ------------------------------------------------------------------

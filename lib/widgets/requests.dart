@@ -340,12 +340,72 @@ class _LeaveReviewCardState extends State<LeaveReviewCard> {
   }
 }
 
+/// Предложение да стана председател: приемам (с потвърждение) или отказвам.
+class ChairOfferCard extends StatefulWidget {
+  final Church church;
+  const ChairOfferCard({super.key, required this.church});
+
+  @override
+  State<ChairOfferCard> createState() => _ChairOfferCardState();
+}
+
+class _ChairOfferCardState extends State<ChairOfferCard> {
+  bool _busy = false;
+
+  Future<void> _answer(bool accept) async {
+    final s = AppScope.read(context);
+    final c = widget.church;
+    final from = s.priestName(c.chairProposedById ?? '');
+    final ok = await confirm(
+        context,
+        accept ? 'Ставате председател?' : 'Отказвате?',
+        accept
+            ? 'Получавате председателските права в ${c.name}: одобрявате свещеници и почивки, '
+                'решавате откази, давате права. $from става редови свещеник.'
+            : '$from остава председател на ${c.name}.',
+        accept ? 'Да, приемам' : 'Отказвам');
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    await _guard(context, () => s.respondChair(c.id, accept),
+        accept ? 'Вече сте председател на ${c.name}.' : 'Отказахте председателството.');
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final c = widget.church;
+    return _RequestFrame(tag: 'Предложение', icon: Icons.workspace_premium_outlined, children: [
+      Text('Да станете председател на ${c.name}',
+          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 4),
+      Text('Предлага ${s.priestName(c.chairProposedById ?? '')}. Ако приемете, той става редови свещеник.',
+          style: TextStyle(fontSize: 15, color: p.textMuted)),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: OutlinedButton(onPressed: _busy ? null : () => _answer(false), child: const Text('Отказвам'))),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: _busy ? null : () => _answer(true),
+            child: const Text('Приемам'),
+          ),
+        ),
+      ]),
+    ]);
+  }
+}
+
 /// Всички молби за текущия храм: моите потвърждения, а за председателя –
 /// откази и почивки. Слага се на началния екран и в календара.
 List<Widget> requestCards(AppState s) {
   final church = s.currentChurchId;
   if (church == null) return [];
   return [
+    for (final c in s.chairOffers.where((c) => c.id == church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: ChairOfferCard(key: ValueKey('ch${c.id}'), church: c)),
     for (final e in s.awaitingMyConfirmation.where((e) => e.churchId == church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: AwaitingCard(key: ValueKey('aw${e.id}'), event: e)),
     for (final e in s.declinedForReview(church))
