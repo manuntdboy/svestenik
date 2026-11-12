@@ -55,7 +55,7 @@ jobs:
         run: supabase db push --remote="$DB_URL" --yes
 
       - name: Качване на функцията за вход
-        run: supabase functions deploy login --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+        run: supabase functions deploy login --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
 
   build:
     needs: server
