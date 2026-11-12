@@ -112,6 +112,17 @@ insert into events (church_id, kind, starts_at, for_whom) values (:'cid', 'sluzh
 insert into events (church_id, kind, starts_at, visibility, for_whom) values (:'cid', 'vodosvet', now() + interval '2 day', 'church', 'А споделено');
 select t.ok(t.rows(format($$insert into events(church_id,kind,starts_at,duration_minutes,for_whom) values (%L,'arhiereyska',now() + interval '3 day',360,'Арх')$$, :'cid')) = 1,
             'Архиерейска Литургия се записва (6 часа)');
+select t.ok((select visibility from events where for_whom = 'Арх') = 'church', 'Архиерейската Литургия е винаги споделена');
+select id as arh from events where for_whom = 'Арх' \gset
+select t.as_user(:'B');
+select t.ok(public.confirm_event(:'arh') is not null, 'свещеник от храма потвърждава участие');
+select t.ok(public.confirm_event(:'arh') is not null, 'повторното потвърждение не пречи');
+select t.fails(format($$insert into event_confirmations(event_id) values (%L)$$, :'arh'), 'потвърждение не се пише директно', 'row-level security');
+select t.fails(format($$select public.confirm_event(%L)$$, (select id from events where for_whom = 'А споделено')),
+               'обикновено събитие не се потвърждава така', 'not_church_event');
+select t.as_user(:'A');
+select t.ok((select count(*) from event_confirmations where event_id = :'arh') = 1, 'председателят вижда кой е потвърдил');
+select t.as_user(:'A');
 delete from events where for_whom = 'Арх';
 insert into events (church_id, kind, starts_at, visibility, assignee_id, for_whom, duration_minutes)
   values (:'cid', 'krashtene', now() + interval '3 day', 'church', :'B', 'за Б', 60);

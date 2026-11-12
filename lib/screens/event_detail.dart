@@ -88,6 +88,15 @@ class EventDetailScreen extends StatelessWidget {
                 otherChurch: (o) => o.churchId == e.churchId ? '' : s.churchName(o.churchId),
               ),
             ],
+            // Архиерейска Литургия: „Приемам“ и кой е потвърдил.
+            if (e.kind.occupiesChurch && e.shared) ...[
+              if (!s.hasConfirmed(e, s.currentUser?.id ?? '') && !e.isCancelled) ...[
+                const SizedBox(height: 14),
+                ArchieraticCard(event: e),
+              ],
+              const SizedBox(height: 14),
+              ArchieraticConfirmations(event: e),
+            ],
             // Моля, потвърдете / решение на председателя – направо тук.
             if (e.awaitsConfirmation && e.assigneeId == s.currentUser?.id) ...[
               const SizedBox(height: 14),

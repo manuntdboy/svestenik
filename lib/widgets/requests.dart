@@ -16,6 +16,10 @@ String seenLabel(ChurchEvent e) {
   return sameDay(t, DateTime.now()) ? 'видяно днес в ${fmtTime(t)}' : 'видяно ${_fmtSeen.format(t)}';
 }
 
+/// „днес в 18:12“ или датата и часа.
+String fmtWhenShort(DateTime t) =>
+    sameDay(t, DateTime.now()) ? 'днес в ${fmtTime(t)}' : _fmtSeen.format(t);
+
 /// „12 ноември“ или „12 – 14 ноември“ / „30 ноември – 2 декември“.
 String fmtLeavePeriod(LeaveRequest l) {
   if (l.start == l.end) return _fmtDm.format(l.start);
@@ -304,6 +308,95 @@ class _DeclinedReviewCardState extends State<DeclinedReviewCard> {
   }
 }
 
+/// Архиерейска Литургия: всеки свещеник в храма потвърждава участие.
+class ArchieraticCard extends StatefulWidget {
+  final ChurchEvent event;
+  const ArchieraticCard({super.key, required this.event});
+
+  @override
+  State<ArchieraticCard> createState() => _ArchieraticCardState();
+}
+
+class _ArchieraticCardState extends State<ArchieraticCard> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final e = widget.event;
+    return _RequestFrame(tag: 'Моля, потвърдете', icon: Icons.church_outlined, children: [
+      const Text('Архиерейска Литургия', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 4),
+      Text('${fmtDayLong(e.startsAt)}, ${fmtTime(e.startsAt)} – ${fmtTime(e.endsAt)}',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+      Text('записа ${s.ownerName(e)}', style: TextStyle(fontSize: 15, color: p.textMuted)),
+      const SizedBox(height: 12),
+      FilledButton.icon(
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        onPressed: _busy
+            ? null
+            : () async {
+                setState(() => _busy = true);
+                await _guard(context, () => s.confirmEvent(e), 'Участието е потвърдено.');
+                if (mounted) setState(() => _busy = false);
+              },
+        icon: const Icon(Icons.check_rounded),
+        label: const Text('Приемам'),
+      ),
+    ]);
+  }
+}
+
+/// Кой е потвърдил участие в Архиерейската Литургия (вижда се от всички).
+class ArchieraticConfirmations extends StatelessWidget {
+  final ChurchEvent event;
+  const ArchieraticConfirmations({super.key, required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final e = event;
+    final priests = s.priestsOf(e.churchId);
+    final done = priests.where((x) => s.hasConfirmed(e, x.$1.id)).length;
+    return SurfaceCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Expanded(
+            child: Text('Потвърждения', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ),
+          Text('$done от ${priests.length}',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.textMuted)),
+        ]),
+        const SizedBox(height: 6),
+        for (final (u, _) in priests)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(children: [
+              PriestBadge(
+                  name: u.fullName, color: p.priest(s.priestIndex(e.churchId, u.id)), size: 32, userId: u.id),
+              const SizedBox(width: 10),
+              Expanded(child: Text(u.fullName, style: const TextStyle(fontSize: 16))),
+              if (s.hasConfirmed(e, u.id))
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.check_circle_rounded, size: 20, color: Colors.green.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                      e.ownerId == u.id
+                          ? 'записа'
+                          : fmtWhenShort(s.confirmationsFor(e.id)[u.id]!),
+                      style: TextStyle(fontSize: 14, color: p.textMuted)),
+                ])
+              else
+                Text('чака', style: TextStyle(fontSize: 14, color: p.textMuted)),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
 /// Заявка за почивка за одобрение (вижда я председателят).
 class LeaveReviewCard extends StatefulWidget {
   final LeaveRequest leave;
@@ -423,6 +516,8 @@ List<Widget> requestCards(AppState s) {
   return [
     for (final c in s.chairOffers.where((c) => c.id == church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: ChairOfferCard(key: ValueKey('ch${c.id}'), church: c)),
+    for (final e in s.archieraticToConfirm.where((e) => e.churchId == church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: ArchieraticCard(key: ValueKey('ar${e.id}'), event: e)),
     for (final e in s.awaitingMyConfirmation.where((e) => e.churchId == church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: AwaitingCard(key: ValueKey('aw${e.id}'), event: e)),
     for (final e in s.declinedForReview(church))

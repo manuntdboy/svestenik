@@ -43,6 +43,8 @@ class AppState extends ChangeNotifier {
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
   final List<LeaveRequest> _leaves = [];
+  // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
+  final Map<String, Map<String, DateTime>> _confirmations = {};
 
   /// Последното състояние от сървъра по номер на събитие – за да знаем
   /// какво се е променило при запис (формулярът променя обекта на място).
@@ -144,6 +146,7 @@ class AppState extends ChangeNotifier {
         _db.from('church_members').select(),
         _db.from('events').select().order('starts_at'),
         _db.from('leave_requests').select().order('start_date'),
+        _db.from('event_confirmations').select(),
       ]);
       _profiles
         ..clear()
@@ -161,6 +164,11 @@ class AppState extends ChangeNotifier {
       _leaves
         ..clear()
         ..addAll(results[4].map(LeaveRequest.fromRow));
+      _confirmations.clear();
+      for (final r in results[5]) {
+        (_confirmations[r['event_id'] as String] ??= {})[r['user_id'] as String] =
+            DateTime.parse(r['confirmed_at'] as String).toLocal();
+      }
       _rows
         ..clear()
         ..addEntries(results[3].map((r) => MapEntry(r['id'] as String, r)));
@@ -209,6 +217,7 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
+    if (t.contains('not_church_event')) return 'Това събитие не изисква потвърждение.';
     if (t.contains('one_cashier')) {
       return 'В храма вече има касиер. Първо махнете правото на сегашния касиер.';
     }
@@ -1121,8 +1130,51 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  // ------------------------------------------------------------------
+  // Архиерейска Литургия: потвърждения от всички свещеници в храма
+  // ------------------------------------------------------------------
+  Map<String, DateTime> confirmationsFor(String eventId) => _confirmations[eventId] ?? const {};
+
+  /// Потвърдил ли е свещеникът (записалият се брои за потвърдил).
+  bool hasConfirmed(ChurchEvent e, String userId) =>
+      e.ownerId == userId || confirmationsFor(e.id).containsKey(userId);
+
+  /// Предстоящи Архиерейски Литургии, които още не съм потвърдил.
+  List<ChurchEvent> get archieraticToConfirm {
+    final me = currentUser?.id;
+    if (me == null) return [];
+    final now = DateTime.now();
+    return _events
+        .where((e) =>
+            e.kind.occupiesChurch &&
+            e.shared &&
+            !e.isCancelled &&
+            e.endsAt.isAfter(now) &&
+            myChurches.any((c) => c.id == e.churchId) &&
+            !hasConfirmed(e, me))
+        .toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  Future<void> confirmEvent(ChurchEvent e) async {
+    try {
+      final t = await _db.rpc('confirm_event', params: {'p_event': e.id});
+      (_confirmations[e.id] ??= {})[currentUser!.id] =
+          t == null ? DateTime.now() : DateTime.parse(t as String).toLocal();
+      notifyListeners();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+    unawaited(_invokeNotify({'type': 'event_confirmed', 'event_id': e.id}));
+  }
+
   /// Записва събитието на сървъра. При грешка хвърля [AppError].
   Future<void> saveEvent(ChurchEvent e) async {
+    // Архиерейската Литургия е за целия храм: споделена, без отделен свещеник.
+    if (e.kind.occupiesChurch) {
+      e.shared = true;
+      e.assigneeId = e.ownerId;
+    }
     // Събитие за колега винаги е споделено с храма.
     if (e.assigneeId != e.ownerId) e.shared = true;
     final before = _rows[e.id];
@@ -1138,7 +1190,14 @@ class AppState extends ChangeNotifier {
       } else {
         await Notifier.cancel(saved.id);
       }
-      unawaited(_notifyAssignee(saved, before));
+      if (saved.kind.occupiesChurch) {
+        // Нова Архиерейска Литургия → известие до всички свещеници в храма.
+        if (before == null || before['kind'] != saved.kind.name) {
+          unawaited(_invokeNotify({'type': 'church_event', 'event_id': saved.id}));
+        }
+      } else {
+        unawaited(_notifyAssignee(saved, before));
+      }
     } catch (err) {
       // Връщаме копието от сървъра, ако формулярът вече е променил обекта.
       unawaited(refresh());

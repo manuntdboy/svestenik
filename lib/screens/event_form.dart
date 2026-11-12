@@ -400,7 +400,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
-            _priestPicker(fieldStyle),
+            if (!_kind.occupiesChurch) _priestPicker(fieldStyle),
             _section(
               'Вид',
               DropdownButtonFormField<EventKind>(
@@ -420,6 +420,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     if (!_durationTouched) _duration = k.defaultMinutes;
                     // Архиерейска Литургия: 08:00–14:00 в избрания ден.
                     final h = k.defaultStartHour;
+                    if (k.occupiesChurch) _assignee = widget.draft.ownerId;
                     if (h != null) {
                       _start = DateTime(_start.year, _start.month, _start.day, h);
                       _duration = k.defaultMinutes;
@@ -583,7 +584,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   ),
                 ),
               ),
-            if (_assignee == widget.draft.ownerId)
+            if (_kind.occupiesChurch)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                    'Архиерейската Литургия е за целия храм: всички свещеници получават известие '
+                    'и потвърждават с „Приемам“.',
+                    style: TextStyle(fontSize: 15, color: p.textMuted)),
+              )
+            else if (_assignee == widget.draft.ownerId)
               _section(
                   'Кой го вижда',
                   _twoWay('Само аз', 'Споделено с храма', _shared,

@@ -209,6 +209,31 @@ async function handle(req: Request): Promise<Response> {
       text = `${period} · ${callerName}`;
     }
     data = { type, church_id: lv.church_id, request_id: lv.id };
+  } else if (type === "church_event" || type === "event_confirmed") {
+    // Архиерейска Литургия: при записване – до всички свещеници в храма;
+    // при потвърждение – до записалия.
+    const eventId = String(body.event_id ?? "");
+    const { data: ev } = await admin.from("events").select("*").eq("id", eventId).maybeSingle();
+    if (!ev || ev.kind !== "arhiereyska") return json(404, { error: "not_found" });
+    const when = new Date(ev.starts_at).toLocaleString("bg-BG", {
+      timeZone: "Europe/Sofia", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+    });
+    if (type === "church_event") {
+      if (ev.owner_id !== caller.id) return json(403, { error: "forbidden" });
+      const { data: members } = await admin.from("church_members").select("user_id")
+        .eq("church_id", ev.church_id).eq("status", "active");
+      recipients = (members ?? []).map((m) => m.user_id);
+      title = "Архиерейска Литургия – моля, потвърдете";
+      text = `${when}${callerName ? " · записа " + callerName : ""}`;
+    } else {
+      const { data: conf } = await admin.from("event_confirmations").select("user_id")
+        .eq("event_id", ev.id).eq("user_id", caller.id).maybeSingle();
+      if (!conf) return json(403, { error: "forbidden" });
+      recipients = [ev.owner_id];
+      title = "Потвърдено участие";
+      text = `${callerName} · Архиерейска Литургия · ${when}`;
+    }
+    data = { type: "event", event_id: ev.id, church_id: ev.church_id };
   } else if (type === "assignment_accepted" || type === "assignment_declined" || type === "assignment_kept") {
     const eventId = String(body.event_id ?? "");
     const { data: ev } = await admin.from("events").select("*").eq("id", eventId).maybeSingle();
