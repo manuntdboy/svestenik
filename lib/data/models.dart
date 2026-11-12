@@ -46,8 +46,10 @@ class Membership {
   final String churchId;
   final String userId;
   final String role; // 'manager' (председател) или 'priest'
+  final DateTime joinedAt;
 
-  Membership({required this.churchId, required this.userId, required this.role});
+  Membership({required this.churchId, required this.userId, required this.role, DateTime? joinedAt})
+      : joinedAt = joinedAt ?? DateTime(2000);
 
   bool get isManager => role == 'manager';
 
@@ -55,6 +57,7 @@ class Membership {
         churchId: r['church_id'] as String,
         userId: r['user_id'] as String,
         role: r['role'] as String,
+        joinedAt: DateTime.tryParse((r['joined_at'] as String?) ?? ''),
       );
 }
 
@@ -107,8 +110,9 @@ const reminderOptions = <int?, String>{
 
 class ChurchEvent {
   final String id;
-  final String ownerId;
+  final String ownerId; // кой е записал събитието
   final String churchId;
+  String assigneeId; // кой свещеник ще го извърши
   EventKind kind;
   DateTime startsAt;
   int durationMinutes;
@@ -125,6 +129,7 @@ class ChurchEvent {
     required this.id,
     required this.ownerId,
     required this.churchId,
+    String? assigneeId,
     required this.kind,
     required this.startsAt,
     this.durationMinutes = defaultDurationMinutes,
@@ -136,7 +141,7 @@ class ChurchEvent {
     this.alarm = false,
     this.shared = false,
     this.note = '',
-  });
+  }) : assigneeId = assigneeId ?? ownerId;
 
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
 
@@ -170,6 +175,7 @@ class ChurchEvent {
         'id': id,
         'owner_id': ownerId,
         'church_id': churchId,
+        'assignee_id': assigneeId,
         'kind': kind.name,
         'starts_at': startsAt.toUtc().toIso8601String(),
         'duration_minutes': durationMinutes,
@@ -187,6 +193,7 @@ class ChurchEvent {
         id: r['id'] as String,
         ownerId: r['owner_id'] as String,
         churchId: r['church_id'] as String,
+        assigneeId: r['assignee_id'] as String?,
         kind: EventKind.fromName(r['kind'] as String),
         startsAt: DateTime.parse(r['starts_at'] as String).toLocal(),
         durationMinutes: (r['duration_minutes'] as int?) ?? defaultDurationMinutes,

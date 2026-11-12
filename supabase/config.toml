@@ -4,3 +4,7 @@ project_id = "kairos"
 [functions.login]
 # Вход с потребителско име: извиква се преди входа, затова без проверка на токен.
 verify_jwt = false
+
+[functions.notify]
+# Проверява токена сама (admin.auth.getUser), затова без проверка от шлюза.
+verify_jwt = false

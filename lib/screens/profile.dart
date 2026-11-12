@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
+import 'church_priests.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -55,6 +56,14 @@ class ProfileScreen extends StatelessWidget {
                     MaterialPageRoute(
                         builder: (_) => ChurchCodeScreen(churchId: church.id))),
                 child: Text('Код за присъединяване: ${church.joinCode}'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => ChurchPriestsScreen(churchId: church.id))),
+                child: Text('Свещеници в храма (${s.priestsOf(church.id).length})'),
               ),
               const SizedBox(height: 8),
               TextButton(

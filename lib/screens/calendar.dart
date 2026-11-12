@@ -49,6 +49,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final s = AppScope.of(context);
+    List<Color> dotsFor(DateTime d) => [
+          for (final id in s.priestsOn(d)) p.priest(s.priestIndex(s.currentChurchId!, id)),
+        ];
     final monthTitle = capitalize(DateFormat('LLLL', 'bg').format(_selected));
     final showYear = _selected.year != DateTime.now().year;
 
@@ -81,14 +84,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
               _WeekStrip(
                 weekStart: _weekStart,
                 selected: _selected,
-                hasEvents: (d) => s.eventsOn(d).isNotEmpty,
+                dots: dotsFor,
                 onSelect: (d) => setState(() => _selected = d),
               )
             else
               _MonthGrid(
                 month: _selected,
                 selected: _selected,
-                hasEvents: (d) => s.eventsOn(d).isNotEmpty,
+                dots: dotsFor,
                 onSelect: (d) => setState(() {
                   _selected = d;
                   _view = CalView.day;
@@ -154,7 +157,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
             event: e,
             past: e.startsAt.isBefore(now),
             isNext: e.id == nextId,
-            owner: e.ownerId == s.currentUser?.id ? null : s.ownerName(e),
+            owner: e.ownerId == s.currentUser?.id || e.ownerId == e.assigneeId
+                ? null
+                : 'записа ${s.ownerName(e)}',
+            priestName: s.priestName(e.assigneeId),
+            priestColor: p.priest(s.priestIndex(e.churchId, e.assigneeId)),
+            forMe: s.isMine(e),
             overlapping: s.canEdit(e) && s.overlapsFor(e).isNotEmpty,
           ),
         ),
@@ -240,13 +248,13 @@ const _weekdayShort = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
 class _DayCell extends StatelessWidget {
   final DateTime day;
   final bool selected;
-  final bool hasEvents;
+  final List<Color> dots;
   final bool dimmed;
   final VoidCallback onTap;
   const _DayCell(
       {required this.day,
       required this.selected,
-      required this.hasEvents,
+      required this.dots,
       required this.onTap,
       this.dimmed = false});
 
@@ -257,7 +265,7 @@ class _DayCell extends StatelessWidget {
     final label = DateFormat('EEEE, d MMMM', 'bg').format(day) +
         (today ? ', днес' : '') +
         (selected ? ', избран' : '') +
-        (hasEvents ? ', има събития' : '');
+        (dots.isNotEmpty ? ', има събития' : '');
     return Semantics(
       label: label,
       button: true,
@@ -289,17 +297,20 @@ class _DayCell extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          // Точка под дните със събития; жълта за днешния ден.
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: !hasEvents
-                  ? Colors.transparent
-                  : today
-                      ? Palette.yellow
-                      : p.textMuted,
+          // Точки под деня: по една в цвета на всеки свещеник със събитие.
+          SizedBox(
+            height: 7,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final c in dots.take(3))
+                  Container(
+                    width: 7,
+                    height: 7,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: c),
+                  ),
+              ],
             ),
           ),
         ],
@@ -311,12 +322,12 @@ class _DayCell extends StatelessWidget {
 class _WeekStrip extends StatelessWidget {
   final DateTime weekStart;
   final DateTime selected;
-  final bool Function(DateTime) hasEvents;
+  final List<Color> Function(DateTime) dots;
   final ValueChanged<DateTime> onSelect;
   const _WeekStrip(
       {required this.weekStart,
       required this.selected,
-      required this.hasEvents,
+      required this.dots,
       required this.onSelect});
 
   @override
@@ -343,7 +354,7 @@ class _WeekStrip extends StatelessWidget {
                   _DayCell(
                     day: d,
                     selected: sameDay(d, selected),
-                    hasEvents: hasEvents(d),
+                    dots: dots(d),
                     onTap: () => onSelect(d),
                   ),
                 ],
@@ -358,12 +369,12 @@ class _WeekStrip extends StatelessWidget {
 class _MonthGrid extends StatelessWidget {
   final DateTime month;
   final DateTime selected;
-  final bool Function(DateTime) hasEvents;
+  final List<Color> Function(DateTime) dots;
   final ValueChanged<DateTime> onSelect;
   const _MonthGrid(
       {required this.month,
       required this.selected,
-      required this.hasEvents,
+      required this.dots,
       required this.onSelect});
 
   @override
@@ -405,7 +416,7 @@ class _MonthGrid extends StatelessWidget {
                         child: _DayCell(
                           day: d,
                           selected: sameDay(d, selected),
-                          hasEvents: hasEvents(d),
+                          dots: dots(d),
                           dimmed: d.month != month.month,
                           onTap: () => onSelect(d),
                         ),
@@ -426,12 +437,18 @@ class _EventRow extends StatelessWidget {
   final bool isNext;
   final String? owner;
   final bool overlapping;
+  final String priestName;
+  final Color priestColor;
+  final bool forMe;
   const _EventRow(
       {required this.event,
       required this.past,
       required this.isNext,
       this.owner,
-      this.overlapping = false});
+      this.overlapping = false,
+      required this.priestName,
+      required this.priestColor,
+      required this.forMe});
 
   @override
   Widget build(BuildContext context) {
@@ -444,6 +461,7 @@ class _EventRow extends StatelessWidget {
     final details = [
       e.placeLabel,
       if (e.shared) 'споделено с храма',
+      if (!forMe) priestName,
       if (owner != null) owner!,
       if (past) 'приключило',
     ].join(' · ');
@@ -488,6 +506,8 @@ class _EventRow extends StatelessWidget {
                         KindChip(e.kind),
                         const Spacer(),
                         if (until != null) YellowTag(until),
+                        const SizedBox(width: 8),
+                        PriestBadge(name: priestName, color: priestColor, size: 30),
                       ],
                     ),
                     const SizedBox(height: 4),

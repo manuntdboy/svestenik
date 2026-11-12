@@ -62,6 +62,14 @@ class Notifier {
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         ),
       );
+      // Канал за известията от колеги (push) – трябва да съществува,
+      // за да ги показва Android със звук.
+      await _android?.createNotificationChannel(const AndroidNotificationChannel(
+        'events',
+        'Събития от колеги',
+        description: 'Когато колега запише или промени събитие за вас',
+        importance: Importance.high,
+      ));
       _ready = true;
     } catch (e) {
       debugPrint('Известията не тръгнаха: $e');
@@ -170,6 +178,25 @@ class Notifier {
       scheduledDate: tz.TZDateTime.now(tz.UTC).add(const Duration(seconds: 10)),
       notificationDetails: _alarmDetails,
       androidScheduleMode: await _mode(),
+    );
+  }
+
+  /// Показва известие веднага (за push, докато приложението е отворено).
+  static Future<void> showNow(String title, String body) async {
+    if (!_ready) return;
+    await _plugin.show(
+      id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'events',
+          'Събития от колеги',
+          channelDescription: 'Когато колега запише или промени събитие за вас',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
     );
   }
 }

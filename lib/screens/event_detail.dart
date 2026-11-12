@@ -106,11 +106,16 @@ class EventDetailScreen extends StatelessWidget {
                           icon: const Icon(Icons.call_rounded),
                           label: const Text('Обади се'),
                         )),
+                  row('Свещеник',
+                      s.isMine(e) ? '${s.priestName(e.assigneeId)} (аз)' : s.priestName(e.assigneeId),
+                      trailing: PriestBadge(
+                          name: s.priestName(e.assigneeId),
+                          color: p.priest(s.priestIndex(e.churchId, e.assigneeId)))),
                   row('Къде', e.outsideChurch ? 'Извън храма' : 'В храма'),
                   if (e.outsideChurch && e.address.isNotEmpty) row('Адрес', e.address),
                   row('Напомняне', (reminderOptions[e.remindMinutes] ?? 'Без напомняне') + (e.alarm && e.remindMinutes != null ? ' · аларма' : '')),
                   row('Кой го вижда', e.shared ? 'Споделено с храма' : 'Само аз'),
-                  if (!canEdit) row('Добавено от', s.ownerName(e)),
+                  if (e.ownerId != s.currentUser?.id) row('Записа', s.ownerName(e)),
                   if (e.note.isNotEmpty) row('Бележка', e.note),
                 ],
               ),
@@ -125,7 +130,9 @@ class EventDetailScreen extends StatelessWidget {
                 child: const Text('Редактирай'),
               ),
               const SizedBox(height: 10),
-              if (!e.shared)
+              if (e.assigneeId != e.ownerId)
+                const SizedBox.shrink()
+              else if (!e.shared)
                 OutlinedButton(
                   onPressed: () async {
                     e.shared = true;

@@ -204,3 +204,39 @@ Future<bool> confirm(BuildContext context, String title, String body, String act
   );
   return r ?? false;
 }
+
+/// Инициали на свещеника („Отец Иван Петров“ → „ИП“).
+String priestInitials(String fullName) {
+  final words = fullName
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty && !{'отец', 'о.', 'свещеник', 'протойерей', 'иерей'}.contains(w.toLowerCase()))
+      .toList();
+  if (words.isEmpty) return fullName.isEmpty ? '?' : fullName[0].toUpperCase();
+  return words.take(2).map((w) => w[0].toUpperCase()).join();
+}
+
+/// Кръг с инициалите на свещеника в неговия цвят.
+class PriestBadge extends StatelessWidget {
+  final String name;
+  final Color color;
+  final double size;
+  const PriestBadge({super.key, required this.name, required this.color, this.size = 32});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Semantics(
+      label: name,
+      excludeSemantics: true,
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        child: Text(priestInitials(name),
+            style: TextStyle(
+                fontSize: size * 0.4, fontWeight: FontWeight.w800, color: p.onPriest())),
+      ),
+    );
+  }
+}

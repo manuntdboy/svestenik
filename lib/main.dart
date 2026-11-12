@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'data/app_state.dart';
 import 'data/notifier.dart';
+import 'data/push.dart';
 import 'screens/church_connect.dart';
 import 'screens/login.dart';
 import 'screens/shell.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
   await initializeDateFormatting('bg');
   Intl.defaultLocale = 'bg';
   await Notifier.init();
+  await Push.init();
   if (!supabaseConfigured) {
     runApp(const _NotConfiguredApp());
     return;

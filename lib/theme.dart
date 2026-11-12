@@ -72,6 +72,38 @@ class Palette {
     dark: true,
   );
 
+  /// Цветове на свещениците в храма (без жълтото на епархията).
+  /// Различават се и по светлина, не само по тон.
+  static const _priestLight = [
+    Color(0xFF2F5D8C), // синьо
+    Color(0xFF2E7D4F), // зелено
+    Color(0xFFB45A12), // оранжево
+    Color(0xFF6B4FA3), // лилаво
+    Color(0xFFB03A5B), // розово-червено
+    Color(0xFF1F7A80), // тюркоаз
+    Color(0xFF7A5230), // кафяво
+    Color(0xFF4A5A6A), // сиво-синьо
+  ];
+  static const _priestDark = [
+    Color(0xFF8DBBEE),
+    Color(0xFF7FCB9C),
+    Color(0xFFF0A764),
+    Color(0xFFB9A3E6),
+    Color(0xFFEE8FA9),
+    Color(0xFF7FCFD4),
+    Color(0xFFD9A877),
+    Color(0xFFB4BFCA),
+  ];
+
+  /// Цветът на свещеника с пореден номер [index] в храма.
+  Color priest(int index) {
+    final list = dark ? _priestDark : _priestLight;
+    return list[index % list.length];
+  }
+
+  /// Текст върху цвета на свещеника.
+  Color onPriest() => dark ? const Color(0xFF0F1D2D) : Colors.white;
+
   static Palette of(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? darkP : light;
 

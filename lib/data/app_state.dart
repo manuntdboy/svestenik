@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'models.dart';
 import 'notifier.dart';
+import 'push.dart';
 
 /// Адрес и публичен ключ на Supabase. Подават се при изграждането
 /// (--dart-define) от GitHub Secrets.
@@ -40,6 +41,13 @@ class AppState extends ChangeNotifier {
   final List<Church> _churches = [];
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
+
+  /// Последното състояние от сървъра по номер на събитие – за да знаем
+  /// какво се е променило при запис (формулярът променя обекта на място).
+  final Map<String, Map<String, dynamic>> _rows = {};
+
+  StreamSubscription<String>? _tokenSub;
+  String? _pushToken;
 
   AppUser? currentUser;
   String? currentChurchId;
@@ -94,6 +102,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _tokenSub?.cancel();
     _authSub?.cancel();
     super.dispose();
   }
@@ -135,6 +144,9 @@ class AppState extends ChangeNotifier {
       _events
         ..clear()
         ..addAll(results[3].map(ChurchEvent.fromRow));
+      _rows
+        ..clear()
+        ..addEntries(results[3].map((r) => MapEntry(r['id'] as String, r)));
 
       currentUser = _profiles.where((p) => p.id == authUser.id).firstOrNull;
       if (currentChurchId == null || !myChurches.any((c) => c.id == currentChurchId)) {
@@ -142,6 +154,7 @@ class AppState extends ChangeNotifier {
       }
       syncError = null;
       unawaited(rescheduleReminders());
+      unawaited(_registerPush());
     } catch (e) {
       debugPrint('Обновяването не успя: $e');
       syncError = 'Няма връзка със сървъра. Показват се последните заредени данни.';
@@ -182,6 +195,29 @@ class AppState extends ChangeNotifier {
       return 'Няма връзка с интернет. Опитайте отново.';
     }
     return 'Нещо се обърка: $text';
+  }
+
+  /// Записва това устройство на сървъра, за да идват push известия.
+  Future<void> _registerPush() async {
+    if (!Push.ready || currentUser == null) return;
+    Push.onEvent ??= () => unawaited(refresh());
+    final token = await Push.token();
+    if (token == null) return;
+    if (token != _pushToken) {
+      try {
+        await _db.rpc('register_device', params: {'p_token': token});
+        _pushToken = token;
+      } catch (e) {
+        debugPrint('Устройството не се записа: $e');
+      }
+    }
+    _tokenSub ??= Push.tokenRefresh.listen((t) async {
+      if (currentUser == null) return;
+      try {
+        await _db.rpc('register_device', params: {'p_token': t});
+        _pushToken = t;
+      } catch (_) {}
+    });
   }
 
   // ------------------------------------------------------------------
@@ -294,18 +330,28 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Моите събития във всички мои храмове – за тях идват напомняния.
+  /// Събитията, които аз ще извърша (във всички мои храмове) – за тях идват
+  /// напомняния, дори ако ги е записал колега.
   Iterable<ChurchEvent> get _myEvents {
     final u = currentUser;
     if (u == null) return const [];
     final ids = myChurches.map((c) => c.id).toSet();
-    return _events.where((e) => e.ownerId == u.id && ids.contains(e.churchId));
+    return _events.where((e) => e.assigneeId == u.id && ids.contains(e.churchId));
   }
 
   Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents);
 
   Future<void> logout() async {
     await Notifier.cancelAll();
+    // Спираме push известията за този профил на това устройство.
+    final token = _pushToken;
+    if (token != null) {
+      try {
+        await _db.rpc('unregister_device', params: {'p_token': token});
+      } catch (_) {}
+      _pushToken = null;
+    }
+    await Push.deleteToken();
     _clear();
     currentChurchId = null;
     await _prefs.remove(_kChurch);
@@ -408,7 +454,9 @@ class AppState extends ChangeNotifier {
     final u = currentUser;
     if (u == null || currentChurchId == null) return [];
     return _events
-        .where((e) => e.churchId == currentChurchId && (e.ownerId == u.id || e.shared))
+        .where((e) =>
+            e.churchId == currentChurchId &&
+            (e.ownerId == u.id || e.assigneeId == u.id || e.shared))
         .toList()
       ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
   }
@@ -420,13 +468,16 @@ class AppState extends ChangeNotifier {
           e.startsAt.day == day.day)
       .toList();
 
+  /// Моето следващо събитие (което аз ще извърша) в текущия храм.
   ChurchEvent? get nextEvent {
     final now = DateTime.now();
-    return visibleEvents.where((e) => e.startsAt.isAfter(now)).firstOrNull;
+    return visibleEvents
+        .where((e) => e.assigneeId == currentUser?.id && e.startsAt.isAfter(now))
+        .firstOrNull;
   }
 
-  /// Моите събития (във всички мои храмове), които се застъпват по време с [e].
-  /// Самото [e] не се брои.
+  /// Събитията на същия свещеник (във всички мои храмове), които се
+  /// застъпват по време с [e]. Самото [e] не се брои.
   List<ChurchEvent> overlapsFor(ChurchEvent e) {
     final u = currentUser;
     if (u == null) return [];
@@ -434,7 +485,7 @@ class AppState extends ChangeNotifier {
     return _events
         .where((x) =>
             x.id != e.id &&
-            x.ownerId == u.id &&
+            x.assigneeId == e.assigneeId &&
             myChurchIds.contains(x.churchId) &&
             x.overlaps(e))
         .toList()
@@ -449,10 +500,38 @@ class AppState extends ChangeNotifier {
   String ownerName(ChurchEvent e) =>
       _profiles.where((u) => u.id == e.ownerId).firstOrNull?.fullName ?? '';
 
-  bool canEdit(ChurchEvent e) => e.ownerId == currentUser?.id;
+  /// Името на свещеника (за падащото меню и календара).
+  String priestName(String userId) =>
+      _profiles.where((u) => u.id == userId).firstOrNull?.fullName ?? '';
 
+  bool isMine(ChurchEvent e) => e.assigneeId == currentUser?.id;
+
+  /// Свещениците на храма по реда на присъединяване (председателят обикновено е пръв).
+  List<(AppUser, Membership)> priestsOf(String churchId) =>
+      membersOf(churchId)..sort((a, b) => a.$2.joinedAt.compareTo(b.$2.joinedAt));
+
+  /// Пореден номер на свещеника в храма – по него се избира цветът му.
+  int priestIndex(String churchId, String userId) {
+    final i = priestsOf(churchId).indexWhere((p) => p.$1.id == userId);
+    return i < 0 ? 7 : i;
+  }
+
+  /// Различните свещеници със събития в деня (за цветните точки).
+  List<String> priestsOn(DateTime day) {
+    final ids = <String>[];
+    for (final e in eventsOn(day)) {
+      if (!ids.contains(e.assigneeId)) ids.add(e.assigneeId);
+    }
+    return ids;
+  }
+
+  /// Редактират записалият и свещеникът, за когото е събитието.
+  bool canEdit(ChurchEvent e) =>
+      e.ownerId == currentUser?.id || e.assigneeId == currentUser?.id;
+
+  /// Трият записалият и председателят (споделени събития).
   bool canDelete(ChurchEvent e) =>
-      canEdit(e) || (e.shared && isManagerOf(e.churchId));
+      e.ownerId == currentUser?.id || (e.shared && isManagerOf(e.churchId));
 
   ChurchEvent newEventDraft(DateTime day) {
     final now = DateTime.now();
@@ -471,17 +550,47 @@ class AppState extends ChangeNotifier {
 
   /// Записва събитието на сървъра. При грешка хвърля [AppError].
   Future<void> saveEvent(ChurchEvent e) async {
+    // Събитие за колега винаги е споделено с храма.
+    if (e.assigneeId != e.ownerId) e.shared = true;
+    final before = _rows[e.id];
     try {
       final row = await _db.from('events').upsert(e.toRow()).select().single();
       final saved = ChurchEvent.fromRow(row);
       _events.removeWhere((x) => x.id == saved.id);
       _events.add(saved);
+      _rows[saved.id] = row;
       notifyListeners();
-      if (saved.ownerId == currentUser?.id) await Notifier.schedule(saved);
+      if (isMine(saved)) {
+        await Notifier.schedule(saved);
+      } else {
+        await Notifier.cancel(saved.id);
+      }
+      unawaited(_notifyAssignee(saved, before));
     } catch (err) {
       // Връщаме копието от сървъра, ако формулярът вече е променил обекта.
       unawaited(refresh());
       throw AppError(_friendly(err));
+    }
+  }
+
+  /// Праща push на колегата, ако записвам събитие за него или сменям
+  /// нещо важно (свещеник, дата, час, вид).
+  Future<void> _notifyAssignee(ChurchEvent saved, Map<String, dynamic>? before) async {
+    if (saved.ownerId != currentUser?.id || saved.assigneeId == currentUser?.id) return;
+    final String change;
+    if (before == null || before['assignee_id'] != saved.assigneeId) {
+      change = 'created';
+    } else if (before['starts_at'] != _rows[saved.id]?['starts_at'] ||
+        before['kind'] != saved.kind.name ||
+        before['duration_minutes'] != saved.durationMinutes) {
+      change = 'updated';
+    } else {
+      return;
+    }
+    try {
+      await _db.functions.invoke('notify', body: {'event_id': saved.id, 'change': change});
+    } catch (e) {
+      debugPrint('Известието до колегата не тръгна: $e');
     }
   }
 

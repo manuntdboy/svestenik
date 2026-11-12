@@ -5,6 +5,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'event_detail.dart';
+import 'church_priests.dart';
 import 'event_form.dart';
 
 /// Начален екран – табло, вариант Б.
@@ -45,7 +46,7 @@ class HomeScreen extends StatelessWidget {
     final p = Palette.of(context);
     final s = AppScope.of(context);
     final now = DateTime.now();
-    final todayCount = s.eventsOn(now).length;
+    final todayCount = s.eventsOn(now).where(s.isMine).length;
     final next = s.nextEvent;
 
     return Stack(
@@ -102,7 +103,9 @@ class HomeScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            _PriestsStrip(churchId: s.currentChurchId!),
+            const SizedBox(height: 12),
             _NextEventCard(event: next),
             const SizedBox(height: 14),
             SizedBox(
@@ -274,7 +277,7 @@ class _CalendarTile extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                           color: p.onCalendarTile)),
                   const SizedBox(height: 2),
-                  Text(count == 1 ? 'събитие днес' : 'събития днес',
+                  Text(count == 1 ? 'ваше събитие днес' : 'ваши събития днес',
                       style: TextStyle(fontSize: 15, color: p.calendarTileMuted)),
                   const SizedBox(height: 6),
                   Text('Календар',
@@ -334,6 +337,69 @@ class _SoonTile extends StatelessWidget {
             ),
             Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Ред с цветните знаци на свещениците в храма; отваря списъка им.
+class _PriestsStrip extends StatelessWidget {
+  final String churchId;
+  const _PriestsStrip({required this.churchId});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final priests = s.priestsOf(churchId);
+    final myColor = p.priest(s.priestIndex(churchId, s.currentUser!.id));
+    return Material(
+      color: p.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: p.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => ChurchPriestsScreen(churchId: churchId))),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Свещеници в храма',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    Row(children: [
+                      Text('Вашият цвят ', style: TextStyle(fontSize: 14, color: p.textMuted)),
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(color: myColor, shape: BoxShape.circle),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+              for (final (u, _) in priests.take(5))
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: PriestBadge(
+                      name: u.fullName, color: p.priest(s.priestIndex(churchId, u.id)), size: 34),
+                ),
+              if (priests.length > 5)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Text('+${priests.length - 5}',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.textMuted)),
+                ),
+              Icon(Icons.chevron_right_rounded, color: p.textMuted),
+            ],
+          ),
         ),
       ),
     );

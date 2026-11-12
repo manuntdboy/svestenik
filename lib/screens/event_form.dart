@@ -25,6 +25,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   late bool _alarm = widget.draft.alarm;
   bool _saving = false;
   late bool _shared = widget.draft.shared;
+  late String _assignee = widget.draft.assigneeId;
   late final _forWhom = TextEditingController(text: widget.draft.forWhom);
   late final _phone = TextEditingController(text: widget.draft.phone);
   late final _address = TextEditingController(text: widget.draft.address);
@@ -85,6 +86,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         kind: _kind,
         startsAt: _start,
         durationMinutes: _duration,
+        assigneeId: _assignee,
       );
 
   void _changeDuration(int delta) {
@@ -139,7 +141,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
       ..address = _outside ? _address.text.trim() : ''
       ..remindMinutes = _remind
       ..alarm = _remind != null && _alarm
-      ..shared = _shared
+      ..assigneeId = _assignee
+      ..shared = _shared || _assignee != widget.draft.ownerId
       ..note = _note.text.trim();
     final nav = Navigator.of(context);
     setState(() => _saving = true);
@@ -182,6 +185,47 @@ class _EventFormScreenState extends State<EventFormScreen> {
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
         ),
       ]),
+    );
+  }
+
+  /// Падащо меню „Свещеник“ – кой ще извърши събитието.
+  Widget _priestPicker(TextStyle fieldStyle) {
+    final s = AppScope.of(context);
+    final p = Palette.of(context);
+    final priests = s.priestsOf(widget.draft.churchId);
+    // Само записалият може да смени свещеника; при един свещеник менюто не трябва.
+    if (priests.length < 2) return const SizedBox.shrink();
+    final canChange = widget.draft.ownerId == s.currentUser?.id;
+    return _section(
+      'Свещеник',
+      DropdownButtonFormField<String>(
+        initialValue: _assignee,
+        style: fieldStyle.copyWith(color: p.text),
+        items: [
+          for (final (u, _) in priests)
+            DropdownMenuItem(
+              value: u.id,
+              child: Row(children: [
+                PriestBadge(
+                    name: u.fullName,
+                    color: p.priest(s.priestIndex(widget.draft.churchId, u.id)),
+                    size: 28),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(u.id == s.currentUser?.id ? '${u.fullName} (аз)' : u.fullName,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ]),
+            ),
+        ],
+        onChanged: canChange
+            ? (v) {
+                if (v == null) return;
+                setState(() => _assignee = v);
+                _announceOverlap();
+              }
+            : null,
+      ),
     );
   }
 
@@ -286,6 +330,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
+            _priestPicker(fieldStyle),
             _section(
               'Вид',
               DropdownButtonFormField<EventKind>(
@@ -404,10 +449,19 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   ),
                 ),
               ),
-            _section(
-                'Кой го вижда',
-                _twoWay('Само аз', 'Споделено с храма', _shared,
-                    (v) => setState(() => _shared = v))),
+            if (_assignee == widget.draft.ownerId)
+              _section(
+                  'Кой го вижда',
+                  _twoWay('Само аз', 'Споделено с храма', _shared,
+                      (v) => setState(() => _shared = v)))
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                    'Събитие за колега се вижда от целия храм, а '
+                    '${AppScope.read(context).priestName(_assignee)} получава известие.',
+                    style: TextStyle(fontSize: 15, color: p.textMuted)),
+              ),
             _section(
               'Бележка',
               TextField(
