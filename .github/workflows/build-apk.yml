@@ -26,8 +26,33 @@ jobs:
       - name: Свързване с проекта
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
+      - name: Адрес на базата през IPv4 (pooler)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # GitHub няма IPv6, затова ползваме пула за връзки на Supabase (IPv4).
+          # Ако е зададен секрет SUPABASE_DB_URL, той има предимство.
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            url="$SUPABASE_DB_URL"
+          else
+            pw=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"],safe=""))')
+            url=""
+            for host in aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
+              try="postgresql://postgres.${SUPABASE_PROJECT_REF}:${pw}@${host}:5432/postgres?sslmode=require"
+              if psql "$try" -tAc 'select 1' >/dev/null 2>&1; then
+                url="$try"; echo "Връзка през $host"; break
+              fi
+            done
+          fi
+          if [ -z "$url" ]; then
+            echo "::error::Няма връзка с базата през pooler. Проверете SUPABASE_DB_PASSWORD или добавете секрет SUPABASE_DB_URL (Connect → Session pooler)."
+            exit 1
+          fi
+          echo "::add-mask::$url"
+          echo "DB_URL=$url" >> "$GITHUB_ENV"
+
       - name: Прилагане на промените по базата
-        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --db-url "$DB_URL"
 
       - name: Качване на функцията за вход
         run: supabase functions deploy login --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
