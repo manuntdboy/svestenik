@@ -98,6 +98,7 @@ enum EventKind {
   sluzhba('Служба'),
   izpoved('Изповед'),
   maslosvet('Маслосвет'),
+  kurban('Курбан'),
   drugo('Друго');
 
   final String label;

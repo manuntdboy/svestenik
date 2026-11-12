@@ -87,6 +87,7 @@ class Palette {
         EventKind.sluzhba => (const Color(0xFFE3ECF6), const Color(0xFF1F4A75)),
         EventKind.izpoved => (const Color(0xFFE4EEE2), const Color(0xFF2F5228)),
         EventKind.maslosvet => (const Color(0xFFF3E6DA), const Color(0xFF6E3E17)),
+        EventKind.kurban => (const Color(0xFFEFE9D2), const Color(0xFF574C12)),
         EventKind.drugo => (const Color(0xFFE3E7EB), const Color(0xFF3E4C59)),
       };
     }
@@ -99,6 +100,7 @@ class Palette {
       EventKind.sluzhba => (const Color(0xFF213549), const Color(0xFFA9CBEE)),
       EventKind.izpoved => (const Color(0xFF263A23), const Color(0xFFB9D9B1)),
       EventKind.maslosvet => (const Color(0xFF402C1C), const Color(0xFFEBC4A2)),
+      EventKind.kurban => (const Color(0xFF3A351E), const Color(0xFFDCD3A0)),
       EventKind.drugo => (const Color(0xFF2A323B), const Color(0xFFB4BFCA)),
     };
   }

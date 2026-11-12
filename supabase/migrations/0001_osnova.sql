@@ -54,7 +54,7 @@ create table public.events (
                    references auth.users (id) on delete cascade,
   church_id        uuid not null references public.churches (id) on delete cascade,
   kind             text not null check (kind in
-                   ('krashtene','venchavka','pogrebenie','panihida','vodosvet','sluzhba','izpoved','maslosvet','drugo')),
+                   ('krashtene','venchavka','pogrebenie','panihida','vodosvet','sluzhba','izpoved','maslosvet','kurban','drugo')),
   starts_at        timestamptz not null,
   duration_minutes integer not null default 30 check (duration_minutes between 15 and 720),
   for_whom         text check (char_length(for_whom) <= 200),
