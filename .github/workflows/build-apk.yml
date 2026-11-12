@@ -52,7 +52,7 @@ jobs:
           echo "DB_URL=$url" >> "$GITHUB_ENV"
 
       - name: Прилагане на промените по базата
-        run: supabase db push --db-url "$DB_URL"
+        run: supabase db push --remote="$DB_URL" --yes
 
       - name: Качване на функцията за вход
         run: supabase functions deploy login --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
