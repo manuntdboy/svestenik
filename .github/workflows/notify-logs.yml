@@ -1,8 +1,8 @@
 name: Дневник на известията
 
 # Ръчно: Actions → „Дневник на известията“ → Run workflow.
-# Показва последните извиквания на функцията notify (код на отговора) и
-# нейния дневник (вид, брой получатели/устройства/изпратени) – без лични данни.
+# Показва последните извиквания на функцията notify: вид, код и резултат
+# (брой получатели/устройства/изпратени или грешка) – без лични данни.
 on:
   workflow_dispatch:
     inputs:
@@ -13,44 +13,30 @@ on:
 jobs:
   logs:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      HOURS: ${{ github.event.inputs.hours }}
     steps:
       - name: Извличане
-        env:
-          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          HOURS: ${{ github.event.inputs.hours }}
         run: |
-          python3 - <<'PY'
-          import json, os, urllib.error, urllib.parse, urllib.request, datetime as dt
-          ref, token = os.environ["REF"], os.environ["TOKEN"]
-          end = dt.datetime.now(dt.timezone.utc)
-          start = end - dt.timedelta(hours=float(os.environ.get("HOURS") or 6))
-          def q(sql):
-              url = (f"https://api.supabase.com/v1/projects/{ref}/analytics/endpoints/logs.all?"
-                     + urllib.parse.urlencode({"sql": sql,
-                        "iso_timestamp_start": start.isoformat(), "iso_timestamp_end": end.isoformat()}))
-              req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}",
-                                                         "User-Agent": "kairos-ci", "Accept": "application/json"})
-              try:
-                  with urllib.request.urlopen(req) as r:
-                      return json.load(r).get("result") or []
-              except urllib.error.HTTPError as e:
-                  print("Грешка", e.code, e.read()[:300])
-                  return []
-          def ts(v):
-              return dt.datetime.fromtimestamp(int(v) / 1e6, dt.timezone(dt.timedelta(hours=2))).strftime("%d.%m %H:%M:%S")
-          print("== Извиквания (час по София, код) ==")
-          for r in q("select timestamp, event_message, response.status_code as code from function_edge_logs "
-                     "cross join unnest(metadata) as m cross join unnest(m.response) as response "
-                     "order by timestamp desc limit 200"):
-              msg = r.get("event_message", "")
-              if "/notify" in msg or "/login" in msg:
-                  name = "notify" if "/notify" in msg else "login"
-                  print(ts(r["timestamp"]), name, r.get("code"))
-          print("== Дневник на notify ==")
-          for r in q("select timestamp, event_message, m.level as level from function_logs "
-                     "cross join unnest(metadata) as m order by timestamp desc limit 200"):
-              msg = (r.get("event_message") or "").strip()
-              if msg.startswith("notify ") or msg.startswith("FCM") or r.get("level") == "error":
-                  print(ts(r["timestamp"]), msg[:300])
-          PY
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            url="$SUPABASE_DB_URL"
+          else
+            pw=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"],safe=""))')
+            url=""
+            for host in aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
+              try="postgresql://postgres.${SUPABASE_PROJECT_REF}:${pw}@${host}:5432/postgres?sslmode=require"
+              if psql "$try" -tAc 'select 1' >/dev/null 2>&1; then url="$try"; break; fi
+            done
+          fi
+          [ -n "$url" ] || { echo "::error::Няма връзка с базата"; exit 1; }
+          echo "::add-mask::$url"
+          h=$(python3 -c 'import os;print(float(os.environ.get("HOURS") or 6))')
+          psql "$url" -P pager=off -c "
+            select to_char(at at time zone 'Europe/Sofia', 'DD.MM HH24:MI:SS') as час,
+                   type as вид, status as код, info as резултат
+              from public.notify_log
+             where at > now() - interval '$h hours'
+             order by at desc limit 200;"

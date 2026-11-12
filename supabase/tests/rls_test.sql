@@ -377,6 +377,10 @@ select t.ok(t.rows(format($$update profiles set rank = 'deacon' where id = %L$$,
 select t.as_user(:'A');
 select t.ok((select rank from profiles where id = :'B') = 'archpriest', 'колегата вижда сана');
 
+select t.as_user(:'A');
+select t.fails('select * from notify_log', 'дневникът на известията не се чете от потребител');
+select t.fails($$insert into notify_log(type, status) values ('x', 200)$$, 'и не се пише от потребител');
+
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

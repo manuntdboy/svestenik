@@ -80,7 +80,7 @@ async function fcmAccessToken(sa: ServiceAccount): Promise<string> {
   return cachedToken.value;
 }
 
-Deno.serve(async (req) => {
+async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -283,16 +283,17 @@ Deno.serve(async (req) => {
   recipients = recipients.filter((r) => r && r !== caller.id);
   if (recipients.length === 0) {
     log({ recipients: 0, self: before > 0 });
-    return json(200, { sent: 0, reason: "no_recipients" });
+    return json(200, { sent: 0, reason: before > 0 ? "only_self" : "no_recipients" });
   }
   const { data: tokens } = await admin.from("device_tokens").select("token").in("user_id", recipients);
   if (!tokens || tokens.length === 0) {
     log({ recipients: recipients.length, devices: 0 });
-    return json(200, { sent: 0, reason: "no_devices" });
+    return json(200, { sent: 0, reason: "no_devices", recipients: recipients.length });
   }
 
   const access = await fcmAccessToken(sa);
   let sent = 0;
+  const fcmErrors: number[] = [];
   for (const { token } of tokens) {
     const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
       method: "POST",
@@ -313,11 +314,38 @@ Deno.serve(async (req) => {
       // Изтрит или сменен токен – махаме го.
       if (res.status === 404 || text.includes("UNREGISTERED") || text.includes("INVALID_ARGUMENT")) {
         await admin.from("device_tokens").delete().eq("token", token);
+        fcmErrors.push(res.status);
       } else {
+        fcmErrors.push(res.status);
         console.error("FCM", res.status, text.slice(0, 300));
       }
     }
   }
   log({ recipients: recipients.length, devices: tokens.length, sent });
-  return json(200, { sent });
+  return json(200, { sent, recipients: recipients.length, devices: tokens.length, fcm_errors: fcmErrors });
+}
+
+// Всяко извикване оставя ред в notify_log: вид, код и кратък резултат
+// (брой получатели/устройства/изпратени или грешка) – без лични данни.
+// Чете се само от сървъра (Actions → „Дневник на известията“).
+Deno.serve(async (req) => {
+  let type = "?";
+  try {
+    type = String((await req.clone().json()).type ?? "event");
+  } catch {
+    // няма тяло
+  }
+  const res = await handle(req);
+  try {
+    const info = await res.clone().json();
+    let secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!secret) secret = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default ?? "";
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, secret, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    await admin.from("notify_log").insert({ type, status: res.status, info });
+  } catch (e) {
+    console.error("notify_log", String(e).slice(0, 200));
+  }
+  return res;
 });
