@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'event_detail.dart';
 import 'event_form.dart';
+import 'search.dart';
 
 enum CalView { day, week, month }
 
@@ -68,6 +69,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       style: const TextStyle(
                           fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                 ),
+                _RoundButton(Icons.search_rounded, 'Търсене',
+                    () => Navigator.push(
+                        context, MaterialPageRoute(builder: (_) => const SearchScreen()))),
+                const SizedBox(width: 8),
                 _RoundButton(Icons.chevron_left_rounded,
                     _view == CalView.month ? 'Предишен месец' : 'Предишна седмица',
                     () => _shift(-1)),
@@ -155,7 +160,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           padding: const EdgeInsets.only(bottom: 10),
           child: _EventRow(
             event: e,
-            past: e.startsAt.isBefore(now),
+            past: e.startsAt.isBefore(now) || e.isCancelled,
             isNext: e.id == nextId,
             owner: e.ownerId == s.currentUser?.id || e.ownerId == e.assigneeId
                 ? null
@@ -163,7 +168,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
             priestName: s.priestName(e.assigneeId),
             priestColor: p.priest(s.priestIndex(e.churchId, e.assigneeId)),
             forMe: s.isMine(e),
-            overlapping: s.canEdit(e) && s.overlapsFor(e).isNotEmpty,
+            overlapping: (s.canEdit(e) && s.overlapsFor(e).isNotEmpty) ||
+                s.placeOverlapsFor(e).isNotEmpty,
           ),
         ),
     ];
@@ -463,7 +469,12 @@ class _EventRow extends StatelessWidget {
       if (e.shared) 'споделено с храма',
       if (!forMe) priestName,
       if (owner != null) owner!,
-      if (past) 'приключило',
+      if (e.isCancelled)
+        'отменено'
+      else if (e.isDone)
+        'проведено'
+      else if (past)
+        'приключило',
     ].join(' · ');
 
     return Material(
@@ -515,16 +526,17 @@ class _EventRow extends StatelessWidget {
                         style: TextStyle(
                             fontSize: dark ? 19 : 17,
                             fontWeight: FontWeight.w700,
-                            color: mainColor)),
+                            color: e.isCancelled ? p.textMuted : mainColor,
+                            decoration: e.isCancelled ? TextDecoration.lineThrough : null)),
                     Text(details, style: TextStyle(fontSize: 14, color: subColor)),
-                    if (overlapping && !past)
+                    if (overlapping && !past && !e.isCancelled)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Row(children: [
                           Icon(Icons.warning_amber_rounded,
                               size: 18, color: dark ? Palette.yellow : const Color(0xFF8A5A00)),
                           const SizedBox(width: 4),
-                          Text('Застъпва се с друго събитие',
+                          Text('Застъпване (свещеник или храм)',
                               style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,

@@ -25,7 +25,7 @@ class EventDetailScreen extends StatelessWidget {
     if (e == null) {
       return Scaffold(appBar: AppBar(), body: const Center(child: Text('Събитието е изтрито.')));
     }
-    final until = timeUntil(e.startsAt);
+    final until = e.status == EventStatus.planned ? timeUntil(e.startsAt) : null;
     final canEdit = s.canEdit(e);
 
     Widget row(String label, String value, {Widget? trailing}) => Padding(
@@ -70,6 +70,7 @@ class EventDetailScreen extends StatelessWidget {
                       KindChip(e.kind, fontSize: 14),
                       const Spacer(),
                       if (until != null) YellowTag(until),
+                      if (e.status != EventStatus.planned) _StatusTag(e.status),
                     ]),
                     const SizedBox(height: 12),
                     Text(fmtDayLong(e.startsAt),
@@ -91,6 +92,14 @@ class EventDetailScreen extends StatelessWidget {
               OverlapNotice(
                 s.overlapsFor(e),
                 otherChurch: (o) => o.churchId == e.churchId ? '' : s.churchName(o.churchId),
+              ),
+            ],
+            if (s.placeOverlapsFor(e).isNotEmpty) ...[
+              const SizedBox(height: 14),
+              OverlapNotice(
+                s.placeOverlapsFor(e),
+                title: 'Храмът е зает по това време',
+                suffix: (o) => s.priestName(o.assigneeId),
               ),
             ],
             const SizedBox(height: 14),
@@ -130,6 +139,8 @@ class EventDetailScreen extends StatelessWidget {
                 child: const Text('Редактирай'),
               ),
               const SizedBox(height: 10),
+              _StatusButtons(event: e),
+              const SizedBox(height: 10),
               if (e.assigneeId != e.ownerId)
                 const SizedBox.shrink()
               else if (!e.shared)
@@ -167,6 +178,17 @@ class EventDetailScreen extends StatelessWidget {
                 ),
               const SizedBox(height: 10),
             ],
+            // Копие за друга дата – всеки, който вижда събитието.
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          EventFormScreen(draft: s.copyDraft(e), copying: true))),
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('Копирай за друга дата'),
+            ),
+            const SizedBox(height: 10),
             if (s.canDelete(e))
               TextButton(
                 style: TextButton.styleFrom(
@@ -191,5 +213,89 @@ class EventDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Етикет „Проведено“ / „Отменено“ в главната карта.
+class _StatusTag extends StatelessWidget {
+  final EventStatus status;
+  const _StatusTag(this.status);
+
+  @override
+  Widget build(BuildContext context) {
+    final cancelled = status == EventStatus.cancelled;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        color: cancelled ? const Color(0xFFF4E0E4) : const Color(0xFFDDF0EC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(status.label,
+          style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: cancelled ? const Color(0xFF7A2438) : const Color(0xFF14584D))),
+    );
+  }
+}
+
+/// Бутони за състоянието: „Проведено“ / „Отменено“ / „Върни като предстоящо“.
+class _StatusButtons extends StatelessWidget {
+  final ChurchEvent event;
+  const _StatusButtons({required this.event});
+
+  Future<void> _set(BuildContext context, EventStatus st) async {
+    final s = AppScope.read(context);
+    if (st == EventStatus.cancelled) {
+      final ok = await confirm(
+          context,
+          'Отмени събитието?',
+          'Събитието остава в календара като „Отменено“, без напомняне. '
+              'Часът се освобождава за други събития.',
+          'Отмени събитието');
+      if (!ok || !context.mounted) return;
+    }
+    try {
+      await s.setStatus(event, st);
+      if (context.mounted) {
+        showMessage(
+            context,
+            switch (st) {
+              EventStatus.done => 'Отбелязано като проведено.',
+              EventStatus.cancelled => 'Събитието е отменено.',
+              EventStatus.planned => 'Събитието пак е предстоящо.',
+            });
+      }
+    } on AppError catch (err) {
+      if (context.mounted) showMessage(context, err.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (event.status != EventStatus.planned) {
+      return OutlinedButton.icon(
+        onPressed: () => _set(context, EventStatus.planned),
+        icon: const Icon(Icons.undo_rounded),
+        label: const Text('Върни като предстоящо'),
+      );
+    }
+    return Row(children: [
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => _set(context, EventStatus.done),
+          icon: const Icon(Icons.check_circle_outline_rounded),
+          label: const Text('Проведено'),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => _set(context, EventStatus.cancelled),
+          icon: const Icon(Icons.event_busy_outlined),
+          label: const Text('Отменено'),
+        ),
+      ),
+    ]);
   }
 }

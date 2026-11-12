@@ -344,7 +344,8 @@ class AppState extends ChangeNotifier {
     final u = currentUser;
     if (u == null) return const [];
     final ids = myChurches.map((c) => c.id).toSet();
-    return _events.where((e) => e.assigneeId == u.id && ids.contains(e.churchId));
+    return _events.where((e) =>
+        e.assigneeId == u.id && ids.contains(e.churchId) && e.status == EventStatus.planned);
   }
 
   Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents);
@@ -605,7 +606,10 @@ class AppState extends ChangeNotifier {
   ChurchEvent? get nextEvent {
     final now = DateTime.now();
     return visibleEvents
-        .where((e) => e.assigneeId == currentUser?.id && e.startsAt.isAfter(now))
+        .where((e) =>
+            e.assigneeId == currentUser?.id &&
+            e.status == EventStatus.planned &&
+            e.startsAt.isAfter(now))
         .firstOrNull;
   }
 
@@ -614,15 +618,95 @@ class AppState extends ChangeNotifier {
   List<ChurchEvent> overlapsFor(ChurchEvent e) {
     final u = currentUser;
     if (u == null) return [];
+    if (e.isCancelled) return [];
     final myChurchIds = myChurches.map((c) => c.id).toSet();
     return _events
         .where((x) =>
             x.id != e.id &&
+            !x.isCancelled &&
             x.assigneeId == e.assigneeId &&
             myChurchIds.contains(x.churchId) &&
             x.overlaps(e))
         .toList()
       ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  /// Други събития В ХРАМА по същото време (при друг свещеник) – храмът
+  /// е зает. Събития извън храма не се броят.
+  List<ChurchEvent> placeOverlapsFor(ChurchEvent e) {
+    final u = currentUser;
+    if (u == null || e.outsideChurch || e.isCancelled) return [];
+    return _events
+        .where((x) =>
+            x.id != e.id &&
+            x.churchId == e.churchId &&
+            !x.outsideChurch &&
+            !x.isCancelled &&
+            x.assigneeId != e.assigneeId &&
+            (x.ownerId == u.id || x.assigneeId == u.id || x.shared) &&
+            x.overlaps(e))
+        .toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  /// Търсене в събитията на текущия храм: име, телефон, адрес, бележка,
+  /// вид, свещеник. Предстоящите първи (най-близкото най-горе), после минали.
+  List<ChurchEvent> search(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    final now = DateTime.now();
+    final qDigits = q.replaceAll(' ', '');
+    bool hit(ChurchEvent e) =>
+        [e.forWhom, e.address, e.note, e.kind.label, priestName(e.assigneeId)]
+            .any((f) => f.toLowerCase().contains(q)) ||
+        (qDigits.isNotEmpty && e.phone.replaceAll(' ', '').contains(qDigits));
+    final found = visibleEvents.where(hit).toList();
+    final upcoming = found.where((e) => !e.startsAt.isBefore(now)).toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    final past = found.where((e) => e.startsAt.isBefore(now)).toList()
+      ..sort((a, b) => b.startsAt.compareTo(a.startsAt));
+    return [...upcoming, ...past];
+  }
+
+  /// Последно въведените „за кого“ с техния телефон – за бързо попълване.
+  List<(String, String)> recentContacts(String typed) {
+    final t = typed.trim().toLowerCase();
+    final seen = <String>{};
+    final out = <(String, String)>[];
+    final all = [..._events]..sort((a, b) => b.startsAt.compareTo(a.startsAt));
+    for (final e in all) {
+      final name = e.forWhom.trim();
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      if (seen.contains(key)) continue;
+      if (t.isNotEmpty && !key.contains(t)) continue;
+      if (key == t) continue;
+      seen.add(key);
+      out.add((name, e.phone));
+      if (out.length >= 6) break;
+    }
+    return out;
+  }
+
+  /// Копие на събитие за нова дата (записвам го аз).
+  ChurchEvent copyDraft(ChurchEvent e) {
+    final copy = e.copyAs(id: _uuid(), ownerId: currentUser!.id);
+    if (!membersOf(e.churchId).any((m) => m.$1.id == copy.assigneeId)) {
+      copy.assigneeId = currentUser!.id;
+    }
+    return copy;
+  }
+
+  /// Отбелязва събитието като проведено, отменено или пак предстоящо.
+  Future<void> setStatus(ChurchEvent e, EventStatus status) async {
+    final old = e.status;
+    e.status = status;
+    try {
+      await saveEvent(e);
+    } on AppError {
+      e.status = old;
+      rethrow;
+    }
   }
 
   String churchName(String churchId) =>
@@ -678,6 +762,7 @@ class AppState extends ChangeNotifier {
       churchId: currentChurchId!,
       kind: EventKind.krashtene,
       startsAt: start,
+      durationMinutes: EventKind.krashtene.defaultMinutes,
     );
   }
 
@@ -693,7 +778,7 @@ class AppState extends ChangeNotifier {
       _events.add(saved);
       _rows[saved.id] = row;
       notifyListeners();
-      if (isMine(saved)) {
+      if (isMine(saved) && saved.status == EventStatus.planned) {
         await Notifier.schedule(saved);
       } else {
         await Notifier.cancel(saved.id);

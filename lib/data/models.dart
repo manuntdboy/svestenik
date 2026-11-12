@@ -88,8 +88,36 @@ enum EventKind {
   /// Водосветът по подразбиране е извън храма.
   bool get defaultOutside => this == EventKind.vodosvet;
 
+  /// Продължителност по подразбиране за вида (минути). Начални стойности –
+  /// лесно се сменят тук.
+  int get defaultMinutes => switch (this) {
+        EventKind.krashtene => 60,
+        EventKind.venchavka => 60,
+        EventKind.pogrebenie => 60,
+        EventKind.panihida => 30,
+        EventKind.vodosvet => 30,
+        EventKind.sluzhba => 120,
+        EventKind.izpoved => 30,
+        EventKind.maslosvet => 60,
+        EventKind.kurban => 30,
+        EventKind.drugo => 30,
+      };
+
   static EventKind fromName(String n) =>
       EventKind.values.firstWhere((k) => k.name == n, orElse: () => EventKind.drugo);
+}
+
+/// Състояние на събитието.
+enum EventStatus {
+  planned('Предстои'),
+  done('Проведено'),
+  cancelled('Отменено');
+
+  final String label;
+  const EventStatus(this.label);
+
+  static EventStatus fromName(String? n) =>
+      EventStatus.values.firstWhere((s) => s.name == n, orElse: () => EventStatus.planned);
 }
 
 /// Продължителност на събитие по подразбиране и стъпка за промяна (минути).
@@ -133,6 +161,7 @@ class ChurchEvent {
   bool alarm; // true = напомнянето звъни като будилник
   bool shared; // false = лично, true = споделено с храма
   String note;
+  EventStatus status;
 
   ChurchEvent({
     required this.id,
@@ -150,6 +179,7 @@ class ChurchEvent {
     this.alarm = false,
     this.shared = false,
     this.note = '',
+    this.status = EventStatus.planned,
   }) : assigneeId = assigneeId ?? ownerId;
 
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
@@ -157,6 +187,28 @@ class ChurchEvent {
   /// Застъпват ли се двете събития по време (допиране не се брои).
   bool overlaps(ChurchEvent other) =>
       startsAt.isBefore(other.endsAt) && other.startsAt.isBefore(endsAt);
+
+  bool get isCancelled => status == EventStatus.cancelled;
+  bool get isDone => status == EventStatus.done;
+
+  /// Копие за нова дата: същите данни, ново събитие, записано от [ownerId].
+  ChurchEvent copyAs({required String id, required String ownerId}) => ChurchEvent(
+        id: id,
+        ownerId: ownerId,
+        churchId: churchId,
+        assigneeId: assigneeId,
+        kind: kind,
+        startsAt: startsAt,
+        durationMinutes: durationMinutes,
+        forWhom: forWhom,
+        phone: phone,
+        outsideChurch: outsideChurch,
+        address: address,
+        remindMinutes: remindMinutes,
+        alarm: alarm,
+        shared: shared,
+        note: note,
+      );
 
   String get placeLabel => outsideChurch
       ? (address.isEmpty ? 'Извън храма' : address)
@@ -196,6 +248,7 @@ class ChurchEvent {
         'alarm': alarm,
         'visibility': shared ? 'church' : 'private',
         'note': note,
+        'status': status.name,
       };
 
   factory ChurchEvent.fromRow(Map<String, dynamic> r) => ChurchEvent(
@@ -214,6 +267,7 @@ class ChurchEvent {
         alarm: (r['alarm'] as bool?) ?? false,
         shared: r['visibility'] == 'church',
         note: (r['note'] as String?) ?? '',
+        status: EventStatus.fromName(r['status'] as String?),
       );
 
   factory ChurchEvent.fromJson(Map<String, dynamic> j) => ChurchEvent(

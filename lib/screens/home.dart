@@ -47,7 +47,7 @@ class HomeScreen extends StatelessWidget {
     final p = Palette.of(context);
     final s = AppScope.of(context);
     final now = DateTime.now();
-    final todayCount = s.eventsOn(now).where(s.isMine).length;
+    final todayCount = s.eventsOn(now).where((e) => s.isMine(e) && !e.isCancelled).length;
     final next = s.nextEvent;
 
     return Stack(

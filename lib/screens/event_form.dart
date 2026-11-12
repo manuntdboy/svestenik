@@ -10,7 +10,9 @@ import '../widgets/common.dart';
 class EventFormScreen extends StatefulWidget {
   final ChurchEvent draft;
   final bool editing;
-  const EventFormScreen({super.key, required this.draft, this.editing = false});
+  final bool copying;
+  const EventFormScreen(
+      {super.key, required this.draft, this.editing = false, this.copying = false});
 
   @override
   State<EventFormScreen> createState() => _EventFormScreenState();
@@ -24,9 +26,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
   late int? _remind = widget.draft.remindMinutes;
   late bool _alarm = widget.draft.alarm;
   bool _saving = false;
+  // Продължителността следва вида, докато не я промените ръчно.
+  late bool _durationTouched = widget.editing || widget.copying;
   late bool _shared = widget.draft.shared;
   late String _assignee = widget.draft.assigneeId;
   late final _forWhom = TextEditingController(text: widget.draft.forWhom);
+  final _forWhomFocus = FocusNode();
   late final _phone = TextEditingController(text: widget.draft.phone);
   late final _address = TextEditingController(text: widget.draft.address);
   late final _note = TextEditingController(text: widget.draft.note);
@@ -36,6 +41,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     for (final c in [_forWhom, _phone, _address, _note]) {
       c.dispose();
     }
+    _forWhomFocus.dispose();
     super.dispose();
   }
 
@@ -53,16 +59,30 @@ class _EventFormScreenState extends State<EventFormScreen> {
     }
   }
 
-  /// Казва веднага, ако избраният час се застъпва с друго събитие.
+  /// Колко застъпвания има: на свещеника и в храма.
+  int _conflicts() {
+    final s = AppScope.read(context);
+    return s.overlapsFor(_probe).length + s.placeOverlapsFor(_probe).length;
+  }
+
+  /// Казва веднага, ако избраният час се застъпва с друго събитие
+  /// на същия свещеник или с друго събитие в храма.
   void _announceOverlap() {
     if (!mounted) return;
-    final overlaps = AppScope.read(context).overlapsFor(_probe);
-    if (overlaps.isEmpty) return;
-    showMessage(
-        context,
-        overlaps.length == 1
-            ? 'Внимание: по това време имате ${eventShortLabel(overlaps.first)}'
-            : 'Внимание: по това време имате ${overlaps.length} други събития');
+    final s = AppScope.read(context);
+    final mine = s.overlapsFor(_probe);
+    final place = s.placeOverlapsFor(_probe);
+    if (mine.isNotEmpty) {
+      showMessage(
+          context,
+          mine.length == 1
+              ? 'Внимание: по това време свещеникът има ${eventShortLabel(mine.first)}'
+              : 'Внимание: по това време свещеникът има ${mine.length} други събития');
+    } else if (place.isNotEmpty) {
+      final o = place.first;
+      showMessage(context,
+          'Внимание: в храма по това време има ${o.kind.label.toLowerCase()} (${s.priestName(o.assigneeId)})');
+    }
   }
 
   Future<void> _pickTime() async {
@@ -87,21 +107,24 @@ class _EventFormScreenState extends State<EventFormScreen> {
         startsAt: _start,
         durationMinutes: _duration,
         assigneeId: _assignee,
+        outsideChurch: _outside,
       );
 
   void _changeDuration(int delta) {
-    final before = AppScope.read(context).overlapsFor(_probe).length;
+    final before = _conflicts();
     setState(() {
+      _durationTouched = true;
       _duration = (_duration + delta).clamp(minDurationMinutes, maxDurationMinutes);
     });
     // При удължаване съобщаваме само ако се появи ново застъпване.
-    if (AppScope.read(context).overlapsFor(_probe).length > before) _announceOverlap();
+    if (_conflicts() > before) _announceOverlap();
   }
 
   Future<void> _save() async {
     final state = AppScope.read(context);
     final overlaps = state.overlapsFor(_probe);
-    if (overlaps.isNotEmpty) {
+    final place = state.placeOverlapsFor(_probe);
+    if (overlaps.isNotEmpty || place.isNotEmpty) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -110,14 +133,28 @@ class _EventFormScreenState extends State<EventFormScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('В ${fmtRange(_probe)} вече имате:', style: const TextStyle(fontSize: 17)),
-              const SizedBox(height: 8),
-              for (final o in overlaps)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('• ${eventShortLabel(o)}',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-                ),
+              if (overlaps.isNotEmpty) ...[
+                Text('В ${fmtRange(_probe)} свещеникът вече има:',
+                    style: const TextStyle(fontSize: 17)),
+                const SizedBox(height: 8),
+                for (final o in overlaps)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('• ${eventShortLabel(o)}',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                  ),
+              ],
+              if (place.isNotEmpty) ...[
+                if (overlaps.isNotEmpty) const SizedBox(height: 12),
+                Text('В храма по това време има:', style: const TextStyle(fontSize: 17)),
+                const SizedBox(height: 8),
+                for (final o in place)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('• ${eventShortLabel(o)} – ${state.priestName(o.assigneeId)}',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                  ),
+              ],
             ],
           ),
           actions: [
@@ -325,7 +362,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
     final p = Palette.of(context);
     const fieldStyle = TextStyle(fontSize: 17, fontWeight: FontWeight.w600);
     return Scaffold(
-      appBar: AppBar(title: Text(widget.editing ? 'Редакция' : 'Ново събитие')),
+      appBar: AppBar(
+          title: Text(widget.editing
+              ? 'Редакция'
+              : widget.copying
+                  ? 'Копие на събитие'
+                  : 'Ново събитие')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -347,6 +389,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     // докато потребителят не е въвел адрес.
                     if (_address.text.isEmpty) _outside = k.defaultOutside;
                     _kind = k;
+                    if (!_durationTouched) _duration = k.defaultMinutes;
                   });
                 },
               ),
@@ -367,24 +410,80 @@ class _EventFormScreenState extends State<EventFormScreen> {
             Builder(builder: (context) {
               final s = AppScope.of(context);
               final overlaps = s.overlapsFor(_probe);
-              if (overlaps.isEmpty) return const SizedBox.shrink();
+              final place = s.placeOverlapsFor(_probe);
+              if (overlaps.isEmpty && place.isEmpty) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: OverlapNotice(
-                  overlaps,
-                  otherChurch: (o) =>
-                      o.churchId == widget.draft.churchId ? '' : s.churchName(o.churchId),
-                ),
+                child: Column(children: [
+                  if (overlaps.isNotEmpty)
+                    OverlapNotice(
+                      overlaps,
+                      otherChurch: (o) =>
+                          o.churchId == widget.draft.churchId ? '' : s.churchName(o.churchId),
+                    ),
+                  if (overlaps.isNotEmpty && place.isNotEmpty) const SizedBox(height: 10),
+                  if (place.isNotEmpty)
+                    OverlapNotice(
+                      place,
+                      title: 'Храмът е зает по това време',
+                      suffix: (o) => s.priestName(o.assigneeId),
+                    ),
+                ]),
               );
             }),
             _section('Продължителност', _durationControl()),
             _section(
               'За кого',
-              TextField(
-                controller: _forWhom,
-                textCapitalization: TextCapitalization.words,
-                style: fieldStyle,
-                decoration: const InputDecoration(hintText: 'например Иван Петров'),
+              // Предлага последно въведените имена; изборът попълва и телефона.
+              RawAutocomplete<(String, String)>(
+                textEditingController: _forWhom,
+                focusNode: _forWhomFocus,
+                optionsBuilder: (v) =>
+                    v.text.trim().isEmpty
+                    ? const <(String, String)>[]
+                    : AppScope.read(context).recentContacts(v.text),
+                displayStringForOption: (o) => o.$1,
+                onSelected: (o) {
+                  if (_phone.text.trim().isEmpty && o.$2.isNotEmpty) {
+                    setState(() => _phone.text = o.$2);
+                  }
+                },
+                fieldViewBuilder: (context, controller, focusNode, onSubmit) => TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  textCapitalization: TextCapitalization.words,
+                  style: fieldStyle,
+                  decoration: const InputDecoration(hintText: 'например Иван Петров'),
+                ),
+                optionsViewBuilder: (context, onSelected, options) {
+                  final p = Palette.of(context);
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 6,
+                      color: p.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxHeight: 280, maxWidth: MediaQuery.of(context).size.width - 40),
+                        child: ListView(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          shrinkWrap: true,
+                          children: [
+                            for (final o in options)
+                              ListTile(
+                                minTileHeight: 52,
+                                leading: const Icon(Icons.history_rounded),
+                                title: Text(o.$1, style: const TextStyle(fontSize: 17)),
+                                subtitle: o.$2.isEmpty ? null : Text(o.$2),
+                                onTap: () => onSelected(o),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             _section(

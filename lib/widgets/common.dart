@@ -81,7 +81,11 @@ class OverlapNotice extends StatelessWidget {
   final List<ChurchEvent> overlaps;
   /// Име на храм за събитията от друг храм (по желание).
   final String Function(ChurchEvent)? otherChurch;
-  const OverlapNotice(this.overlaps, {super.key, this.otherChurch});
+  /// Заглавие (по подразбиране – застъпване при свещеника).
+  final String? title;
+  /// Допълнение след всяко събитие (например името на свещеника).
+  final String Function(ChurchEvent)? suffix;
+  const OverlapNotice(this.overlaps, {super.key, this.otherChurch, this.title, this.suffix});
 
   @override
   Widget build(BuildContext context) {
@@ -106,14 +110,16 @@ class OverlapNotice extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    overlaps.length == 1
-                        ? 'Застъпва се с друго събитие'
-                        : 'Застъпва се с ${overlaps.length} събития',
+                    title ??
+                        (overlaps.length == 1
+                            ? 'Застъпва се с друго събитие'
+                            : 'Застъпва се с ${overlaps.length} събития'),
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fg)),
                 const SizedBox(height: 4),
                 for (final o in overlaps)
                   Text(
                       eventShortLabel(o) +
+                          (suffix == null ? '' : ' – ${suffix!(o)}') +
                           (otherChurch == null || otherChurch!(o).isEmpty
                               ? ''
                               : ' (${otherChurch!(o)})'),
