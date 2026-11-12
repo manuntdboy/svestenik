@@ -42,6 +42,7 @@ class AppState extends ChangeNotifier {
   final List<Church> _churches = [];
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
+  final List<LeaveRequest> _leaves = [];
 
   /// Последното състояние от сървъра по номер на събитие – за да знаем
   /// какво се е променило при запис (формулярът променя обекта на място).
@@ -120,6 +121,7 @@ class AppState extends ChangeNotifier {
     _churches.clear();
     _members.clear();
     _events.clear();
+    _leaves.clear();
     syncError = null;
   }
 
@@ -137,6 +139,7 @@ class AppState extends ChangeNotifier {
         _db.from('churches').select(),
         _db.from('church_members').select(),
         _db.from('events').select().order('starts_at'),
+        _db.from('leave_requests').select().order('start_date'),
       ]);
       _profiles
         ..clear()
@@ -151,6 +154,9 @@ class AppState extends ChangeNotifier {
       _events
         ..clear()
         ..addAll(results[3].map(ChurchEvent.fromRow));
+      _leaves
+        ..clear()
+        ..addAll(results[4].map(LeaveRequest.fromRow));
       _rows
         ..clear()
         ..addEntries(results[3].map((r) => MapEntry(r['id'] as String, r)));
@@ -192,6 +198,11 @@ class AppState extends ChangeNotifier {
     };
     final t = text.toLowerCase();
     if (t.contains('invalid_code')) return 'Няма храм с този код.';
+    if (t.contains('assignee_on_leave')) return 'Свещеникът е в почивка в този ден.';
+    if (t.contains('not_pending')) return 'Събитието вече не чака потвърждение.';
+    if (t.contains('not_declined')) return 'Отказът вече е решен.';
+    if (t.contains('bad_substitute')) return 'Изберете свещеник от храма.';
+    if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
     if (t.contains('last_manager')) return 'Храмът трябва да има поне един председател.';
@@ -345,7 +356,10 @@ class AppState extends ChangeNotifier {
     if (u == null) return const [];
     final ids = myChurches.map((c) => c.id).toSet();
     return _events.where((e) =>
-        e.assigneeId == u.id && ids.contains(e.churchId) && e.status == EventStatus.planned);
+        e.assigneeId == u.id &&
+        ids.contains(e.churchId) &&
+        e.status == EventStatus.planned &&
+        e.isAccepted);
   }
 
   Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents);
@@ -614,7 +628,9 @@ class AppState extends ChangeNotifier {
     return _events
         .where((e) =>
             e.churchId == currentChurchId &&
-            (e.ownerId == u.id || e.assigneeId == u.id || e.shared))
+            (e.ownerId == u.id || e.assigneeId == u.id || e.shared) &&
+            // моите непотвърдени са в картите „Моля, потвърдете“, не в календара
+            !(e.assigneeId == u.id && e.ownerId != u.id && !e.isAccepted))
         .toList()
       ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
   }
@@ -719,6 +735,166 @@ class AppState extends ChangeNotifier {
       copy.assigneeId = currentUser!.id;
     }
     return copy;
+  }
+
+  // ------------------------------------------------------------------
+  // Потвърждение на събитие, записано от колега
+  // ------------------------------------------------------------------
+  /// Събития, които чакат моето потвърждение (във всички мои храмове).
+  List<ChurchEvent> get awaitingMyConfirmation {
+    final u = currentUser;
+    if (u == null) return [];
+    final ids = myChurches.map((c) => c.id).toSet();
+    return _events
+        .where((e) => e.assigneeId == u.id && e.awaitsConfirmation && ids.contains(e.churchId))
+        .toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+  }
+
+  /// Моите откази, които чакат решение на председателя.
+  List<ChurchEvent> get myDeclinesInReview {
+    final u = currentUser;
+    if (u == null) return [];
+    return _events.where((e) => e.declinedById == u.id && e.isDeclined).toList();
+  }
+
+  /// Отказани събития за решение (вижда ги председателят).
+  List<ChurchEvent> declinedForReview(String churchId) => isManagerOf(churchId)
+      ? (_events.where((e) => e.churchId == churchId && e.isDeclined).toList()
+        ..sort((a, b) => a.startsAt.compareTo(b.startsAt)))
+      : [];
+
+  ChurchEvent _merge(Map<String, dynamic> row) {
+    final e = ChurchEvent.fromRow(row);
+    _events.removeWhere((x) => x.id == e.id);
+    _events.add(e);
+    _rows[e.id] = row;
+    return e;
+  }
+
+  /// Приемам или отказвам събитие, записано за мен.
+  Future<void> respondAssignment(ChurchEvent e,
+      {required bool accept, String reason = '', String? substituteId}) async {
+    try {
+      final row = await _db.rpc('respond_assignment', params: {
+        'p_event': e.id,
+        'p_accept': accept,
+        'p_reason': reason.trim().isEmpty ? null : reason.trim(),
+        'p_substitute': substituteId,
+      });
+      final saved = _merge(Map<String, dynamic>.from(row as Map));
+      notifyListeners();
+      if (accept && saved.status == EventStatus.planned) await Notifier.schedule(saved);
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+    unawaited(_invokeNotify({
+      'type': accept ? 'assignment_accepted' : 'assignment_declined',
+      'event_id': e.id,
+    }));
+  }
+
+  /// Председателят решава отказ: прехвърля на [assigneeId] или оставя на
+  /// отказалия (ако [assigneeId] е той).
+  Future<void> resolveDecline(ChurchEvent e, String assigneeId) async {
+    final decliner = e.declinedById;
+    try {
+      final row = await _db.rpc('resolve_decline', params: {'p_event': e.id, 'p_assignee': assigneeId});
+      _merge(Map<String, dynamic>.from(row as Map));
+      notifyListeners();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+    if (assigneeId == decliner) {
+      unawaited(_invokeNotify({'type': 'assignment_kept', 'event_id': e.id}));
+    } else if (assigneeId != currentUser?.id) {
+      unawaited(_invokeNotify({'type': 'event', 'event_id': e.id, 'change': 'created'}));
+    }
+    unawaited(rescheduleReminders());
+  }
+
+  // ------------------------------------------------------------------
+  // Почивки
+  // ------------------------------------------------------------------
+  /// Моите заявки в храма (всички състояния), най-новите първи.
+  List<LeaveRequest> myLeaves(String churchId) => _leaves
+      .where((l) => l.churchId == churchId && l.userId == currentUser?.id)
+      .toList()
+    ..sort((a, b) => b.start.compareTo(a.start));
+
+  /// Чакащи заявки за одобрение (вижда ги председателят).
+  List<LeaveRequest> pendingLeaves(String churchId) => isManagerOf(churchId)
+      ? (_leaves.where((l) => l.churchId == churchId && l.status == LeaveStatus.pending).toList()
+        ..sort((a, b) => a.start.compareTo(b.start)))
+      : [];
+
+  /// Одобрените почивки в храма, които още не са минали.
+  List<LeaveRequest> approvedLeaves(String churchId) {
+    final today = DateTime.now();
+    final d = DateTime(today.year, today.month, today.day);
+    return _leaves
+        .where((l) => l.churchId == churchId && l.status == LeaveStatus.approved && !l.end.isBefore(d))
+        .toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+  }
+
+  /// Почивки в този ден: одобрените (всички), а председателят – и чакащите.
+  List<LeaveRequest> leavesOn(String churchId, DateTime day) => _leaves
+      .where((l) =>
+          l.churchId == churchId &&
+          l.covers(day) &&
+          (l.status == LeaveStatus.approved ||
+              (l.status == LeaveStatus.pending && (isManagerOf(churchId) || l.userId == currentUser?.id))))
+      .toList();
+
+  bool isOnLeave(String churchId, String userId, DateTime day) => _leaves.any((l) =>
+      l.churchId == churchId &&
+      l.userId == userId &&
+      l.status == LeaveStatus.approved &&
+      l.covers(day));
+
+  Future<void> requestLeave(DateTime start, DateTime end, String note) async {
+    String iso(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    try {
+      final row = await _db
+          .from('leave_requests')
+          .insert({
+            'church_id': currentChurchId,
+            'start_date': iso(start),
+            'end_date': iso(end),
+            'note': note.trim().isEmpty ? null : note.trim(),
+          })
+          .select()
+          .single();
+      final l = LeaveRequest.fromRow(row);
+      _leaves.add(l);
+      notifyListeners();
+      unawaited(_invokeNotify({'type': 'leave_request', 'request_id': l.id}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> decideLeave(LeaveRequest l, bool approve) async {
+    try {
+      await _db.rpc('decide_leave', params: {'p_request': l.id, 'p_approve': approve});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'leave_decided', 'request_id': l.id}));
+  }
+
+  /// Оттегля (своя чакаща) или отменя (председателят – всяка) заявка.
+  Future<void> cancelLeave(LeaveRequest l) async {
+    try {
+      await _db.rpc('cancel_leave', params: {'p_request': l.id});
+      _leaves.removeWhere((x) => x.id == l.id);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
   }
 
   /// Отбелязва събитието като проведено, отменено или пак предстоящо.

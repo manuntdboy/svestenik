@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -11,6 +13,10 @@ import 'models.dart';
 /// приложение и след рестарт на телефона.
 class Notifier {
   static final _plugin = FlutterLocalNotificationsPlugin();
+
+  /// Данните на натиснато известие (push или наше) – приложението отваря
+  /// съответния екран. Задава се тук и в push.dart, чете се в Shell.
+  static final opened = ValueNotifier<Map<String, String>?>(null);
   static bool _ready = false;
 
   static const _details = NotificationDetails(
@@ -59,6 +65,13 @@ class Notifier {
         settings: const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         ),
+        onDidReceiveNotificationResponse: (r) {
+          final payload = r.payload;
+          if (payload == null || payload.isEmpty) return;
+          try {
+            opened.value = Map<String, String>.from(jsonDecode(payload) as Map);
+          } catch (_) {}
+        },
       );
       // Канал за известията от колеги (push) – трябва да съществува,
       // за да ги показва Android със звук.
@@ -180,11 +193,12 @@ class Notifier {
   }
 
   /// Показва известие веднага (за push, докато приложението е отворено).
-  static Future<void> showNow(String title, String body) async {
+  static Future<void> showNow(String title, String body, {Map<String, String>? data}) async {
     if (!_ready) return;
     await _plugin.show(
       id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
       title: title,
+      payload: data == null ? null : jsonEncode(data),
       body: body,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(

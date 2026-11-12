@@ -229,13 +229,23 @@ class _EventFormScreenState extends State<EventFormScreen> {
   Widget _priestPicker(TextStyle fieldStyle) {
     final s = AppScope.of(context);
     final p = Palette.of(context);
-    final priests = s.priestsOf(widget.draft.churchId);
+    final church = widget.draft.churchId;
+    // Свещениците в одобрена почивка в този ден не се предлагат
+    // (освен вече избрания, за да не изчезне от полето).
+    final priests = s
+        .priestsOf(church)
+        .where((x) => x.$1.id == _assignee || !s.isOnLeave(church, x.$1.id, _start))
+        .toList();
+    final onLeave = s.priestsOf(church).where((x) => s.isOnLeave(church, x.$1.id, _start)).toList();
+    final assigneeOnLeave = s.isOnLeave(church, _assignee, _start);
     // Само записалият може да смени свещеника; при един свещеник менюто не трябва.
-    if (priests.length < 2) return const SizedBox.shrink();
+    if (priests.length < 2 && !assigneeOnLeave) return const SizedBox.shrink();
     final canChange = widget.draft.ownerId == s.currentUser?.id;
     return _section(
       'Свещеник',
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       DropdownButtonFormField<String>(
+        key: ValueKey('priest-${_start.year}-${_start.month}-${_start.day}'),
         initialValue: _assignee,
         style: fieldStyle.copyWith(color: p.text),
         items: [
@@ -249,7 +259,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     size: 28),
                 const SizedBox(width: 10),
                 Flexible(
-                  child: Text(u.id == s.currentUser?.id ? '${u.fullName} (аз)' : u.fullName,
+                  child: Text(
+                      (u.id == s.currentUser?.id ? '${u.fullName} (аз)' : u.fullName) +
+                          (s.isOnLeave(church, u.id, _start) ? ' – в почивка' : ''),
                       overflow: TextOverflow.ellipsis),
                 ),
               ]),
@@ -263,6 +275,20 @@ class _EventFormScreenState extends State<EventFormScreen> {
               }
             : null,
       ),
+      if (assigneeOnLeave && _assignee != s.currentUser?.id)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('${s.priestName(_assignee)} е в почивка в този ден – изберете друг свещеник.',
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.error)),
+        )
+      else if (onLeave.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('В почивка този ден: ${onLeave.map((x) => x.$1.fullName).join(', ')}',
+              style: TextStyle(fontSize: 14, color: p.textMuted)),
+        ),
+      ]),
     );
   }
 

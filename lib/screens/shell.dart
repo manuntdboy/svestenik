@@ -6,6 +6,8 @@ import '../data/app_state.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
 import 'calendar.dart';
+import 'event_detail.dart';
+import 'leaves.dart';
 import 'home.dart';
 import 'profile.dart';
 
@@ -30,14 +32,41 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     });
     // При първото отваряне Android пита дали да се показват известия.
-    WidgetsBinding.instance.addPostFrameCallback((_) => Notifier.requestPermissions());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Notifier.requestPermissions();
+      _openFromNotification();
+    });
+    Notifier.opened.addListener(_openFromNotification);
   }
 
   @override
   void dispose() {
+    Notifier.opened.removeListener(_openFromNotification);
     WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
     super.dispose();
+  }
+
+  /// Натиснато известие → обновяваме и отваряме мястото, за което е.
+  Future<void> _openFromNotification() async {
+    final data = Notifier.opened.value;
+    if (data == null || !mounted) return;
+    Notifier.opened.value = null;
+    final s = AppScope.read(context);
+    final nav = Navigator.of(context);
+    await s.refresh();
+    if (!mounted) return;
+    final type = data['type'] ?? '';
+    final eventId = data['event_id'];
+    if (type.startsWith('leave_')) {
+      nav.push(MaterialPageRoute(builder: (_) => const LeavesScreen()));
+    } else if (eventId != null && s.eventById(eventId) != null) {
+      // Молба за потвърждение и др. – детайлите имат „Приемам / Отказвам“.
+      setState(() => _tab = 1);
+      nav.push(MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: eventId)));
+    } else {
+      setState(() => _tab = 0); // заявка за присъединяване, одобрение и т.н.
+    }
   }
 
   /// При връщане в приложението изтегля новостите от сървъра.

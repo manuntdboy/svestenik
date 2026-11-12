@@ -39,10 +39,21 @@ class Push {
       // показваме го ние.
       FirebaseMessaging.onMessage.listen((m) {
         final n = m.notification;
-        if (n != null) Notifier.showNow(n.title ?? 'Кайрос', n.body ?? '');
+        if (n != null) {
+          Notifier.showNow(n.title ?? 'Кайрос', n.body ?? '',
+              data: m.data.map((k, v) => MapEntry(k, '$v')));
+        }
         onEvent?.call();
       });
-      FirebaseMessaging.onMessageOpenedApp.listen((_) => onEvent?.call());
+      // Натиснато известие: отваряме съответния екран.
+      FirebaseMessaging.onMessageOpenedApp.listen((m) {
+        Notifier.opened.value = m.data.map((k, v) => MapEntry(k, '$v'));
+        onEvent?.call();
+      });
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) {
+        Notifier.opened.value = initial.data.map((k, v) => MapEntry(k, '$v'));
+      }
       _ready = true;
     } catch (e) {
       debugPrint('Push не тръгна: $e');

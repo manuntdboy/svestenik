@@ -169,4 +169,44 @@ void main() {
       expect(timeUntil(now.add(const Duration(minutes: 10))), startsWith('след'));
     });
   });
+
+  group('Потвърждение и почивки', () {
+    test('състоянието на потвърждение се чете от базата', () {
+      final e = ChurchEvent.fromRow({
+        'id': 'x',
+        'owner_id': 'a',
+        'church_id': 'c',
+        'assignee_id': 'b',
+        'kind': 'krashtene',
+        'starts_at': '2026-11-20T09:00:00Z',
+        'visibility': 'church',
+        'assignment_status': 'declined',
+        'decline_reason': 'служба другаде',
+        'proposed_substitute': 'c2',
+        'declined_by': 'b',
+      });
+      expect(e.isDeclined, isTrue);
+      expect(e.declineReason, 'служба другаде');
+      expect(e.proposedSubstituteId, 'c2');
+      expect(e.declinedById, 'b');
+      // полетата за потвърждение не се пращат от приложението
+      expect(e.toRow().containsKey('assignment_status'), isFalse);
+    });
+    test('почивката важи в дните си, включително последния', () {
+      final l = LeaveRequest.fromRow({
+        'id': 'l',
+        'church_id': 'c',
+        'user_id': 'b',
+        'start_date': '2026-11-20',
+        'end_date': '2026-11-22',
+        'status': 'approved',
+      });
+      expect(l.days, 3);
+      expect(l.covers(DateTime(2026, 11, 19, 23, 59)), isFalse);
+      expect(l.covers(DateTime(2026, 11, 20, 8)), isTrue);
+      expect(l.covers(DateTime(2026, 11, 22, 23, 59)), isTrue);
+      expect(l.covers(DateTime(2026, 11, 23)), isFalse);
+      expect(l.status, LeaveStatus.approved);
+    });
+  });
 }

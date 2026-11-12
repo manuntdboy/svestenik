@@ -111,6 +111,16 @@ enum EventKind {
       EventKind.values.firstWhere((k) => k.name == n, orElse: () => EventKind.drugo);
 }
 
+/// Потвърждение от свещеника, за когото е записано събитието.
+enum AssignmentStatus {
+  pending, // чака свещеника
+  accepted, // прието (или записано за себе си)
+  declined; // отказано – решава председателят
+
+  static AssignmentStatus fromName(String? n) =>
+      AssignmentStatus.values.firstWhere((s) => s.name == n, orElse: () => AssignmentStatus.accepted);
+}
+
 /// Състояние на събитието.
 enum EventStatus {
   planned('Предстои'),
@@ -166,6 +176,11 @@ class ChurchEvent {
   bool shared; // false = лично, true = споделено с храма
   String note;
   EventStatus status;
+  // Попълват се от сървъра (само през функциите за потвърждение).
+  AssignmentStatus assignment;
+  String declineReason;
+  String? proposedSubstituteId;
+  String? declinedById;
 
   ChurchEvent({
     required this.id,
@@ -184,6 +199,10 @@ class ChurchEvent {
     this.shared = false,
     this.note = '',
     this.status = EventStatus.planned,
+    this.assignment = AssignmentStatus.accepted,
+    this.declineReason = '',
+    this.proposedSubstituteId,
+    this.declinedById,
   }) : assigneeId = assigneeId ?? ownerId;
 
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
@@ -193,6 +212,9 @@ class ChurchEvent {
       startsAt.isBefore(other.endsAt) && other.startsAt.isBefore(endsAt);
 
   bool get isCancelled => status == EventStatus.cancelled;
+  bool get awaitsConfirmation => assignment == AssignmentStatus.pending;
+  bool get isDeclined => assignment == AssignmentStatus.declined;
+  bool get isAccepted => assignment == AssignmentStatus.accepted;
   bool get isDone => status == EventStatus.done;
 
   /// Копие за нова дата: същите данни, ново събитие, записано от [ownerId].
@@ -272,6 +294,10 @@ class ChurchEvent {
         shared: r['visibility'] == 'church',
         note: (r['note'] as String?) ?? '',
         status: EventStatus.fromName(r['status'] as String?),
+        assignment: AssignmentStatus.fromName(r['assignment_status'] as String?),
+        declineReason: (r['decline_reason'] as String?) ?? '',
+        proposedSubstituteId: r['proposed_substitute'] as String?,
+        declinedById: r['declined_by'] as String?,
       );
 
   factory ChurchEvent.fromJson(Map<String, dynamic> j) => ChurchEvent(
@@ -362,4 +388,59 @@ class ProfileDetails {
     if (next.isBefore(today)) next = at(today.year + 1);
     return next.difference(today).inDays;
   }
+}
+
+/// Заявка за почивка.
+enum LeaveStatus {
+  pending('Чака одобрение'),
+  approved('Одобрена'),
+  rejected('Неодобрена');
+
+  final String label;
+  const LeaveStatus(this.label);
+
+  static LeaveStatus fromName(String? n) =>
+      LeaveStatus.values.firstWhere((s) => s.name == n, orElse: () => LeaveStatus.pending);
+}
+
+class LeaveRequest {
+  final String id;
+  final String churchId;
+  final String userId;
+  final DateTime start; // само дата
+  final DateTime end; // само дата, включително
+  final String note;
+  final LeaveStatus status;
+
+  LeaveRequest({
+    required this.id,
+    required this.churchId,
+    required this.userId,
+    required this.start,
+    required this.end,
+    this.note = '',
+    this.status = LeaveStatus.pending,
+  });
+
+  bool covers(DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    return !d.isBefore(start) && !d.isAfter(end);
+  }
+
+  int get days => end.difference(start).inDays + 1;
+
+  static DateTime _d(String s) {
+    final p = DateTime.parse(s);
+    return DateTime(p.year, p.month, p.day);
+  }
+
+  factory LeaveRequest.fromRow(Map<String, dynamic> r) => LeaveRequest(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        userId: r['user_id'] as String,
+        start: _d(r['start_date'] as String),
+        end: _d(r['end_date'] as String),
+        note: (r['note'] as String?) ?? '',
+        status: LeaveStatus.fromName(r['status'] as String?),
+      );
 }

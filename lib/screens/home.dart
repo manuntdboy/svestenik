@@ -7,6 +7,7 @@ import '../widgets/common.dart';
 import 'event_detail.dart';
 import 'church_priests.dart';
 import 'my_profile.dart';
+import '../widgets/requests.dart';
 import 'event_form.dart';
 
 /// Начален екран – табло, вариант Б.
@@ -112,6 +113,8 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _PriestsStrip(churchId: s.currentChurchId!),
             const SizedBox(height: 12),
+            // Моля, потвърдете · отказани събития · заявки за почивка
+            ...requestCards(s),
             if (s.isManagerOf(s.currentChurchId!))
               for (final (u, _) in s.pendingRequests(s.currentChurchId!))
                 Padding(

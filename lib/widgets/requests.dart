@@ -1,0 +1,359 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../data/app_state.dart';
+import '../data/models.dart';
+import '../theme.dart';
+import 'common.dart';
+
+final _fmtDm = DateFormat('d MMMM', 'bg');
+
+/// „12 ноември“ или „12 – 14 ноември“ / „30 ноември – 2 декември“.
+String fmtLeavePeriod(LeaveRequest l) {
+  if (l.start == l.end) return _fmtDm.format(l.start);
+  if (l.start.month == l.end.month) return '${l.start.day} – ${_fmtDm.format(l.end)}';
+  return '${_fmtDm.format(l.start)} – ${_fmtDm.format(l.end)}';
+}
+
+/// Обща рамка на картите за молби (жълт кант като „Чака одобрение“).
+class _RequestFrame extends StatelessWidget {
+  final String tag;
+  final IconData icon;
+  final List<Widget> children;
+  const _RequestFrame({required this.tag, required this.icon, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Palette.yellow, width: 2),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [YellowTag(tag), const Spacer(), Icon(icon, color: p.textMuted)]),
+        const SizedBox(height: 10),
+        ...children,
+      ]),
+    );
+  }
+}
+
+Widget _eventTitle(BuildContext context, ChurchEvent e) {
+  final p = Palette.of(context);
+  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [
+      KindChip(e.kind),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text('${fmtDayLong(e.startsAt)}, ${fmtRange(e)}',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      ),
+    ]),
+    const SizedBox(height: 6),
+    if (e.forWhom.isNotEmpty)
+      Text(e.forWhom, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+    Text(e.placeLabel, style: TextStyle(fontSize: 15, color: p.textMuted)),
+  ]);
+}
+
+Future<void> _guard(BuildContext context, Future<void> Function() action, String done) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await action();
+    messenger.showSnackBar(SnackBar(content: Text(done, style: const TextStyle(fontSize: 16))));
+  } on AppError catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
+
+/// Анкета при отказ: причина (по желание) и предлаган заместник (по желание).
+Future<void> showDeclineSheet(BuildContext context, ChurchEvent e) async {
+  final s = AppScope.read(context);
+  final reason = TextEditingController();
+  String? substitute;
+  final day = DateTime(e.startsAt.year, e.startsAt.month, e.startsAt.day);
+  final others = s
+      .priestsOf(e.churchId)
+      .where((x) => x.$1.id != s.currentUser?.id && !s.isOnLeave(e.churchId, x.$1.id, day))
+      .toList();
+  final ok = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheet) {
+        final p = Palette.of(ctx);
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text('Отказ от събитие',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Отказът отива при председателя. Двете полета са по желание.',
+                  style: TextStyle(fontSize: 15, color: p.textMuted)),
+              const SizedBox(height: 16),
+              const FieldLabel('Защо? (по желание)'),
+              TextField(
+                controller: reason,
+                minLines: 2,
+                maxLines: 4,
+                maxLength: 500,
+                textCapitalization: TextCapitalization.sentences,
+                style: const TextStyle(fontSize: 17),
+                decoration: const InputDecoration(hintText: 'например служба в друг храм'),
+              ),
+              const SizedBox(height: 8),
+              const FieldLabel('Кого предлагате за заместник? (по желание)'),
+              DropdownButtonFormField<String?>(
+                initialValue: substitute,
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.text),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Без предложение')),
+                  for (final (u, _) in others)
+                    DropdownMenuItem<String?>(
+                      value: u.id,
+                      child: Row(children: [
+                        PriestBadge(
+                            name: u.fullName, color: p.priest(s.priestIndex(e.churchId, u.id)), size: 26),
+                        const SizedBox(width: 10),
+                        Flexible(child: Text(u.fullName, overflow: TextOverflow.ellipsis)),
+                      ]),
+                    ),
+                ],
+                onChanged: (v) => setSheet(() => substitute = v),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Изпрати на председателя'),
+              ),
+              const SizedBox(height: 6),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+            ]),
+          ),
+        );
+      },
+    ),
+  );
+  if (ok != true || !context.mounted) {
+    reason.dispose();
+    return;
+  }
+  final text = reason.text;
+  reason.dispose();
+  await _guard(
+      context,
+      () => s.respondAssignment(e, accept: false, reason: text, substituteId: substitute),
+      'Отказът е изпратен на председателя.');
+}
+
+/// „Моля, потвърдете“: събитие, записано от колега за мен.
+class AwaitingCard extends StatefulWidget {
+  final ChurchEvent event;
+  const AwaitingCard({super.key, required this.event});
+
+  @override
+  State<AwaitingCard> createState() => _AwaitingCardState();
+}
+
+class _AwaitingCardState extends State<AwaitingCard> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final e = widget.event;
+    return _RequestFrame(tag: 'Моля, потвърдете', icon: Icons.event_available_outlined, children: [
+      _eventTitle(context, e),
+      const SizedBox(height: 4),
+      Text('Записа ${s.ownerName(e)}', style: TextStyle(fontSize: 15, color: p.textMuted)),
+      if (e.note.isNotEmpty)
+        Text(e.note, style: TextStyle(fontSize: 15, color: p.textMuted)),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _busy ? null : () => showDeclineSheet(context, e),
+            child: const Text('Отказвам'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: _busy
+                ? null
+                : () async {
+                    setState(() => _busy = true);
+                    await _guard(context, () => s.respondAssignment(e, accept: true),
+                        'Прието – събитието е в календара ви.');
+                    if (mounted) setState(() => _busy = false);
+                  },
+            child: const Text('Приемам'),
+          ),
+        ),
+      ]),
+    ]);
+  }
+}
+
+/// „Отказано събитие“: председателят избира заместник или оставя на същия.
+class DeclinedReviewCard extends StatefulWidget {
+  final ChurchEvent event;
+  const DeclinedReviewCard({super.key, required this.event});
+
+  @override
+  State<DeclinedReviewCard> createState() => _DeclinedReviewCardState();
+}
+
+class _DeclinedReviewCardState extends State<DeclinedReviewCard> {
+  late String? _pick = widget.event.proposedSubstituteId;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final e = widget.event;
+    final decliner = e.declinedById ?? e.assigneeId;
+    final day = DateTime(e.startsAt.year, e.startsAt.month, e.startsAt.day);
+    final options = s
+        .priestsOf(e.churchId)
+        .where((x) => x.$1.id != decliner && !s.isOnLeave(e.churchId, x.$1.id, day))
+        .toList();
+    if (_pick != null && !options.any((x) => x.$1.id == _pick)) _pick = null;
+    final proposed = e.proposedSubstituteId == null ? '' : s.priestName(e.proposedSubstituteId!);
+
+    Future<void> go(String assignee, String done) async {
+      setState(() => _busy = true);
+      await _guard(context, () => s.resolveDecline(e, assignee), done);
+      if (mounted) setState(() => _busy = false);
+    }
+
+    return _RequestFrame(tag: 'Отказано събитие', icon: Icons.swap_horiz_rounded, children: [
+      _eventTitle(context, e),
+      const SizedBox(height: 8),
+      Text('${s.priestName(decliner)} отказа', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      Text(e.declineReason.isEmpty ? 'Без посочена причина' : 'Причина: ${e.declineReason}',
+          style: TextStyle(fontSize: 15, color: p.textMuted)),
+      if (proposed.isNotEmpty)
+        Text('Предлага: $proposed', style: TextStyle(fontSize: 15, color: p.textMuted)),
+      const SizedBox(height: 12),
+      const FieldLabel('Заместник'),
+      DropdownButtonFormField<String?>(
+        initialValue: _pick,
+        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.text),
+        hint: const Text('Изберете свещеник'),
+        items: [
+          for (final (u, _) in options)
+            DropdownMenuItem<String?>(
+              value: u.id,
+              child: Row(children: [
+                PriestBadge(name: u.fullName, color: p.priest(s.priestIndex(e.churchId, u.id)), size: 26),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                      u.id == s.currentUser?.id
+                          ? '${u.fullName} (аз)'
+                          : u.id == e.proposedSubstituteId
+                              ? '${u.fullName} (предложен)'
+                              : u.fullName,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ]),
+            ),
+        ],
+        onChanged: _busy ? null : (v) => setState(() => _pick = v),
+      ),
+      const SizedBox(height: 12),
+      FilledButton(
+        onPressed: _busy || _pick == null
+            ? null
+            : () => go(_pick!,
+                _pick == s.currentUser?.id ? 'Поехте събитието.' : 'Изпратено на заместника за потвърждение.'),
+        child: Text(_pick == null ? 'Прехвърли на заместник' : 'Прехвърли на ${s.priestName(_pick!)}'),
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton(
+        onPressed: _busy ? null : () => go(decliner, 'Събитието остава на ${s.priestName(decliner)}.'),
+        child: Text('Остави на ${s.priestName(decliner)}'),
+      ),
+    ]);
+  }
+}
+
+/// Заявка за почивка за одобрение (вижда я председателят).
+class LeaveReviewCard extends StatefulWidget {
+  final LeaveRequest leave;
+  const LeaveReviewCard({super.key, required this.leave});
+
+  @override
+  State<LeaveReviewCard> createState() => _LeaveReviewCardState();
+}
+
+class _LeaveReviewCardState extends State<LeaveReviewCard> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final l = widget.leave;
+
+    Future<void> go(bool approve) async {
+      setState(() => _busy = true);
+      await _guard(context, () => s.decideLeave(l, approve),
+          approve ? 'Почивката е одобрена.' : 'Почивката не е одобрена.');
+      if (mounted) setState(() => _busy = false);
+    }
+
+    return _RequestFrame(tag: 'Заявка за почивка', icon: Icons.beach_access_outlined, children: [
+      Row(children: [
+        PriestBadge(name: s.priestName(l.userId), color: p.priest(s.priestIndex(l.churchId, l.userId)), size: 36),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(s.priestName(l.userId), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+        ),
+      ]),
+      const SizedBox(height: 6),
+      Text('${fmtLeavePeriod(l)} · ${l.days == 1 ? '1 ден' : '${l.days} дни'}',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+      if (l.note.isNotEmpty) Text(l.note, style: TextStyle(fontSize: 15, color: p.textMuted)),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: OutlinedButton(onPressed: _busy ? null : () => go(false), child: const Text('Откажи'))),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: _busy ? null : () => go(true),
+            child: const Text('Одобри'),
+          ),
+        ),
+      ]),
+    ]);
+  }
+}
+
+/// Всички молби за текущия храм: моите потвърждения, а за председателя –
+/// откази и почивки. Слага се на началния екран и в календара.
+List<Widget> requestCards(AppState s) {
+  final church = s.currentChurchId;
+  if (church == null) return [];
+  return [
+    for (final e in s.awaitingMyConfirmation.where((e) => e.churchId == church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: AwaitingCard(key: ValueKey('aw${e.id}'), event: e)),
+    for (final e in s.declinedForReview(church))
+      Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: DeclinedReviewCard(key: ValueKey('dr${e.id}'), event: e)),
+    for (final l in s.pendingLeaves(church))
+      Padding(
+          padding: const EdgeInsets.only(bottom: 12), child: LeaveReviewCard(key: ValueKey('lv${l.id}'), leave: l)),
+  ];
+}

@@ -130,14 +130,78 @@ Deno.serve(async (req) => {
     title = "Одобрен сте";
     text = `${callerName} ви одобри в ${church?.name ?? "храма"}. Отворете Кайрос.`;
     data = { type, church_id: churchId };
+  } else if (type === "leave_request" || type === "leave_decided") {
+    const requestId = String(body.request_id ?? "");
+    const { data: lv } = await admin.from("leave_requests").select("*").eq("id", requestId).maybeSingle();
+    if (!lv) return json(404, { error: "not_found" });
+    const fmt = (d: string) =>
+      new Date(d + "T12:00:00Z").toLocaleDateString("bg-BG", { day: "numeric", month: "long" });
+    const period = lv.start_date === lv.end_date ? fmt(lv.start_date) : `${fmt(lv.start_date)} – ${fmt(lv.end_date)}`;
+    if (type === "leave_request") {
+      if (lv.user_id !== caller.id || lv.status !== "pending") return json(403, { error: "forbidden" });
+      const { data: managers } = await admin.from("church_members").select("user_id")
+        .eq("church_id", lv.church_id).eq("role", "manager").eq("status", "active");
+      recipients = (managers ?? []).map((m) => m.user_id);
+      title = "Заявка за почивка";
+      text = `${callerName} · ${period}${lv.note ? " · " + lv.note : ""}`;
+    } else {
+      const { data: me } = await admin.from("church_members").select("role,status")
+        .eq("church_id", lv.church_id).eq("user_id", caller.id).maybeSingle();
+      if (!me || me.role !== "manager" || me.status !== "active") return json(403, { error: "forbidden" });
+      recipients = [lv.user_id];
+      title = lv.status === "approved" ? "Почивката е одобрена" : "Почивката не е одобрена";
+      text = `${period} · ${callerName}`;
+    }
+    data = { type, church_id: lv.church_id, request_id: lv.id };
+  } else if (type === "assignment_accepted" || type === "assignment_declined" || type === "assignment_kept") {
+    const eventId = String(body.event_id ?? "");
+    const { data: ev } = await admin.from("events").select("*").eq("id", eventId).maybeSingle();
+    if (!ev) return json(404, { error: "not_found" });
+    const kind = KIND[ev.kind] ?? "Събитие";
+    const when = new Date(ev.starts_at).toLocaleString("bg-BG", {
+      timeZone: "Europe/Sofia", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+    });
+    if (type === "assignment_accepted") {
+      if (ev.assignee_id !== caller.id || ev.assignment_status !== "accepted") return json(403, { error: "forbidden" });
+      recipients = [ev.owner_id];
+      title = `${callerName} прие: ${kind}`;
+      text = [when, ev.for_whom].filter(Boolean).join(" · ");
+    } else if (type === "assignment_declined") {
+      if (ev.declined_by !== caller.id || ev.assignment_status !== "declined") return json(403, { error: "forbidden" });
+      const { data: managers } = await admin.from("church_members").select("user_id")
+        .eq("church_id", ev.church_id).eq("role", "manager").eq("status", "active");
+      recipients = [...(managers ?? []).map((m) => m.user_id), ev.owner_id];
+      let sub = "";
+      if (ev.proposed_substitute) {
+        const { data: sp } = await admin.from("profiles").select("full_name").eq("id", ev.proposed_substitute).maybeSingle();
+        if (sp?.full_name) sub = ` · предлага ${sp.full_name}`;
+      }
+      title = `${callerName} отказа: ${kind}`;
+      text = [when, ev.decline_reason].filter(Boolean).join(" · ") + sub;
+    } else {
+      // председателят остави събитието на отказалия
+      const { data: me } = await admin.from("church_members").select("role,status")
+        .eq("church_id", ev.church_id).eq("user_id", caller.id).maybeSingle();
+      if (!me || me.role !== "manager" || me.status !== "active") return json(403, { error: "forbidden" });
+      recipients = [ev.assignee_id];
+      title = `Председателят ви остави: ${kind}`;
+      text = [when, ev.for_whom].filter(Boolean).join(" · ");
+    }
+    data = { type, event_id: ev.id, church_id: ev.church_id };
   } else {
     // Събитие, записано от колега.
     const eventId = String(body.event_id ?? "");
     const change = body.change === "updated" ? "updated" : "created";
     const { data: ev } = await admin.from("events").select("*").eq("id", eventId).maybeSingle();
     if (!ev) return json(404, { error: "not_found" });
-    // Само записалият може да уведоми; на себе си не пращаме.
-    if (ev.owner_id !== caller.id) return json(403, { error: "forbidden" });
+    // Уведомява записалият, или председателят след прехвърляне; на себе си не пращаме.
+    let allowed = ev.owner_id === caller.id;
+    if (!allowed) {
+      const { data: me } = await admin.from("church_members").select("role,status")
+        .eq("church_id", ev.church_id).eq("user_id", caller.id).maybeSingle();
+      allowed = !!me && me.role === "manager" && me.status === "active";
+    }
+    if (!allowed) return json(403, { error: "forbidden" });
     if (ev.assignee_id === caller.id) return json(200, { sent: 0, reason: "self" });
     const when = new Date(ev.starts_at).toLocaleString("bg-BG", {
       timeZone: "Europe/Sofia",
@@ -148,7 +212,9 @@ Deno.serve(async (req) => {
       minute: "2-digit",
     });
     const kind = KIND[ev.kind] ?? "Събитие";
-    title = change === "updated" ? `Промяна: ${kind}` : `Ново събитие за вас: ${kind}`;
+    title = ev.assignment_status === "pending"
+      ? `Моля, потвърдете: ${kind}`
+      : change === "updated" ? `Промяна: ${kind}` : `Ново събитие за вас: ${kind}`;
     const parts = [when];
     if (ev.for_whom) parts.push(ev.for_whom);
     if (callerName) parts.push(`записа ${callerName}`);

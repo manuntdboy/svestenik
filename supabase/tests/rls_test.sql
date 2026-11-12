@@ -129,8 +129,8 @@ select t.as_user(:'B');
 select t.ok((select string_agg(for_whom, ',' order by for_whom) from events) = 'А споделено,за Б',
             'Иван вижда споделеното и своето, не личното на Георги');
 select t.ok(t.rows($$update events set note = 'ще закъснея' where for_whom = 'за Б'$$) = 1, 'свещеникът редактира събитие за него');
-select t.ok(t.rows(format($$update events set owner_id = %L where for_whom = 'за Б'$$, :'B')) = 1
-            and (select owner_id from events where for_whom = 'за Б') = :'A', 'записалият не може да бъде сменен');
+select t.rows(format($$update events set owner_id = %L where for_whom = 'за Б'$$, :'B')) \g /dev/null
+select t.ok((select owner_id from events where for_whom = 'за Б') = :'A', 'записалият не може да бъде сменен');
 select t.fails(format($$update events set assignee_id = %L where for_whom = 'за Б'$$, :'C'),
                'свещеникът не прехвърля събитието на трети', 'row-level security');
 select t.ok(t.rows($$delete from events where for_whom = 'за Б'$$) = 0, 'свещеникът не трие чуждо събитие');
@@ -208,6 +208,105 @@ select t.ok((select full_name from profiles where id = :'A') = 'Отец Гео�
 select t.ok(t.rows($$update profiles set full_name = 'Нов' where id = '00000000-0000-0000-0000-00000000000a'$$) = 0,
             'колега не сменя чуждо име');
 select t.ok(t.rows($$update profiles set full_name = 'Отец Иван Петров' where id = auth.uid()$$) = 1, 'свещеникът сменя своето име');
+
+\echo '== Потвърждение, отказ и заместник'
+-- Иван е одобрен член; Петър беше премахнат – връщаме го и одобряваме пак.
+select t.as_user(:'A');
+select public.regenerate_join_code(:'cid') as code2 \gset
+select t.as_user(:'C');
+select 1 from public.join_church(:'code2') \g /dev/null
+select t.as_user(:'A');
+select public.approve_member(:'cid', :'C') \g /dev/null
+-- за себе си → прието; за колега → чака
+insert into events (church_id, kind, starts_at, for_whom) values (:'cid', 'drugo', now() + interval '5 day', 'аз за мен');
+select t.ok((select assignment_status from events where for_whom = 'аз за мен') = 'accepted', 'за себе си: прието веднага');
+insert into events (church_id, kind, starts_at, visibility, assignee_id, for_whom)
+  values (:'cid', 'venchavka', now() + interval '6 day', 'church', :'B', 'молба 1') ;
+select id as ev1 from events where for_whom = 'молба 1' \gset
+select t.ok((select assignment_status from events where id = :'ev1') = 'pending', 'за колега: чака потвърждение');
+select t.rows(format($$update events set assignment_status = 'accepted' where id = %L$$, :'ev1')) \g /dev/null
+select t.ok((select assignment_status from events where id = :'ev1') = 'pending', 'записалият не може да приеме вместо колегата');
+select t.fails(format('select public.respond_assignment(%L, true)', :'ev1'), 'само свещеникът отговаря', 'not_assignee');
+
+select t.as_user(:'B');
+select t.fails(format('select public.resolve_decline(%L, %L)', :'ev1', :'C'), 'свещеник не решава откази', 'not_manager');
+select t.fails(format('select public.respond_assignment(%L, false, %L, %L)', :'ev1', 'x', :'B'), 'не може да предложи себе си', 'bad_substitute');
+select t.fails(format('select public.respond_assignment(%L, false, %L, %L)', :'ev1', 'x', :'D'), 'заместникът трябва да е от храма', 'bad_substitute');
+select (public.respond_assignment(:'ev1', false, '  Служба в друг храм  ', :'C')).assignment_status as st \gset
+select t.ok(:'st' = 'declined', 'отказ с причина и заместник');
+select t.ok((select decline_reason from events where id = :'ev1') = 'Служба в друг храм'
+            and (select proposed_substitute from events where id = :'ev1') = :'C'
+            and (select declined_by from events where id = :'ev1') = :'B', 'причината и заместникът са записани');
+select t.fails(format('select public.respond_assignment(%L, true)', :'ev1'), 'отказаното не се приема повторно', 'not_pending');
+select t.rows(format($$update events set assignment_status = 'accepted', decline_reason = null where id = %L$$, :'ev1')) \g /dev/null
+select t.ok((select assignment_status from events where id = :'ev1') = 'declined', 'отказът не се отменя на ръка');
+
+select t.as_user(:'A');
+select t.fails(format('select public.resolve_decline(%L, %L)', :'ev1', :'D'), 'председателят не дава на човек извън храма', 'bad_substitute');
+select (public.resolve_decline(:'ev1', :'C')).assignment_status as st \gset
+select t.ok(:'st' = 'pending' and (select assignee_id from events where id = :'ev1') = :'C', 'председателят прехвърля на заместника – чака него');
+select t.fails(format('select public.resolve_decline(%L, %L)', :'ev1', :'B'), 'решава се само отказано', 'not_declined');
+
+select t.as_user(:'C');
+select t.ok((select count(*) from events where id = :'ev1') = 1, 'заместникът вижда събитието');
+select (public.respond_assignment(:'ev1', true)).assignment_status as st \gset
+select t.ok(:'st' = 'accepted', 'заместникът приема');
+
+-- председателят оставя на същия свещеник
+select t.as_user(:'A');
+insert into events (church_id, kind, starts_at, visibility, assignee_id, for_whom)
+  values (:'cid', 'panihida', now() + interval '7 day', 'church', :'B', 'молба 2');
+select id as ev2 from events where for_whom = 'молба 2' \gset
+select t.as_user(:'B');
+select public.respond_assignment(:'ev2', false) \g /dev/null
+select t.as_user(:'A');
+select (public.resolve_decline(:'ev2', :'B')).assignment_status as st \gset
+select t.ok(:'st' = 'accepted' and (select assignee_id from events where id = :'ev2') = :'B', 'председателят оставя на същия – прието');
+
+-- записалият сменя свещеника при редакция → новият потвърждава
+select t.ok(t.rows(format($$update events set assignee_id = %L where id = %L$$, :'C', :'ev2')) = 1, 'записалият сменя свещеника');
+select t.ok((select assignment_status from events where id = :'ev2') = 'pending', 'смяна на свещеника иска ново потвърждение');
+select t.ok(t.rows(format($$update events set assignee_id = %L, visibility = 'church' where id = %L$$, :'A', :'ev2')) = 1, 'записалият поема сам');
+select t.ok((select assignment_status from events where id = :'ev2') = 'accepted', 'поето от записалия – прието');
+
+\echo '== Почивки'
+select t.as_user(:'B');
+insert into leave_requests (church_id, start_date, end_date, note)
+  values (:'cid', current_date + 10, current_date + 12, 'отпуск');
+select id as lv1 from leave_requests where note = 'отпуск' \gset
+select t.ok((select status from leave_requests where id = :'lv1') = 'pending', 'заявката чака одобрение');
+select t.fails(format($$insert into leave_requests(church_id,start_date,end_date,status) values (%L,current_date,current_date,'approved')$$, :'cid')
+               || '; select 1/(select count(*)-count(*) from leave_requests where status=''approved'' and user_id=auth.uid())',
+               'не може да се заяви одобрена почивка', 'division');
+select t.fails(format($$insert into leave_requests(church_id,user_id,start_date,end_date) values (%L,%L,current_date,current_date)$$, :'cid', :'C'),
+               'не се заявява почивка за друг', 'row-level security');
+select t.fails(format($$insert into leave_requests(church_id,start_date,end_date) values (%L,current_date+5,current_date+1)$$, :'cid'),
+               'краят не може да е преди началото', 'check');
+select t.fails(format('select public.decide_leave(%L, true)', :'lv1'), 'свещеник не одобрява почивки', 'not_manager');
+select t.as_user(:'C');
+select t.ok((select count(*) from leave_requests where id = :'lv1') = 0, 'колегите не виждат чакащата заявка');
+select t.as_user(:'A');
+select t.ok((select count(*) from leave_requests where id = :'lv1') = 1, 'председателят вижда заявката');
+select (public.decide_leave(:'lv1', true)).status as st \gset
+select t.ok(:'st' = 'approved', 'председателят одобрява');
+select t.as_user(:'C');
+select t.ok((select count(*) from leave_requests where id = :'lv1') = 1, 'колегите виждат одобрената почивка');
+select t.ok(public.is_on_leave(:'cid', :'B', current_date + 11) and not public.is_on_leave(:'cid', :'B', current_date + 13),
+            'почивката важи само в дните си');
+select t.fails(format($$insert into events(church_id,kind,starts_at,visibility,assignee_id) values (%L,'drugo',(current_date+11)::timestamp + time '12:00','church',%L)$$, :'cid', :'B'),
+               'не се записва събитие за свещеник в почивка', 'assignee_on_leave');
+insert into events (church_id, kind, starts_at, visibility, assignee_id, for_whom)
+  values (:'cid', 'drugo', (current_date + 14)::timestamp + time '12:00', 'church', :'B', 'след почивката');
+select t.ok((select count(*) from events where for_whom = 'след почивката') = 1, 'след почивката може');
+select t.fails(format($$update events set starts_at = (current_date+11)::timestamp + time '12:00' where for_whom = 'след почивката'$$),
+               'не се мести събитие на колега в дните на почивката му', 'assignee_on_leave');
+select t.as_user(:'B');
+select t.ok(t.rows(format($$delete from leave_requests where id = %L$$, :'lv1')) = 0, 'одобрена почивка не се трие от свещеника');
+insert into leave_requests (church_id, start_date, end_date, note) values (:'cid', current_date + 30, current_date + 30, 'чакаща');
+select t.ok(t.rows($$delete from leave_requests where note = 'чакаща'$$) = 1, 'свещеникът оттегля чакаща заявка');
+select t.as_user(:'A');
+select public.cancel_leave(:'lv1') \g /dev/null
+select t.ok((select count(*) from leave_requests where id = :'lv1') = 0, 'председателят отменя одобрена почивка');
 
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');

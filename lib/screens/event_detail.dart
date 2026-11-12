@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'event_form.dart';
+import '../widgets/requests.dart';
 
 class EventDetailScreen extends StatelessWidget {
   final String eventId;
@@ -94,6 +95,15 @@ class EventDetailScreen extends StatelessWidget {
                 otherChurch: (o) => o.churchId == e.churchId ? '' : s.churchName(o.churchId),
               ),
             ],
+            // Моля, потвърдете / решение на председателя – направо тук.
+            if (e.awaitsConfirmation && e.assigneeId == s.currentUser?.id) ...[
+              const SizedBox(height: 14),
+              AwaitingCard(event: e),
+            ],
+            if (e.isDeclined && s.isManagerOf(e.churchId)) ...[
+              const SizedBox(height: 14),
+              DeclinedReviewCard(event: e),
+            ],
             if (s.placeOverlapsFor(e).isNotEmpty) ...[
               const SizedBox(height: 14),
               OverlapNotice(
@@ -124,7 +134,16 @@ class EventDetailScreen extends StatelessWidget {
                   if (e.outsideChurch && e.address.isNotEmpty) row('Адрес', e.address),
                   row('Напомняне', (reminderOptions[e.remindMinutes] ?? 'Без напомняне') + (e.alarm && e.remindMinutes != null ? ' · аларма' : '')),
                   row('Кой го вижда', e.shared ? 'Споделено с храма' : 'Само аз'),
-                  if (e.ownerId != s.currentUser?.id) row('Записа', s.ownerName(e)),
+                  // Кой е записал – вижда се от всички.
+                  row('Записа', e.ownerId == s.currentUser?.id ? '${s.ownerName(e)} (аз)' : s.ownerName(e)),
+                  if (e.ownerId != e.assigneeId)
+                    row(
+                        'Потвърждение',
+                        e.awaitsConfirmation
+                            ? 'Чака ${s.priestName(e.assigneeId)}'
+                            : e.isDeclined
+                                ? 'Отказано${e.declineReason.isEmpty ? '' : ': ${e.declineReason}'} – решава председателят'
+                                : 'Прието'),
                   if (e.note.isNotEmpty) row('Бележка', e.note),
                 ],
               ),

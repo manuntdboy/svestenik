@@ -7,7 +7,9 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'event_detail.dart';
 import 'event_form.dart';
+import 'leaves.dart';
 import 'search.dart';
+import '../widgets/requests.dart';
 
 enum CalView { day, week, month }
 
@@ -73,6 +75,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     () => Navigator.push(
                         context, MaterialPageRoute(builder: (_) => const SearchScreen()))),
                 const SizedBox(width: 8),
+                _RoundButton(Icons.beach_access_outlined, 'Почивки',
+                    () => Navigator.push(
+                        context, MaterialPageRoute(builder: (_) => const LeavesScreen()))),
+                const SizedBox(width: 8),
                 _RoundButton(Icons.chevron_left_rounded,
                     _view == CalView.month ? 'Предишен месец' : 'Предишна седмица',
                     () => _shift(-1)),
@@ -103,6 +109,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 }),
               ),
             const SizedBox(height: 14),
+            ...requestCards(s),
             if (_view == CalView.day || _view == CalView.month)
               ..._dayList(context, s, p, _selected)
             else
@@ -131,7 +138,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   List<Widget> _dayList(BuildContext context, AppState s, Palette p, DateTime day,
       {bool compact = false}) {
     final events = s.eventsOn(day);
-    if (compact && events.isEmpty) return [];
+    final leaves = s.leavesOn(s.currentChurchId!, day);
+    if (compact && events.isEmpty && leaves.isEmpty) return [];
     final now = DateTime.now();
     final nextId = s.nextEvent?.id;
     return [
@@ -149,6 +157,33 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ],
         ),
       ),
+      // Почивки в този ден: одобрените виждат всички, чакащите – председателят и заявилият.
+      for (final l in leaves)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: p.chipBg,
+              borderRadius: BorderRadius.circular(16),
+              border: l.status == LeaveStatus.pending ? Border.all(color: Palette.yellow, width: 2) : null,
+            ),
+            child: Row(children: [
+              Icon(Icons.beach_access_outlined, color: p.chipText),
+              const SizedBox(width: 10),
+              PriestBadge(
+                  name: s.priestName(l.userId), color: p.priest(s.priestIndex(l.churchId, l.userId)), size: 26),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                    '${s.priestName(l.userId)} – почивка'
+                    '${l.start == l.end ? '' : ' (${fmtLeavePeriod(l)})'}'
+                    '${l.status == LeaveStatus.pending ? ' · чака одобрение' : ''}',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: p.chipText)),
+              ),
+            ]),
+          ),
+        ),
       if (events.isEmpty)
         SurfaceCard(
           radius: 20,
@@ -162,9 +197,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
             event: e,
             past: e.startsAt.isBefore(now) || e.isCancelled,
             isNext: e.id == nextId,
-            owner: e.ownerId == s.currentUser?.id || e.ownerId == e.assigneeId
-                ? null
-                : 'записа ${s.ownerName(e)}',
+            // Кой е записал – вижда се от всички.
+            owner: e.ownerId == s.currentUser?.id ? 'записах аз' : 'записа ${s.ownerName(e)}',
+            confirmation: e.awaitsConfirmation
+                ? 'чака потвърждение от ${s.priestName(e.assigneeId)}'
+                : e.isDeclined
+                    ? 'отказано – решава председателят'
+                    : null,
             priestName: s.priestName(e.assigneeId),
             priestColor: p.priest(s.priestIndex(e.churchId, e.assigneeId)),
             forMe: s.isMine(e),
@@ -446,6 +485,7 @@ class _EventRow extends StatelessWidget {
   final String priestName;
   final Color priestColor;
   final bool forMe;
+  final String? confirmation;
   const _EventRow(
       {required this.event,
       required this.past,
@@ -454,7 +494,8 @@ class _EventRow extends StatelessWidget {
       this.overlapping = false,
       required this.priestName,
       required this.priestColor,
-      required this.forMe});
+      required this.forMe,
+      this.confirmation});
 
   @override
   Widget build(BuildContext context) {
@@ -468,6 +509,7 @@ class _EventRow extends StatelessWidget {
       e.placeLabel,
       if (e.shared) 'споделено с храма',
       if (!forMe) priestName,
+      if (confirmation != null) confirmation!,
       if (owner != null) owner!,
       if (e.isCancelled)
         'отменено'
