@@ -62,6 +62,7 @@ create table public.events (
   outside_church   boolean not null default false,
   address          text check (char_length(address) <= 300),
   remind_minutes   integer check (remind_minutes between 0 and 10080),
+  alarm            boolean not null default false,
   visibility       text not null default 'private' check (visibility in ('private','church')),
   note             text check (char_length(note) <= 2000),
   created_at       timestamptz not null default now(),

@@ -20,11 +20,14 @@ permissions = """
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32"/>
 """
 receivers = """
         <receiver android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"/>
         <receiver android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>
@@ -39,6 +42,9 @@ if "RECEIVE_BOOT_COMPLETED" not in m:
     m = re.sub(r"(<manifest[^>]*>)", r"\1" + permissions.replace("\\", "\\\\"), m, count=1)
 if "ScheduledNotificationReceiver" not in m:
     m = m.replace("</application>", receivers + "    </application>", 1)
+# Алармата може да се покаже върху заключения екран.
+if "showWhenLocked" not in m:
+    m = re.sub(r'(<activity\b)', r'\1\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', m, count=1)
 manifest.write_text(m, encoding="utf-8")
 
 # ---------------------------------------------------------------- gradle

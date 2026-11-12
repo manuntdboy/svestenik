@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -21,6 +23,31 @@ class Notifier {
       importance: Importance.high,
       priority: Priority.high,
       category: AndroidNotificationCategory.reminder,
+    ),
+  );
+
+  /// Аларма: звук на будилник, звъни, докато не се спре, показва се и
+  /// върху заключения екран. Отделен канал, за да има свой звук.
+  static final _alarmDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'alarms_v1',
+      'Аларми за събития',
+      channelDescription: 'Звъни като будилник, докато не натиснете „Спри“',
+      importance: Importance.max,
+      priority: Priority.max,
+      category: AndroidNotificationCategory.alarm,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      playSound: true,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 800, 600, 800, 600, 800]),
+      fullScreenIntent: true,
+      visibility: NotificationVisibility.public,
+      // FLAG_INSISTENT: звукът се повтаря, докато известието не бъде спряно.
+      additionalFlags: Int32List.fromList([4]),
+      actions: const [
+        AndroidNotificationAction('stop', 'Спри', cancelNotification: true),
+      ],
     ),
   );
 
@@ -49,6 +76,16 @@ class Notifier {
     final exact = await a.canScheduleExactNotifications() ?? false;
     if (!exact) await a.requestExactAlarmsPermission();
     return granted;
+  }
+
+  /// Разрешение алармата да се показва на цял екран върху заключен телефон.
+  static Future<void> requestAlarmPermissions() async {
+    await requestPermissions();
+    try {
+      await _android?.requestFullScreenIntentPermission();
+    } catch (e) {
+      debugPrint('Няма разрешение за цял екран: $e');
+    }
   }
 
   static Future<bool> notificationsEnabled() async =>
@@ -81,10 +118,10 @@ class Notifier {
     try {
       await _plugin.zonedSchedule(
         id: _idFor(e.id),
-        title: '${e.kind.label} в ${fmtTime(e.startsAt)}',
+        title: '${e.alarm ? '⏰ ' : ''}${e.kind.label} в ${fmtTime(e.startsAt)}',
         body: '$day$who${e.placeLabel}',
         scheduledDate: tz.TZDateTime.from(when, tz.UTC),
-        notificationDetails: _details,
+        notificationDetails: e.alarm ? _alarmDetails : _details,
         androidScheduleMode: await _mode(),
       );
     } catch (err) {
@@ -119,6 +156,19 @@ class Notifier {
       body: 'Така ще изглеждат напомнянията преди събитие.',
       scheduledDate: tz.TZDateTime.now(tz.UTC).add(const Duration(seconds: 10)),
       notificationDetails: _details,
+      androidScheduleMode: await _mode(),
+    );
+  }
+
+  /// Пробна аларма след 10 секунди.
+  static Future<void> testAlarm() async {
+    if (!_ready) return;
+    await _plugin.zonedSchedule(
+      id: 2,
+      title: '⏰ Пробна аларма',
+      body: 'Натиснете „Спри“, за да спре звъненето.',
+      scheduledDate: tz.TZDateTime.now(tz.UTC).add(const Duration(seconds: 10)),
+      notificationDetails: _alarmDetails,
       androidScheduleMode: await _mode(),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/notifier.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -21,6 +22,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   late int _duration = widget.draft.durationMinutes;
   late bool _outside = widget.draft.outsideChurch;
   late int? _remind = widget.draft.remindMinutes;
+  late bool _alarm = widget.draft.alarm;
   late bool _shared = widget.draft.shared;
   late final _forWhom = TextEditingController(text: widget.draft.forWhom);
   late final _phone = TextEditingController(text: widget.draft.phone);
@@ -135,6 +137,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       ..outsideChurch = _outside
       ..address = _outside ? _address.text.trim() : ''
       ..remindMinutes = _remind
+      ..alarm = _remind != null && _alarm
       ..shared = _shared
       ..note = _note.text.trim();
     final nav = Navigator.of(context);
@@ -366,6 +369,33 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 onChanged: (v) => setState(() => _remind = v),
               ),
             ),
+            if (_remind != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: p.surfaceAlt,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: p.border),
+                  ),
+                  child: SwitchListTile(
+                    value: _alarm,
+                    onChanged: (v) async {
+                      setState(() => _alarm = v);
+                      if (v) await Notifier.requestAlarmPermissions();
+                    },
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    title: const Text('Аларма',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                        _alarm
+                            ? 'Звъни като будилник, докато не натиснете „Спри“'
+                            : 'Само известие с кратък звук',
+                        style: TextStyle(fontSize: 15, color: p.textMuted)),
+                  ),
+                ),
+              ),
             _section(
                 'Кой го вижда',
                 _twoWay('Само аз', 'Споделено с храма', _shared,

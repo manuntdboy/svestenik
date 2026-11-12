@@ -148,6 +148,7 @@ class ChurchEvent {
   bool outsideChurch;
   String address;
   int? remindMinutes;
+  bool alarm; // true = напомнянето звъни като будилник
   bool shared; // false = лично, true = споделено с храма
   String note;
 
@@ -163,6 +164,7 @@ class ChurchEvent {
     this.outsideChurch = false,
     this.address = '',
     this.remindMinutes = 60,
+    this.alarm = false,
     this.shared = false,
     this.note = '',
   });
@@ -189,6 +191,7 @@ class ChurchEvent {
         'outsideChurch': outsideChurch,
         'address': address,
         'remindMinutes': remindMinutes,
+        'alarm': alarm,
         'shared': shared,
         'note': note,
       };
@@ -206,6 +209,7 @@ class ChurchEvent {
         outsideChurch: (j['outsideChurch'] as bool?) ?? false,
         address: (j['address'] as String?) ?? '',
         remindMinutes: j['remindMinutes'] as int?,
+        alarm: (j['alarm'] as bool?) ?? false,
         shared: (j['shared'] as bool?) ?? false,
         note: (j['note'] as String?) ?? '',
       );

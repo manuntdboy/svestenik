@@ -123,6 +123,25 @@ class ProfileScreen extends StatelessWidget {
                 },
                 child: const Text('Пробно известие'),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () async {
+                  await Notifier.requestAlarmPermissions();
+                  final on = await Notifier.notificationsEnabled();
+                  if (!context.mounted) return;
+                  if (on) {
+                    await Notifier.testAlarm();
+                    if (context.mounted) {
+                      showMessage(context,
+                          'След 10 секунди ще звънне пробна аларма. Спира се с „Спри“.');
+                    }
+                  } else {
+                    showMessage(context,
+                        'Известията са изключени. Включете ги от Настройки → Приложения → Кайрос → Известия.');
+                  }
+                },
+                child: const Text('Пробна аларма'),
+              ),
             ],
           ),
         ),

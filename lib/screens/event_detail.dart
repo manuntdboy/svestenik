@@ -108,7 +108,7 @@ class EventDetailScreen extends StatelessWidget {
                         )),
                   row('Къде', e.outsideChurch ? 'Извън храма' : 'В храма'),
                   if (e.outsideChurch && e.address.isNotEmpty) row('Адрес', e.address),
-                  row('Напомняне', reminderOptions[e.remindMinutes] ?? 'Без напомняне'),
+                  row('Напомняне', (reminderOptions[e.remindMinutes] ?? 'Без напомняне') + (e.alarm && e.remindMinutes != null ? ' · аларма' : '')),
                   row('Кой го вижда', e.shared ? 'Споделено с храма' : 'Само аз'),
                   if (!canEdit) row('Добавено от', s.ownerName(e)),
                   if (e.note.isNotEmpty) row('Бележка', e.note),
