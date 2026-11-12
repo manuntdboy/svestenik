@@ -78,24 +78,13 @@ Deno.serve(async (req) => {
   const caller = who?.user;
   if (!caller) return json(401, { error: "not_authenticated" });
 
-  let eventId = "";
-  let change = "created";
+  let body: Record<string, unknown>;
   try {
-    const body = await req.json();
-    eventId = String(body.event_id ?? "");
-    change = body.change === "updated" ? "updated" : "created";
+    body = await req.json();
   } catch {
     return json(400, { error: "bad_request" });
   }
-
-  const { data: ev } = await admin.from("events").select("*").eq("id", eventId).maybeSingle();
-  if (!ev) return json(404, { error: "not_found" });
-  // Само записалият може да уведоми; на себе си не пращаме.
-  if (ev.owner_id !== caller.id) return json(403, { error: "forbidden" });
-  if (ev.assignee_id === caller.id) return json(200, { sent: 0, reason: "self" });
-
-  const { data: tokens } = await admin.from("device_tokens").select("token").eq("user_id", ev.assignee_id);
-  if (!tokens || tokens.length === 0) return json(200, { sent: 0, reason: "no_devices" });
+  const type = String(body.type ?? "event");
 
   let sa: ServiceAccount;
   try {
@@ -104,21 +93,74 @@ Deno.serve(async (req) => {
     return json(500, { error: "fcm_not_configured" });
   }
 
-  const { data: author } = await admin.from("profiles").select("full_name").eq("id", caller.id).maybeSingle();
-  const when = new Date(ev.starts_at).toLocaleString("bg-BG", {
-    timeZone: "Europe/Sofia",
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const kind = KIND[ev.kind] ?? "Събитие";
-  const title = change === "updated" ? `Промяна: ${kind}` : `Ново събитие за вас: ${kind}`;
-  const parts = [when];
-  if (ev.for_whom) parts.push(ev.for_whom);
-  if (author?.full_name) parts.push(`записа ${author.full_name}`);
-  const body = parts.join(" · ");
+  const { data: callerProfile } = await admin.from("profiles").select("full_name").eq("id", caller.id).maybeSingle();
+  const callerName = callerProfile?.full_name ?? "";
+
+  // Кому и какво пращаме.
+  let recipients: string[] = [];
+  let title = "";
+  let text = "";
+  let data: Record<string, string> = {};
+
+  if (type === "join_request") {
+    // Нов свещеник чака одобрение → до председателите на храма.
+    const churchId = String(body.church_id ?? "");
+    const { data: me } = await admin.from("church_members").select("status")
+      .eq("church_id", churchId).eq("user_id", caller.id).maybeSingle();
+    if (!me || me.status !== "pending") return json(403, { error: "forbidden" });
+    const { data: church } = await admin.from("churches").select("name").eq("id", churchId).maybeSingle();
+    const { data: managers } = await admin.from("church_members").select("user_id")
+      .eq("church_id", churchId).eq("role", "manager").eq("status", "active");
+    recipients = (managers ?? []).map((m) => m.user_id);
+    title = "Нов свещеник чака одобрение";
+    text = `${callerName} иска да се присъедини към ${church?.name ?? "храма"}`;
+    data = { type, church_id: churchId };
+  } else if (type === "member_approved") {
+    // Председателят одобри → до одобрения свещеник.
+    const churchId = String(body.church_id ?? "");
+    const userId = String(body.user_id ?? "");
+    const { data: me } = await admin.from("church_members").select("role,status")
+      .eq("church_id", churchId).eq("user_id", caller.id).maybeSingle();
+    if (!me || me.role !== "manager" || me.status !== "active") return json(403, { error: "forbidden" });
+    const { data: target } = await admin.from("church_members").select("status")
+      .eq("church_id", churchId).eq("user_id", userId).maybeSingle();
+    if (!target || target.status !== "active") return json(409, { error: "not_approved" });
+    const { data: church } = await admin.from("churches").select("name").eq("id", churchId).maybeSingle();
+    recipients = [userId];
+    title = "Одобрен сте";
+    text = `${callerName} ви одобри в ${church?.name ?? "храма"}. Отворете Кайрос.`;
+    data = { type, church_id: churchId };
+  } else {
+    // Събитие, записано от колега.
+    const eventId = String(body.event_id ?? "");
+    const change = body.change === "updated" ? "updated" : "created";
+    const { data: ev } = await admin.from("events").select("*").eq("id", eventId).maybeSingle();
+    if (!ev) return json(404, { error: "not_found" });
+    // Само записалият може да уведоми; на себе си не пращаме.
+    if (ev.owner_id !== caller.id) return json(403, { error: "forbidden" });
+    if (ev.assignee_id === caller.id) return json(200, { sent: 0, reason: "self" });
+    const when = new Date(ev.starts_at).toLocaleString("bg-BG", {
+      timeZone: "Europe/Sofia",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const kind = KIND[ev.kind] ?? "Събитие";
+    title = change === "updated" ? `Промяна: ${kind}` : `Ново събитие за вас: ${kind}`;
+    const parts = [when];
+    if (ev.for_whom) parts.push(ev.for_whom);
+    if (callerName) parts.push(`записа ${callerName}`);
+    text = parts.join(" · ");
+    recipients = [ev.assignee_id];
+    data = { type: "event", event_id: ev.id, church_id: ev.church_id };
+  }
+
+  recipients = recipients.filter((r) => r && r !== caller.id);
+  if (recipients.length === 0) return json(200, { sent: 0, reason: "no_recipients" });
+  const { data: tokens } = await admin.from("device_tokens").select("token").in("user_id", recipients);
+  if (!tokens || tokens.length === 0) return json(200, { sent: 0, reason: "no_devices" });
 
   const access = await fcmAccessToken(sa);
   let sent = 0;
@@ -129,8 +171,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         message: {
           token,
-          notification: { title, body },
-          data: { event_id: ev.id, church_id: ev.church_id },
+          notification: { title, body: text },
+          data,
           android: { priority: "high", notification: { channel_id: "events", sound: "default" } },
         },
       }),

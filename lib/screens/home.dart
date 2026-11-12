@@ -106,6 +106,12 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _PriestsStrip(churchId: s.currentChurchId!),
             const SizedBox(height: 12),
+            if (s.isManagerOf(s.currentChurchId!))
+              for (final (u, _) in s.pendingRequests(s.currentChurchId!))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _PendingCard(churchId: s.currentChurchId!, user: u),
+                ),
             _NextEventCard(event: next),
             const SizedBox(height: 14),
             SizedBox(
@@ -401,6 +407,89 @@ class _PriestsStrip extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// „Чакат одобрение“: свещеник, въвел кода на храма (вижда го председателят).
+class _PendingCard extends StatefulWidget {
+  final String churchId;
+  final AppUser user;
+  const _PendingCard({required this.churchId, required this.user});
+
+  @override
+  State<_PendingCard> createState() => _PendingCardState();
+}
+
+class _PendingCardState extends State<_PendingCard> {
+  bool _busy = false;
+
+  Future<void> _act(bool approve) async {
+    final s = AppScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    if (!approve) {
+      final ok = await confirm(context, 'Отказ',
+          '${widget.user.fullName} няма да бъде добавен в храма.', 'Откажи');
+      if (!ok) return;
+    }
+    setState(() => _busy = true);
+    try {
+      if (approve) {
+        await s.approveMember(widget.churchId, widget.user.id);
+        messenger.showSnackBar(SnackBar(content: Text('${widget.user.fullName} е одобрен.')));
+      } else {
+        await s.declineMember(widget.churchId, widget.user.id);
+      }
+    } on AppError catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Palette.yellow, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            const YellowTag('Чака одобрение'),
+            const Spacer(),
+            Icon(Icons.person_add_alt_1_rounded, color: p.textMuted),
+          ]),
+          const SizedBox(height: 10),
+          Text(widget.user.fullName,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          if (widget.user.username.isNotEmpty)
+            Text('@${widget.user.username}', style: TextStyle(fontSize: 15, color: p.textMuted)),
+          Text('въведе кода на храма и иска да се присъедини',
+              style: TextStyle(fontSize: 15, color: p.textMuted)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _busy ? null : () => _act(false),
+                child: const Text('Откажи'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                onPressed: _busy ? null : () => _act(true),
+                child: const Text('Одобри'),
+              ),
+            ),
+          ]),
+        ],
       ),
     );
   }

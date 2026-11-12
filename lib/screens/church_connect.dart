@@ -35,13 +35,24 @@ class _ChurchConnectScreenState extends State<ChurchConnectScreen> {
   Future<void> _join() async {
     final state = AppScope.read(context);
     final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     final err = await state.joinChurch(_code.text);
     if (!mounted) return;
     if (err != null) {
       setState(() => _codeError = err);
       return;
     }
-    if (widget.pushed) nav.pop();
+    _code.clear();
+    if (state.pendingChurches.isNotEmpty && state.currentChurch?.id != null && widget.pushed) {
+      nav.pop();
+    }
+    if (state.pendingChurches.isNotEmpty) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Заявката е изпратена. Председателят на храма трябва да ви одобри.',
+              style: TextStyle(fontSize: 16))));
+    } else if (widget.pushed) {
+      nav.pop();
+    }
   }
 
   Future<void> _create() async {
@@ -88,6 +99,41 @@ class _ChurchConnectScreenState extends State<ChurchConnectScreen> {
                 'Календарът ви принадлежи към храм. Присъединете се с код или създайте нов храм.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
             const SizedBox(height: 16),
+            for (final c in state.pendingChurches)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: p.heroBg,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const YellowTag('Чака одобрение'),
+                      const SizedBox(height: 10),
+                      Text(c.name,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                      Text(c.place, style: TextStyle(fontSize: 15, color: p.heroMuted)),
+                      const SizedBox(height: 8),
+                      Text(
+                          'Председателят получи известие. Щом ви одобри, ще ви дойде известие '
+                          'и храмът ще се отвори тук.',
+                          style: TextStyle(fontSize: 15, color: p.heroMuted)),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: state.refresh,
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70)),
+                        child: const Text('Провери отново'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             SurfaceCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -148,6 +148,13 @@ class EventDetailScreen extends StatelessWidget {
               else
                 OutlinedButton(
                   onPressed: () async {
+                    final ok = await confirm(
+                        context,
+                        'Направи го лично?',
+                        'Събитието ще изчезне от общия календар на храма и колегите няма да го '
+                            'виждат. Така може да се запише друго събитие по същото време.',
+                        'Направи го лично');
+                    if (!ok) return;
                     e.shared = false;
                     try {
                       await s.saveEvent(e);

@@ -47,17 +47,26 @@ class Membership {
   final String userId;
   final String role; // 'manager' (председател) или 'priest'
   final DateTime joinedAt;
+  final String status; // 'active' или 'pending' (чака одобрение)
 
-  Membership({required this.churchId, required this.userId, required this.role, DateTime? joinedAt})
+  Membership(
+      {required this.churchId,
+      required this.userId,
+      required this.role,
+      DateTime? joinedAt,
+      this.status = 'active'})
       : joinedAt = joinedAt ?? DateTime(2000);
 
-  bool get isManager => role == 'manager';
+  bool get isManager => role == 'manager' && isActive;
+  bool get isActive => status == 'active';
+  bool get isPending => status == 'pending';
 
   factory Membership.fromRow(Map<String, dynamic> r) => Membership(
         churchId: r['church_id'] as String,
         userId: r['user_id'] as String,
         role: r['role'] as String,
         joinedAt: DateTime.tryParse((r['joined_at'] as String?) ?? ''),
+        status: (r['status'] as String?) ?? 'active',
       );
 }
 

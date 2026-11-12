@@ -366,11 +366,70 @@ class AppState extends ChangeNotifier {
   // ------------------------------------------------------------------
   // Храмове
   // ------------------------------------------------------------------
+  /// Храмовете, в които съм одобрен.
   List<Church> get myChurches {
     final u = currentUser;
     if (u == null) return [];
-    final ids = _members.where((m) => m.userId == u.id).map((m) => m.churchId).toSet();
+    final ids = _members
+        .where((m) => m.userId == u.id && m.isActive)
+        .map((m) => m.churchId)
+        .toSet();
     return _churches.where((c) => ids.contains(c.id)).toList();
+  }
+
+  /// Храмовете, в които чакам одобрение от председателя.
+  List<Church> get pendingChurches {
+    final u = currentUser;
+    if (u == null) return [];
+    final ids = _members
+        .where((m) => m.userId == u.id && m.isPending)
+        .map((m) => m.churchId)
+        .toSet();
+    return _churches.where((c) => ids.contains(c.id)).toList();
+  }
+
+  /// Свещениците, които чакат одобрение в храма (вижда ги председателят).
+  List<(AppUser, Membership)> pendingRequests(String churchId) => [
+        for (final m in _members.where((m) => m.churchId == churchId && m.isPending))
+          (
+            _profiles.where((p) => p.id == m.userId).firstOrNull ??
+                AppUser(id: m.userId, username: '', fullName: 'Нов свещеник'),
+            m
+          ),
+      ];
+
+  /// Одобрява чакащ свещеник и му праща известие.
+  Future<void> approveMember(String churchId, String userId) async {
+    try {
+      await _db.rpc('approve_member', params: {'p_church': churchId, 'p_user': userId});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'member_approved', 'church_id': churchId, 'user_id': userId}));
+  }
+
+  /// Отказва чакащ свещеник (премахва заявката).
+  Future<void> declineMember(String churchId, String userId) => removeMember(churchId, userId);
+
+  Future<void> _invokeNotify(Map<String, dynamic> body) async {
+    try {
+      await _db.functions.invoke('notify', body: body);
+    } catch (e) {
+      debugPrint('Известието не тръгна: $e');
+    }
+  }
+
+  /// Сменя името, което виждат колегите.
+  Future<void> updateFullName(String name) async {
+    final n = name.trim();
+    if (n.length < 2) throw AppError('Въведете име.');
+    try {
+      await _db.from('profiles').update({'full_name': n}).eq('id', currentUser!.id);
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
   }
 
   Church? get currentChurch =>
@@ -380,7 +439,7 @@ class AppState extends ChangeNotifier {
       (m) => m.churchId == churchId && m.userId == currentUser?.id && m.isManager);
 
   List<(AppUser, Membership)> membersOf(String churchId) => [
-        for (final m in _members.where((m) => m.churchId == churchId))
+        for (final m in _members.where((m) => m.churchId == churchId && m.isActive))
           (
             _profiles.where((p) => p.id == m.userId).firstOrNull ??
                 AppUser(id: m.userId, username: '', fullName: '—'),
@@ -412,7 +471,13 @@ class AppState extends ChangeNotifier {
       final row = await _db.rpc('join_church', params: {'p_code': clean});
       final c = Church.fromRow(Map<String, dynamic>.from(row as Map));
       await refresh();
-      await selectChurch(c.id);
+      if (myChurches.any((x) => x.id == c.id)) {
+        // Вече съм член на този храм.
+        await selectChurch(c.id);
+      } else {
+        // Заявката чака одобрение – известяваме председателя.
+        unawaited(_invokeNotify({'type': 'join_request', 'church_id': c.id}));
+      }
       return null;
     } catch (e) {
       return _friendly(e);
@@ -587,11 +652,7 @@ class AppState extends ChangeNotifier {
     } else {
       return;
     }
-    try {
-      await _db.functions.invoke('notify', body: {'event_id': saved.id, 'change': change});
-    } catch (e) {
-      debugPrint('Известието до колегата не тръгна: $e');
-    }
+    await _invokeNotify({'type': 'event', 'event_id': saved.id, 'change': change});
   }
 
   /// Изтрива събитието на сървъра. При грешка хвърля [AppError].

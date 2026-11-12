@@ -4,6 +4,7 @@ import '../data/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'church_code.dart';
+import 'priest_profile.dart';
 
 /// Списък на свещениците в храма – всеки със своя цвят от календара.
 class ChurchPriestsScreen extends StatelessWidget {
@@ -39,7 +40,14 @@ class ChurchPriestsScreen extends StatelessWidget {
               for (final (u, m) in priests)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: SurfaceCard(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                PriestProfileScreen(churchId: churchId, userId: u.id))),
+                    child: SurfaceCard(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     radius: 20,
                     child: Row(
@@ -72,8 +80,10 @@ class ChurchPriestsScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+                        Icon(Icons.chevron_right_rounded, color: p.textMuted),
                       ],
                     ),
+                  ),
                   ),
                 ),
               const SizedBox(height: 8),

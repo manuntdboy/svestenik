@@ -7,6 +7,7 @@ import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
 import 'church_priests.dart';
+import 'priest_profile.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -37,6 +38,14 @@ class ProfileScreen extends StatelessWidget {
               Text('@${u.username}', style: TextStyle(fontSize: 16, color: p.textMuted)),
               if (u.email.isNotEmpty)
                 Text(u.email, style: TextStyle(fontSize: 16, color: p.textMuted)),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => PriestProfileScreen(churchId: church.id, userId: u.id))),
+                child: const Text('Моят профил'),
+              ),
             ],
           ),
         ),
