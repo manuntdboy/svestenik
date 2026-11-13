@@ -108,6 +108,7 @@ class DutyScreen extends StatefulWidget {
 
 class _DutyScreenState extends State<DutyScreen> {
   bool _past = false;
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
 
   @override
   Widget build(BuildContext context) {
@@ -134,6 +135,12 @@ class _DutyScreenState extends State<DutyScreen> {
               const ChurchBanner(title: 'Дежурства'),
               const SizedBox(height: 12),
               const DutyNowCard(),
+              // Месец с датите в цвета на дежурния.
+              _DutyMonth(
+                month: _month,
+                onShift: (d) => setState(() => _month = DateTime(_month.year, _month.month + d, 1)),
+              ),
+              const SizedBox(height: 12),
               for (final w in s.swapsForMe(church))
                 Padding(padding: const EdgeInsets.only(bottom: 12), child: DutySwapCard(swap: w)),
               for (final w in s.swapsForChair(church))
@@ -331,14 +338,14 @@ class _MySwapRow extends StatelessWidget {
 }
 
 /// Добавяне или промяна на дежурство (председателят).
-Future<void> showDutyForm(BuildContext context, {Duty? duty}) async {
+Future<void> showDutyForm(BuildContext context, {Duty? duty, DateTime? day}) async {
   final s = AppScope.read(context);
   final church = s.currentChurchId!;
   final priests = s.priestsOf(church).where((m) => m.$2.isActive).map((m) => m.$1).toList();
   if (priests.isEmpty) return;
   String user = duty?.userId ?? priests.first.id;
-  DateTime? start = duty?.start;
-  DateTime? end = duty?.end;
+  DateTime? start = duty?.start ?? day;
+  DateTime? end = duty?.end ?? day?.add(const Duration(days: 6));
   final note = TextEditingController(text: duty?.note ?? '');
   final result = await showModalBottomSheet<String>(
     context: context,
@@ -698,6 +705,125 @@ class _DutySeriesScreenState extends State<DutySeriesScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// Месечен календар на графика: датите са в цвета на дежурния свещеник.
+class _DutyMonth extends StatelessWidget {
+  final DateTime month;
+  final ValueChanged<int> onShift;
+  const _DutyMonth({required this.month, required this.onShift});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final church = s.currentChurchId!;
+    final manager = s.isManagerOf(church);
+    final first = DateTime(month.year, month.month, 1);
+    final start = first.subtract(Duration(days: first.weekday - DateTime.monday));
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final rows = ((first.weekday - 1) + daysInMonth + 6) ~/ 7;
+    final today = _today();
+    final shown = <String>{
+      for (var i = 1; i <= daysInMonth; i++)
+        if (s.dutyOn(church, DateTime(month.year, month.month, i)) case final du?) du.userId,
+    };
+    const wd = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+
+    void tap(DateTime d) {
+      final du = s.dutyOn(church, d);
+      if (du == null) {
+        if (manager) showDutyForm(context, day: d);
+        return;
+      }
+      if (manager) {
+        showDutyForm(context, duty: du);
+      } else if (du.userId == s.currentUser?.id && !du.end.isBefore(today) && s.openSwapFor(du.id) == null) {
+        showSwapSheet(context, du);
+      } else {
+        showMessage(context, '${s.priestName(du.userId)} · ${fmtDutyPeriod(du.start, du.end)}');
+      }
+    }
+
+    return SurfaceCard(
+      radius: 22,
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 12),
+      child: Column(children: [
+        Row(children: [
+          IconButton(onPressed: () => onShift(-1), icon: const Icon(Icons.chevron_left_rounded)),
+          Expanded(
+            child: Text(capitalize(_month(first)),
+                textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          ),
+          IconButton(onPressed: () => onShift(1), icon: const Icon(Icons.chevron_right_rounded)),
+        ]),
+        Row(children: [
+          for (final w in wd)
+            Expanded(
+                child: Text(w, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: p.textMuted))),
+        ]),
+        const SizedBox(height: 4),
+        for (var r = 0; r < rows; r++)
+          Row(children: [
+            for (var c = 0; c < 7; c++)
+              Expanded(
+                child: Builder(builder: (_) {
+                  final d = DateTime(start.year, start.month, start.day + r * 7 + c);
+                  final du = s.dutyOn(church, d);
+                  final color = du == null ? null : p.priest(s.priestIndex(church, du.userId));
+                  final other = d.month != month.month;
+                  final isToday = d == today;
+                  return InkResponse(
+                    onTap: () => tap(d),
+                    radius: 22,
+                    child: Container(
+                      height: 40,
+                      margin: const EdgeInsets.symmetric(vertical: 2),
+                      alignment: Alignment.center,
+                      decoration: isToday
+                          ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Palette.yellow, width: 2.5))
+                          : null,
+                      child: Text('${d.day}',
+                          style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: color != null ? FontWeight.w800 : FontWeight.w500,
+                              color: color == null
+                                  ? (other ? p.textMuted.withValues(alpha: .5) : p.text)
+                                  : color.withValues(alpha: other ? .45 : 1))),
+                    ),
+                  );
+                }),
+              ),
+          ]),
+        // Легенда: кой цвят кой свещеник е.
+        Builder(builder: (_) {
+          if (shown.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(manager ? 'Няма дежурства този месец – натиснете ден, за да добавите.' : 'Няма дежурства този месец.',
+                  style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+            child: Wrap(spacing: 12, runSpacing: 6, children: [
+              for (final u in shown)
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(color: p.priest(s.priestIndex(church, u)), shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(s.priestName(u), style: const TextStyle(fontSize: 13.5)),
+                ]),
+            ]),
+          );
+        }),
+      ]),
     );
   }
 }
