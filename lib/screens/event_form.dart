@@ -590,7 +590,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 child: Builder(builder: (context) {
                   final need = stockForEvent(_kind);
                   final church = widget.draft.churchId;
-                  final bal = s.canSeeCash(church) ? s.stockOf(church) : null;
+                  final bal = AppScope.of(context).canSeeCash(church) ? AppScope.of(context).stockOf(church) : null;
                   final what = need.entries
                       .map((e) => '${e.value} ${switch (e.key) {
                             StockItem.certBaptism => e.value == 1 ? 'кръщелно свидетелство' : 'кръщелни свидетелства',
