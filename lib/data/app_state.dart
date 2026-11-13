@@ -749,7 +749,7 @@ class AppState extends ChangeNotifier {
     return list;
   }
 
-  static String _uuid() {
+  static String _newUuid() {
     final r = Random.secure();
     final b = List<int>.generate(16, (_) => r.nextInt(256));
     b[6] = (b[6] & 0x0f) | 0x40;
@@ -760,7 +760,7 @@ class AppState extends ChangeNotifier {
 
   /// Записва ревизия (само проверка – наличността не се променя).
   Future<void> saveAudit(String churchId, Map<StockItem, int> counted, String note) async {
-    final batch = _uuid();
+    final batch = _newUuid();
     try {
       for (final e in counted.entries) {
         await _db.rpc('stock_audit', params: {
