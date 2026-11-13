@@ -1624,6 +1624,40 @@ class AppState extends ChangeNotifier {
     unawaited(_invokeNotify({'type': 'leave_decided', 'request_id': l.id}));
   }
 
+  /// Решения по моите почивки, които още не съм видял („ОК“).
+  List<LeaveRequest> leavesToAck(String churchId) {
+    final me = currentUser?.id;
+    return _leaves.where((l) {
+      if (l.churchId != churchId || l.userId != me || l.decisionSeen) return false;
+      if (l.status == LeaveStatus.pending) return false;
+      final by = (l.status == LeaveStatus.ended || l.cutShort) ? l.endedBy : l.decidedBy;
+      return by != null && by != me;
+    }).toList();
+  }
+
+  Future<void> ackLeave(LeaveRequest l) async {
+    try {
+      await _db.rpc('leave_ack', params: {'p_request': l.id});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Мои записи в касата, върнати от другия, които още не съм видял.
+  List<CashEntry> cashReturnsToAck(String churchId) => _cash
+      .where((e) => e.churchId == churchId && e.createdBy == currentUser?.id && e.isReturned && !e.returnSeen)
+      .toList();
+
+  Future<void> ackCashReturn(CashEntry e) async {
+    try {
+      await _db.rpc('cash_return_ack', params: {'p_entry': e.id});
+      await refresh();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
   /// Председателят прекратява одобрена почивка: непочналата се отменя
   /// цялата, течащата приключва вчера. Свещеникът получава известие.
   Future<void> endLeave(LeaveRequest l, String note) async {

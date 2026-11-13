@@ -352,6 +352,11 @@ select t.ok(:'le'::date = (now() at time zone 'Europe/Sofia')::date - 1
             'течаща почивка приключва вчера, първоначалният край се пази');
 select t.fails(format('select public.end_leave(%L, null)', (select id from leave_requests where note = 'тече')),
                'вече прекратена почивка не се прекратява пак', 'leave_over');
+select t.as_user(:'B');
+select t.ok((select decision_seen_at from leave_requests where note = 'за отказ') is null, 'отказът чака „ОК“ от свещеника');
+select public.leave_ack(id) from leave_requests where note = 'за отказ' \g /dev/null
+select t.ok((select decision_seen_at from leave_requests where note = 'за отказ') is not null, 'след „ОК“ картата изчезва');
+select t.as_user(:'A');
 delete from leave_requests where note in ('за отказ', 'бъдеща', 'тече');
 
 \echo '== Дежурства'

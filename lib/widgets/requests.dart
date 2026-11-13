@@ -5,7 +5,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import 'common.dart';
-import '../screens/cash.dart' show CashReviewCard;
+import '../screens/cash.dart' show CashReviewCard, fmtEur;
 import '../screens/cash_more.dart' show CloseMonthCard;
 import '../screens/stock.dart' show LowStockCard, StockReviewCard;
 import '../screens/duties.dart' show fmtDutyPeriod;
@@ -577,6 +577,10 @@ List<Widget> requestCards(AppState s) {
   final church = s.currentChurchId;
   if (church == null) return [];
   return [
+    for (final l in s.leavesToAck(church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: LeaveDecisionCard(key: ValueKey('la${l.id}'), leave: l)),
+    for (final e in s.cashReturnsToAck(church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: CashReturnedCard(key: ValueKey('cr${e.id}'), entry: e)),
     for (final c in s.chairOffers.where((c) => c.id == church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: ChairOfferCard(key: ValueKey('ch${c.id}'), church: c)),
     for (final e in s.archieraticToConfirm.where((e) => e.churchId == church))
@@ -689,5 +693,132 @@ class _DutySwapCardState extends State<DutySwapCard> {
         ),
       ]),
     ]);
+  }
+}
+
+
+/// Рамка на известие с „ОК“ – цветна според това дали е добра или лоша новина.
+class _AckFrame extends StatefulWidget {
+  final Color color;
+  final IconData icon;
+  final String title;
+  final List<Widget> children;
+  final Future<void> Function() onOk;
+  const _AckFrame({required this.color, required this.icon, required this.title, required this.children, required this.onOk});
+
+  @override
+  State<_AckFrame> createState() => _AckFrameState();
+}
+
+class _AckFrameState extends State<_AckFrame> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: widget.color.withValues(alpha: p.dark ? .18 : .10),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: widget.color, width: 2.5),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(widget.icon, color: widget.color, size: 28),
+          const SizedBox(width: 10),
+          Expanded(child: Text(widget.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
+        ]),
+        const SizedBox(height: 8),
+        ...widget.children,
+        const SizedBox(height: 12),
+        FilledButton(
+          style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50), backgroundColor: widget.color, foregroundColor: Colors.white),
+          onPressed: _busy
+              ? null
+              : () async {
+                  setState(() => _busy = true);
+                  try {
+                    await widget.onOk();
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
+                  if (mounted) setState(() => _busy = false);
+                },
+          child: const Text('ОК', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Решение по моята почивка – стои, докато не натисна „ОК“.
+class LeaveDecisionCard extends StatelessWidget {
+  final LeaveRequest leave;
+  const LeaveDecisionCard({super.key, required this.leave});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final l = leave;
+    final (color, icon, title, by, note) = l.status == LeaveStatus.ended
+        ? (const Color(0xFFC0392B), Icons.event_busy_rounded, 'Почивката ви е отменена', l.endedBy, l.endNote)
+        : l.cutShort
+            ? (const Color(0xFFD35400), Icons.timelapse_rounded, 'Почивката ви е прекратена', l.endedBy, l.endNote)
+            : l.status == LeaveStatus.approved
+                ? (const Color(0xFF2E7D4F), Icons.check_circle_rounded, 'Почивката ви е одобрена', l.decidedBy, l.decisionNote)
+                : (const Color(0xFFC0392B), Icons.cancel_rounded, 'Почивката ви не е одобрена', l.decidedBy, l.decisionNote);
+    final dm = DateFormat('d.MM');
+    return _AckFrame(
+      color: color,
+      icon: icon,
+      title: title,
+      onOk: () => s.ackLeave(l),
+      children: [
+        Text(
+            l.cutShort
+                ? '${dm.format(l.start)} – ${dm.format(l.plannedEnd!)} · последен ден ${dm.format(l.end)}'
+                : '${fmtLeavePeriod(l)} · ${l.days == 1 ? '1 ден' : '${l.days} дни'}',
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        if (by != null) Text('Председател: ${s.priestName(by)}', style: const TextStyle(fontSize: 15.5)),
+        if (note.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('„$note“', style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic)),
+          ),
+      ],
+    );
+  }
+}
+
+/// Мой запис в касата, върнат от другия – стои, докато не натисна „ОК“.
+class CashReturnedCard extends StatelessWidget {
+  final CashEntry entry;
+  const CashReturnedCard({super.key, required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final e = entry;
+    return _AckFrame(
+      color: const Color(0xFFC0392B),
+      icon: Icons.undo_rounded,
+      title: 'Записът ви в касата е върнат',
+      onOk: () => s.ackCashReturn(e),
+      children: [
+        Text('${e.kindLabel} · ${fmtEur(e.amount.abs())}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        Text('${e.categoryLabel} · ${DateFormat('d.MM.y').format(e.date)}', style: const TextStyle(fontSize: 15.5)),
+        if (e.decidedBy != null) Text('Върна: ${s.priestName(e.decidedBy!)}', style: const TextStyle(fontSize: 15.5)),
+        if (e.returnReason.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Причина: „${e.returnReason}“', style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic)),
+          ),
+        const SizedBox(height: 4),
+        const Text('Записът не влиза в книгите. Ако е нужно, въведете го отново поправен.',
+            style: TextStyle(fontSize: 14)),
+      ],
+    );
   }
 }

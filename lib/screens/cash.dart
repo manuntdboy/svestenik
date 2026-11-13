@@ -37,7 +37,8 @@ class CashScreen extends StatefulWidget {
 }
 
 class _CashScreenState extends State<CashScreen> {
-  CashBook? _tab = CashBook.income; // null = чакащи и върнати
+  CashBook? _tab = CashBook.income; // null = чакащи
+  bool _ret = false; // раздел „Върнати“
   CashFilter _filter = const CashFilter();
 
   @override
@@ -89,7 +90,9 @@ class _CashScreenState extends State<CashScreen> {
     final returned = all.where((e) => e.isReturned).toList();
     final tabs = [CashBook.income, CashBook.expense, if (st.hasBank) CashBook.transfer, null];
     if (!tabs.contains(_tab)) _tab = CashBook.income;
-    final shown = (_tab == null
+    final shown = (_ret
+            ? [...returned]
+            : _tab == null
             ? [...waiting]
             // Върнатите остават в историята на книгата – зачеркнати, без да се броят.
             : all.where((e) => (e.isApproved || e.isReturned) && e.book == _tab).toList())
@@ -121,7 +124,10 @@ class _CashScreenState extends State<CashScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: InkWell(
-                  onTap: () => setState(() => _tab = null),
+                  onTap: () => setState(() {
+                    _tab = null;
+                    _ret = false;
+                  }),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: Palette.yellow, borderRadius: BorderRadius.circular(12)),
@@ -235,7 +241,8 @@ class _CashScreenState extends State<CashScreen> {
         ],
         const SizedBox(height: 14),
         LayoutBuilder(builder: (context, c) {
-          final perRow = tabs.length <= 3 ? tabs.length : 2;
+          final n = tabs.length + 1;
+          final perRow = n <= 3 ? n : 2;
           final w = (c.maxWidth - (perRow - 1) * 10) / perRow;
           return Wrap(spacing: 10, runSpacing: 10, children: [
             for (final t in tabs)
@@ -243,13 +250,26 @@ class _CashScreenState extends State<CashScreen> {
                 width: w,
                 child: _BookTile(
                   book: t,
-                  selected: _tab == t,
+                  selected: !_ret && _tab == t,
                   count: t == null
                       ? waiting.length
                       : all.where((e) => e.isApproved && e.book == t).length,
-                  onTap: () => setState(() => _tab = t),
+                  onTap: () => setState(() {
+                    _tab = t;
+                    _ret = false;
+                  }),
                 ),
               ),
+            SizedBox(
+              width: w,
+              child: _BookTile(
+                book: null,
+                returned: true,
+                selected: _ret,
+                count: returned.length,
+                onTap: () => setState(() => _ret = true),
+              ),
+            ),
           ]);
         }),
         const SizedBox(height: 16),
@@ -258,8 +278,8 @@ class _CashScreenState extends State<CashScreen> {
             child: Container(
               padding: const EdgeInsets.only(left: 12),
               decoration:
-                  BoxDecoration(border: Border(left: BorderSide(color: bookColor(context, _tab), width: 5))),
-              child: Text(_tab == null ? 'Чакат одобрение' : _tab!.bookName,
+                  BoxDecoration(border: Border(left: BorderSide(color: _ret ? _returnedColor : bookColor(context, _tab), width: 5))),
+              child: Text(_ret ? 'Върнати' : _tab == null ? 'Чакат одобрение' : _tab!.bookName,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             ),
           ),
@@ -295,23 +315,20 @@ class _CashScreenState extends State<CashScreen> {
             child: Text(
                 _filter.isActive
                     ? 'Няма записи по този филтър.'
-                    : _tab == null
+                    : _ret
+                        ? 'Няма върнати записи.'
+                        : _tab == null
                         ? 'Няма записи, които чакат одобрение.'
                         : 'Още няма записи в тази книга.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
           ),
         for (final e in shown) e.isReturned ? Opacity(opacity: .7, child: CashRow(entry: e)) : CashRow(entry: e),
-        // Върнатите не влизат в книгите; остават само за историята.
-        if (_tab == null && returned.where(_filter.matches).isNotEmpty) ...[
-          const SizedBox(height: 18),
-          Text('Върнати – само за сведение', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: p.textMuted)),
+        if (_ret && returned.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 8),
-            child: Text('Не влизат в книгите и не се броят. Пазят се, защото записите не се трият.',
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Върнатите не влизат в книгите и не се броят. Пазят се, защото записите не се трият.',
                 style: TextStyle(fontSize: 13.5, color: p.textMuted)),
           ),
-          for (final e in returned.where(_filter.matches)) Opacity(opacity: .7, child: CashRow(entry: e)),
-        ],
       ],
     );
   }
@@ -407,25 +424,29 @@ class _CashScreenState extends State<CashScreen> {
   }
 }
 
+const _returnedColor = Color(0xFFB35C1E);
+
 class _BookTile extends StatelessWidget {
   final CashBook? book;
+  final bool returned; // раздел „Върнати“
   final bool selected;
   final int count;
   final VoidCallback onTap;
-  const _BookTile({required this.book, required this.selected, required this.count, required this.onTap});
+  const _BookTile(
+      {required this.book, this.returned = false, required this.selected, required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final c = bookColor(context, book);
-    final onC = book == null ? Palette.onYellow : Colors.white;
-    final (icon, label) = switch (book) {
+    final c = returned ? _returnedColor : bookColor(context, book);
+    final onC = book == null && !returned ? Palette.onYellow : Colors.white;
+    final (icon, label) = returned ? (Icons.undo_rounded, 'Върнати') : switch (book) {
       CashBook.income => (Icons.south_west_rounded, 'Приходна'),
       CashBook.expense => (Icons.north_east_rounded, 'Разходна'),
       CashBook.transfer => (Icons.account_balance_outlined, 'Банка'),
       _ => (Icons.hourglass_top_rounded, 'Чакащи'),
     };
-    final alert = book == null && count > 0;
+    final alert = book == null && !returned && count > 0;
     return Material(
       color: selected ? c : c.withValues(alpha: p.dark ? .18 : .10),
       shape: RoundedRectangleBorder(
@@ -438,13 +459,17 @@ class _BookTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(icon, size: 24, color: selected ? onC : (book == null ? p.text : c)),
+            Icon(icon, size: 24, color: selected ? onC : (book == null && !returned ? p.text : c)),
             const SizedBox(height: 6),
             Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: selected ? onC : p.text)),
-            Text(book == null ? (count == 0 ? 'няма' : '$count чакат') : '$count записа',
+            Text(returned
+                    ? (count == 0 ? 'няма' : '$count записа')
+                    : book == null
+                        ? (count == 0 ? 'няма' : '$count чакат')
+                        : '$count записа',
                 style: TextStyle(fontSize: 13, color: selected ? onC.withValues(alpha: .85) : p.textMuted)),
           ]),
         ),

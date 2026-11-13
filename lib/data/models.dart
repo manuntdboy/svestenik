@@ -529,6 +529,9 @@ class LeaveRequest {
   final String endNote; // коментар при прекратяване/отмяна
   final DateTime? plannedEnd; // първоначален край, ако е прекратена по-рано
   final DateTime? endedAt;
+  final String? decidedBy;
+  final String? endedBy;
+  final bool decisionSeen; // свещеникът е натиснал „ОК“ на решението
 
   LeaveRequest({
     required this.id,
@@ -542,6 +545,9 @@ class LeaveRequest {
     this.endNote = '',
     this.plannedEnd,
     this.endedAt,
+    this.decidedBy,
+    this.endedBy,
+    this.decisionSeen = true,
   });
 
   /// Одобрена, но председателят я е прекратил преди края.
@@ -574,6 +580,9 @@ class LeaveRequest {
         endNote: (r['end_note'] as String?) ?? '',
         plannedEnd: r['planned_end'] == null ? null : _d(r['planned_end'] as String),
         endedAt: r['ended_at'] == null ? null : DateTime.tryParse(r['ended_at'] as String)?.toLocal(),
+        decidedBy: r['decided_by'] as String?,
+        endedBy: r['ended_by'] as String?,
+        decisionSeen: r['decision_seen_at'] != null,
       );
 }
 
@@ -672,9 +681,11 @@ class CashEntry {
     this.backdated = false,
     this.decidedAt,
     this.donor = '',
+    this.returnSeen = true,
   });
 
   final DateTime? decidedAt;
+  final bool returnSeen; // създателят е натиснал „ОК“ на върнатия запис
 
   bool get isPending => status == 'pending';
   bool get isApproved => status == 'approved';
@@ -732,6 +743,7 @@ class CashEntry {
         backdated: (r['backdated'] as bool?) ?? false,
         donor: (r['donor'] as String?) ?? '',
         decidedAt: r['decided_at'] == null ? null : DateTime.parse(r['decided_at'] as String).toLocal(),
+        returnSeen: r['return_seen_at'] != null,
       );
 }
 
