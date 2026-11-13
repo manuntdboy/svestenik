@@ -11,6 +11,7 @@ import '../widgets/requests.dart';
 import '../widgets/whats_new.dart';
 import 'event_form.dart';
 import 'cash.dart';
+import 'stock.dart';
 
 /// Начален екран – табло, вариант Б.
 class HomeScreen extends StatelessWidget {
@@ -141,25 +142,13 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Expanded(child: _SoonTile(Icons.menu_book_outlined, 'Регистър')),
-                        const SizedBox(height: 12),
                         // Каса: председател и касиер – цялата; свещеник – предава приходи.
                         Expanded(child: _CashTile(churchId: s.currentChurchId!)),
+                        const SizedBox(height: 12),
+                        Expanded(child: _StockTile(churchId: s.currentChurchId!)),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const SizedBox(
-              height: 112,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _SoonTile(Icons.inventory_2_outlined, 'Склад')),
-                  SizedBox(width: 12),
-                  Expanded(child: _SoonTile(Icons.description_outlined, 'Отчети')),
                 ],
               ),
             ),
@@ -371,6 +360,64 @@ class _CashTile extends StatelessWidget {
                         fontSize: 13,
                         color: negative ? const Color(0xFFB23A3A) : p.textMuted,
                         fontWeight: negative ? FontWeight.w800 : FontWeight.w400)),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StockTile extends StatelessWidget {
+  final String churchId;
+  const _StockTile({required this.churchId});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final holder = s.canSeeCash(churchId);
+    if (!holder) return const _SoonTile(Icons.inventory_2_outlined, 'Склад', locked: true);
+    final low = s.lowStock(churchId);
+    final bal = s.stockOf(churchId);
+    final out = low.any((i) => bal[i]! <= 0);
+    final waiting = s.stockToDecide(churchId).length;
+    final warn = out ? const Color(0xFFB23A3A) : (low.isNotEmpty || waiting > 0 ? Palette.yellow : null);
+    return Material(
+      color: p.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: warn ?? p.border, width: warn != null ? 3 : 1)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockScreen())),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: p.chipBg, borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.inventory_2_outlined, size: 22, color: p.chipText),
+              ),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Склад', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(
+                    waiting > 0
+                        ? '$waiting чака одобрение'
+                        : low.isEmpty
+                            ? 'Наличностите са наред'
+                            : 'Заредете: ${low.length} ${low.length == 1 ? 'вид' : 'вида'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: out ? const Color(0xFFB23A3A) : p.textMuted,
+                        fontWeight: low.isEmpty && waiting == 0 ? FontWeight.w400 : FontWeight.w700)),
               ]),
             ],
           ),

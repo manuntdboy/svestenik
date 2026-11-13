@@ -46,6 +46,8 @@ class AppState extends ChangeNotifier {
   final List<CashEntry> _cash = [];
   final Map<String, CashSettings> _cashSettings = {};
   final List<CashPeriod> _periods = [];
+  final List<StockMove> _stock = [];
+  final Map<String, int> _stockMin = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
 
@@ -126,6 +128,8 @@ class AppState extends ChangeNotifier {
     _cash.clear();
     _cashSettings.clear();
     _periods.clear();
+    _stock.clear();
+    _stockMin.clear();
     _details.clear();
     _photos.clear();
     _photoStamp.clear();
@@ -156,6 +160,8 @@ class AppState extends ChangeNotifier {
         _db.from('cash_entries').select(),
         _db.from('cash_settings').select(),
         _db.from('cash_periods').select(),
+        _db.from('stock_moves').select(),
+        _db.from('stock_thresholds').select(),
       ]);
       _profiles
         ..clear()
@@ -182,6 +188,14 @@ class AppState extends ChangeNotifier {
       _periods
         ..clear()
         ..addAll(results[8].map(CashPeriod.fromRow));
+      _stock
+        ..clear()
+        ..addAll(results[9].map(StockMove.fromRow));
+      _stockMin.clear();
+      for (final r in results[10]) {
+        final it = StockItem.fromCode(r['item'] as String?);
+        if (it != null) _stockMin['${r['church_id']}|${it.code}'] = (r['min_qty'] as num).toInt();
+      }
       _confirmations.clear();
       for (final r in results[5]) {
         (_confirmations[r['event_id'] as String] ??= {})[r['user_id'] as String] =
@@ -639,6 +653,78 @@ class AppState extends ChangeNotifier {
 
   List<CashEntry> myCashEntries(String churchId) =>
       cashEntries(churchId).where((e) => e.createdBy == currentUser?.id).toList();
+
+  // ------------------------------------------------------------------
+  // Склад (води се като касата: председател и касиер)
+  // ------------------------------------------------------------------
+  List<StockMove> stockMoves(String churchId, {StockItem? item}) => _stock
+      .where((m) => m.churchId == churchId && (item == null || m.item == item))
+      .toList()
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  Map<StockItem, int> stockOf(String churchId) => stockBalances(_stock.where((m) => m.churchId == churchId));
+
+  int stockMin(String churchId, StockItem i) => _stockMin['$churchId|${i.code}'] ?? i.defaultMin;
+
+  /// Видовете под границата (за предупреждението на началния екран).
+  List<StockItem> lowStock(String churchId) {
+    if (!canSeeCash(churchId)) return [];
+    final b = stockOf(churchId);
+    return StockItem.values.where((i) => b[i]! <= stockMin(churchId, i)).toList();
+  }
+
+  List<StockMove> stockToDecide(String churchId) {
+    final me = currentUser?.id;
+    if (!canSeeCash(churchId)) return [];
+    return _stock.where((m) => m.churchId == churchId && m.isPending && m.createdBy != me).toList();
+  }
+
+  Future<void> loadStock(String churchId, StockItem item, int qty, String note) async {
+    try {
+      final row = await _db.rpc('stock_load',
+          params: {'p_church': churchId, 'p_item': item.code, 'p_qty': qty, 'p_note': note});
+      final mv = StockMove.fromRow(Map<String, dynamic>.from(row as Map));
+      _stock.add(mv);
+      notifyListeners();
+      unawaited(_invokeNotify({'type': 'stock_loaded', 'move_id': mv.id}));
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
+  Future<StockMove> writeOffStock(String churchId, StockItem item, int qty, String reason) async {
+    try {
+      final row = await _db.rpc('stock_writeoff',
+          params: {'p_church': churchId, 'p_item': item.code, 'p_qty': qty, 'p_note': reason});
+      final mv = StockMove.fromRow(Map<String, dynamic>.from(row as Map));
+      _stock.add(mv);
+      notifyListeners();
+      if (mv.isPending) unawaited(_invokeNotify({'type': 'stock_pending', 'move_id': mv.id}));
+      return mv;
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
+  Future<void> decideStock(StockMove mv, bool approve, {String reason = ''}) async {
+    try {
+      await _db.rpc('stock_decide', params: {'p_move': mv.id, 'p_approve': approve, 'p_reason': reason});
+      await refresh();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+    unawaited(_invokeNotify({'type': 'stock_decided', 'move_id': mv.id}));
+  }
+
+  Future<void> setStockMin(String churchId, StockItem item, int min) async {
+    try {
+      await _db.rpc('stock_set_threshold', params: {'p_church': churchId, 'p_item': item.code, 'p_min': min});
+      _stockMin['$churchId|${item.code}'] = min;
+      notifyListeners();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
 
   // ---- приключване на месеци
   CashPeriod? periodOf(String churchId, DateTime d) => _periods
@@ -1266,6 +1352,8 @@ class AppState extends ChangeNotifier {
       e.status = old;
       rethrow;
     }
+    // Проведено кръщене/венчавка движи склада на сървъра – обновяваме.
+    if (stockForEvent(e.kind).isNotEmpty) unawaited(refresh());
   }
 
   String churchName(String churchId) =>

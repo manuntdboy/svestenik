@@ -10,6 +10,7 @@ import '../theme.dart';
 import 'alarm_ring.dart';
 import 'calendar.dart';
 import 'cash.dart';
+import 'stock.dart';
 import 'event_detail.dart';
 import 'leaves.dart';
 import 'home.dart';
@@ -93,6 +94,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final eventId = data['event_id'];
     if (type == 'cash') {
       nav.push(MaterialPageRoute(builder: (_) => const CashScreen()));
+    } else if (type == 'stock') {
+      nav.push(MaterialPageRoute(builder: (_) => const StockScreen()));
     } else if (type.startsWith('leave_')) {
       final rid = data['request_id'];
       nav.push(MaterialPageRoute(

@@ -584,6 +584,35 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   ),
                 ),
               ),
+            if (stockForEvent(_kind).isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Builder(builder: (context) {
+                  final need = stockForEvent(_kind);
+                  final church = widget.draft.churchId;
+                  final bal = s.canSeeCash(church) ? s.stockOf(church) : null;
+                  final what = need.entries
+                      .map((e) => '${e.value} ${switch (e.key) {
+                            StockItem.certBaptism => e.value == 1 ? 'кръщелно свидетелство' : 'кръщелни свидетелства',
+                            StockItem.certWedding => e.value == 1 ? 'венчално свидетелство' : 'венчални свидетелства',
+                            StockItem.diploma => e.value == 1 ? 'грамота' : 'грамоти',
+                            _ => e.key.label,
+                          }}')
+                      .join(' и ');
+                  final have = bal == null
+                      ? ''
+                      : ' В склада: ${need.keys.map((i) => '${i.label.toLowerCase()} ${bal[i]}').join(', ')}.';
+                  return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.inventory_2_outlined, size: 20, color: p.textMuted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                          'Когато се отбележи като проведено, от склада ${need.values.fold(0, (a, b) => a + b) == 1 ? 'ще излезе' : 'ще излязат'} $what.$have',
+                          style: TextStyle(fontSize: 15, color: p.textMuted)),
+                    ),
+                  ]);
+                }),
+              ),
             if (_kind.occupiesChurch)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),

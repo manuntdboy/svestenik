@@ -209,6 +209,39 @@ async function handle(req: Request): Promise<Response> {
       text = `${period} · ${callerName}`;
     }
     data = { type, church_id: lv.church_id, request_id: lv.id };
+  } else if (type === "stock_loaded" || type === "stock_pending" || type === "stock_decided") {
+    // Склад: зареждане (за знание) и ръчно изписване (за одобрение) → другият; решение → въвелият.
+    const moveId = String(body.move_id ?? "");
+    const { data: mv } = await admin.from("stock_moves").select("*").eq("id", moveId).maybeSingle();
+    if (!mv) return json(404, { error: "not_found" });
+    const ITEMS: Record<string, [string, string]> = {
+      candle_040: ["свещи 0,40 €", "кг"], candle_1: ["свещи 1 €", "кг"], candle_4: ["свещи 4 €", "кг"],
+      cert_baptism: ["кръщелни свидетелства", "бр."], cert_wedding: ["венчални свидетелства", "бр."],
+      diploma: ["грамоти", "бр."],
+    };
+    const [name, unit] = ITEMS[mv.item] ?? [mv.item, ""];
+    const q = `${Math.abs(mv.qty)} ${unit} ${name}`;
+    const { data: members } = await admin.from("church_members").select("user_id, role, permissions")
+      .eq("church_id", mv.church_id).eq("status", "active");
+    const holders = (members ?? []).filter((m) => m.role === "manager" || (m.permissions ?? []).includes("cash"))
+      .map((m) => m.user_id);
+    if (type === "stock_loaded") {
+      if (mv.created_by !== caller.id || mv.kind !== "load") return json(403, { error: "forbidden" });
+      recipients = holders;
+      title = "Склад: заредено";
+      text = `${callerName} зареди ${q}`;
+    } else if (type === "stock_pending") {
+      if (mv.created_by !== caller.id || mv.status !== "pending") return json(403, { error: "forbidden" });
+      recipients = holders;
+      title = "Склад: изписване чака одобрение";
+      text = `${q} · ${mv.note ?? ""} · ${callerName}`;
+    } else {
+      if (mv.decided_by !== caller.id) return json(403, { error: "forbidden" });
+      recipients = [mv.created_by];
+      title = mv.status === "approved" ? "Склад: изписването е одобрено" : "Склад: изписването е върнато";
+      text = `${q}${mv.return_reason ? " · " + mv.return_reason : ""} · ${callerName}`;
+    }
+    data = { type: "stock", church_id: mv.church_id };
   } else if (type === "cash_close_pending" || type === "cash_close_decided") {
     // Приключване на месец: касиерът иска → председателят; решение → касиерът.
     const churchId = String(body.church_id ?? "");

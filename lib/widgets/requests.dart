@@ -7,6 +7,7 @@ import '../theme.dart';
 import 'common.dart';
 import '../screens/cash.dart' show CashReviewCard;
 import '../screens/cash_more.dart' show CloseMonthCard;
+import '../screens/stock.dart' show LowStockCard, StockReviewCard;
 
 final _fmtDm = DateFormat('d MMMM', 'bg');
 final _fmtSeen = DateFormat('d MMMM, HH:mm', 'bg');
@@ -526,6 +527,10 @@ List<Widget> requestCards(AppState s) {
       Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: DeclinedReviewCard(key: ValueKey('dr${e.id}'), event: e)),
+    if (s.lowStock(church).isNotEmpty)
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: LowStockCard(items: s.lowStock(church))),
+    for (final mv in s.stockToDecide(church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: StockReviewCard(key: ValueKey('st${mv.id}'), move: mv)),
     for (final per in s.closesToApprove(church))
       Padding(
           padding: const EdgeInsets.only(bottom: 12),

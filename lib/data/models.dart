@@ -787,3 +787,106 @@ class CashSettings {
   }
   return (c, b);
 }
+
+// ---------------------------------------------------------------------
+// Склад
+// ---------------------------------------------------------------------
+enum StockSection { candles, papers }
+
+enum StockItem {
+  candle040('candle_040', 'Свещи 0,40 €', StockSection.candles, 5),
+  candle1('candle_1', 'Свещи 1 €', StockSection.candles, 3),
+  candle4('candle_4', 'Свещи 4 €', StockSection.candles, 1),
+  certBaptism('cert_baptism', 'Кръщелни свидетелства', StockSection.papers, 10),
+  certWedding('cert_wedding', 'Венчални свидетелства', StockSection.papers, 10),
+  diploma('diploma', 'Грамоти', StockSection.papers, 10);
+
+  final String code;
+  final String label;
+  final StockSection section;
+  final int defaultMin;
+  const StockItem(this.code, this.label, this.section, this.defaultMin);
+
+  String get unit => section == StockSection.candles ? 'кг' : 'бр.';
+  String qty(int n) => '$n $unit';
+
+  static StockItem? fromCode(String? c) => StockItem.values.where((i) => i.code == c).firstOrNull;
+}
+
+/// Какво изписва от склада проведеното събитие.
+Map<StockItem, int> stockForEvent(EventKind k) => switch (k) {
+      EventKind.krashtene => {StockItem.certBaptism: 1},
+      EventKind.venchavka => {StockItem.certWedding: 2, StockItem.diploma: 1},
+      _ => const {},
+    };
+
+class StockMove {
+  final String id;
+  final String churchId;
+  final StockItem item;
+  final int qty; // + влиза, − излиза
+  final String kind; // load / writeoff / event / event_return
+  final String? eventId;
+  final String note;
+  final String createdBy;
+  final DateTime createdAt;
+  final String status;
+  final String? autoReason;
+  final String? decidedBy;
+  final DateTime? decidedAt;
+  final String returnReason;
+
+  StockMove({
+    required this.id,
+    required this.churchId,
+    required this.item,
+    required this.qty,
+    required this.kind,
+    this.eventId,
+    this.note = '',
+    required this.createdBy,
+    required this.createdAt,
+    this.status = 'approved',
+    this.autoReason,
+    this.decidedBy,
+    this.decidedAt,
+    this.returnReason = '',
+  });
+
+  bool get isPending => status == 'pending';
+  bool get isApproved => status == 'approved';
+  bool get isReturned => status == 'returned';
+
+  String get kindLabel => switch (kind) {
+        'load' => 'Зареждане',
+        'writeoff' => 'Изписване',
+        'event' => 'Проведено събитие',
+        _ => 'Върнато от събитие',
+      };
+
+  factory StockMove.fromRow(Map<String, dynamic> r) => StockMove(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        item: StockItem.fromCode(r['item'] as String?) ?? StockItem.diploma,
+        qty: (r['qty'] as num).toInt(),
+        kind: (r['kind'] as String?) ?? 'load',
+        eventId: r['event_id'] as String?,
+        note: (r['note'] as String?) ?? '',
+        createdBy: (r['created_by'] as String?) ?? '',
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        status: (r['status'] as String?) ?? 'approved',
+        autoReason: r['auto_reason'] as String?,
+        decidedBy: r['decided_by'] as String?,
+        decidedAt: r['decided_at'] == null ? null : DateTime.parse(r['decided_at'] as String).toLocal(),
+        returnReason: (r['return_reason'] as String?) ?? '',
+      );
+}
+
+/// Наличност по вид (само одобрените движения).
+Map<StockItem, int> stockBalances(Iterable<StockMove> moves) {
+  final m = {for (final i in StockItem.values) i: 0};
+  for (final mv in moves) {
+    if (mv.isApproved) m[mv.item] = m[mv.item]! + mv.qty;
+  }
+  return m;
+}
