@@ -12,6 +12,11 @@ const buildNumber = int.fromEnvironment('BUILD_NUMBER');
 /// Камбанката „Какво е новото“ се показва само в тестовите версии.
 const isTestBuild = bool.fromEnvironment('TEST_BUILD', defaultValue: true);
 
+/// Сборка само за създателя (--dart-define=CREATOR=true): има скрития екран
+/// „Кайрос в числа“ и бележки „само за вас“. В версиите за тестерите е false
+/// и този код изобщо не влиза в приложението.
+const isCreatorBuild = bool.fromEnvironment('CREATOR');
+
 const _kSeen = 'whats_new_seen_build';
 
 class WhatsNew {
@@ -27,8 +32,14 @@ class WhatsNew {
     final j = jsonDecode(await rootBundle.loadString('assets/whats_new.json')) as Map<String, dynamic>;
     return _cache = WhatsNew(
       (j['date'] as String?) ?? '',
-      ((j['added'] as List?) ?? const []).cast<String>(),
-      ((j['test'] as List?) ?? const []).cast<String>(),
+      [
+        if (isCreatorBuild) ...((j['creator'] as List?) ?? const []).cast<String>(),
+        ...((j['added'] as List?) ?? const []).cast<String>(),
+      ],
+      [
+        if (isCreatorBuild) ...((j['creator_test'] as List?) ?? const []).cast<String>(),
+        ...((j['test'] as List?) ?? const []).cast<String>(),
+      ],
     );
   }
 }

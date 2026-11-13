@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models.dart';
 import 'notifier.dart';
 import 'push.dart';
+import '../widgets/whats_new.dart' show buildNumber;
 
 /// Адрес и публичен ключ на Supabase. Подават се при изграждането
 /// (--dart-define) от GitHub Secrets.
@@ -122,6 +123,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _clear() {
+    _versionAt = null;
     currentUser = null;
     myDetails = ProfileDetails();
     myPhoto = null;
@@ -219,6 +221,7 @@ class AppState extends ChangeNotifier {
       unawaited(_loadDetails());
       unawaited(rescheduleReminders());
       unawaited(_registerPush());
+      unawaited(_reportVersion());
     } catch (e) {
       debugPrint('Обновяването не успя: $e');
       syncError = 'Няма връзка със сървъра. Показват се последните заредени данни.';
@@ -296,6 +299,21 @@ class AppState extends ChangeNotifier {
       return 'Няма връзка с интернет. Опитайте отново.';
     }
     return 'Нещо се обърка: $text';
+  }
+
+  /// Казва на сървъра коя версия ползва този профил (вижда се само в
+  /// прегледа на създателя). Най-много веднъж на 30 минути.
+  DateTime? _versionAt;
+  Future<void> _reportVersion() async {
+    if (currentUser == null) return;
+    final now = DateTime.now();
+    if (_versionAt != null && now.difference(_versionAt!).inMinutes < 30) return;
+    _versionAt = now;
+    try {
+      await _db.rpc('report_version', params: {'p_build': buildNumber});
+    } catch (e) {
+      debugPrint('Версията не се записа: $e');
+    }
   }
 
   /// Записва това устройство на сървъра, за да идват push известия.

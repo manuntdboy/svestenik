@@ -7,8 +7,9 @@ import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
 import 'church_priests.dart';
+import 'creator.dart';
 import 'my_profile.dart';
-import '../widgets/whats_new.dart' show buildNumber;
+import '../widgets/whats_new.dart' show buildNumber, isCreatorBuild;
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -168,27 +169,33 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        // „За приложението“ – създател и версия.
-        SurfaceCard(
-          child: Row(children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset('assets/logo-kairos.png', width: 52, height: 52),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('За приложението',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text('Кайрос${buildNumber > 0 ? ' · версия $buildNumber' : ''}',
-                    style: TextStyle(fontSize: 15, color: p.textMuted)),
-                const SizedBox(height: 4),
-                const Text('Димитър Костадинов (създател)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ]),
+        // „За приложението“ – създател и версия. В сборката за създателя
+        // дълго натискане тук отваря „Кайрос в числа“; иначе нищо.
+        GestureDetector(
+          onLongPress: isCreatorBuild
+              ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CreatorScreen()))
+              : null,
+          child: SurfaceCard(
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset('assets/logo-kairos.png', width: 52, height: 52),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('За приложението',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text('Кайрос${buildNumber > 0 ? ' · версия $buildNumber' : ''}',
+                      style: TextStyle(fontSize: 15, color: p.textMuted)),
+                  const SizedBox(height: 4),
+                  const Text('Димитър Костадинов (създател)',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ]),
+          ),
         ),
         const SizedBox(height: 28),
         FilledButton(

@@ -590,6 +590,30 @@ select t.fails($$insert into stock_moves(church_id, item, qty, kind) values (gen
 select t.as_user(:'A');
 select t.ok((select count(*) from cash_entries where church_id = :'cid2') = 0, 'друг храм не вижда касата');
 
+-- ---------------------------------------------------------------- създател
+select t.as_user(:'C');
+select t.fails($$select public.creator_stats()$$, 'обикновен потребител не вижда общия преглед', 'forbidden');
+select t.fails($$select * from app_creators$$, 'списъкът на създателите е затворен', 'permission denied');
+reset role;
+insert into app_creators (user_id) values (:'A');
+update auth.users set last_sign_in_at = now() where id = :'A';
+set role authenticated;
+select t.as_user(:'A');
+select t.ok(public.is_creator(), 'създателят е разпознат');
+select public.report_version(85) \g /dev/null
+select public.report_version(86) \g /dev/null
+select (public.creator_stats()) as cs \gset
+select t.ok((:'cs'::jsonb->'totals'->>'users')::int >= 4
+            and jsonb_array_length(:'cs'::jsonb->'users') = (:'cs'::jsonb->'totals'->>'users')::int
+            and (:'cs'::jsonb->'totals'->>'churches')::int >= 2
+            and jsonb_array_length(:'cs'::jsonb->'churches') = (:'cs'::jsonb->'totals'->>'churches')::int
+            and (:'cs'::jsonb->'totals'->>'active_1')::int >= 1,
+            'създателят вижда всички регистрирани, храмове и активни');
+select t.ok((:'cs'::jsonb->'versions'->>'86')::int = 1 and (:'cs'::jsonb->'versions'->'85') is null,
+            'версията на всеки се пази една – последната');
+select t.as_user(:'B');
+select t.ok(not public.is_creator(), 'другите не са създатели');
+select t.fails($$select * from app_versions$$, 'версиите не се четат директно', 'permission denied');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'
