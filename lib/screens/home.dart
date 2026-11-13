@@ -219,15 +219,29 @@ class _CalendarTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: p.onCalendarTile.withValues(alpha: p.dark ? 0.12 : 0.18),
-                  borderRadius: BorderRadius.circular(16),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: p.onCalendarTile.withValues(alpha: p.dark ? 0.12 : 0.18),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(Icons.calendar_month_outlined, size: 30, color: p.onCalendarTile),
                 ),
-                child: Icon(Icons.calendar_month_outlined, size: 30, color: p.onCalendarTile),
-              ),
+                const Spacer(),
+                // Днешната дата като дд.мм. – в горния ъгъл на плочката.
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: p.onCalendarTile.withValues(alpha: p.dark ? 0.12 : 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                      '${DateTime.now().day.toString().padLeft(2, '0')}.${DateTime.now().month.toString().padLeft(2, '0')}.',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: p.onCalendarTile)),
+                ),
+              ]),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -241,17 +255,8 @@ class _CalendarTile extends StatelessWidget {
                   Text(count == 1 ? 'ваше събитие днес' : 'ваши събития днес',
                       style: TextStyle(fontSize: 15, color: p.calendarTileMuted)),
                   const SizedBox(height: 6),
-                  Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-                    Text('Календар',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700, color: p.onCalendarTile)),
-                    const SizedBox(width: 8),
-                    // Днешната дата като дд.мм.
-                    Text(
-                        '${DateTime.now().day.toString().padLeft(2, '0')}.${DateTime.now().month.toString().padLeft(2, '0')}.',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w800, color: p.onCalendarTile)),
-                  ]),
+                  Text('Календар',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: p.onCalendarTile)),
                 ],
               ),
             ],
@@ -367,7 +372,7 @@ class _StockTile extends StatelessWidget {
                     waiting > 0
                         ? '$waiting чака одобрение'
                         : low.isEmpty
-                            ? 'Наличностите са наред'
+                            ? 'Всичко е налично'
                             : 'Заредете: ${low.length} ${low.length == 1 ? 'вид' : 'вида'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
