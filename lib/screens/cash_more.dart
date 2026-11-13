@@ -24,10 +24,17 @@ class CashFilter {
   final String? who;
   final double? min;
   final double? max;
-  const CashFilter({this.from, this.to, this.category, this.who, this.min, this.max});
+  final String text; // търсене в бележка, вид, дарител
+  const CashFilter({this.from, this.to, this.category, this.who, this.min, this.max, this.text = ''});
 
   bool get isActive => count > 0;
-  int get count => [from != null || to != null, category != null, who != null, min != null || max != null]
+  int get count => [
+        from != null || to != null,
+        category != null,
+        who != null,
+        min != null || max != null,
+        text.trim().isNotEmpty
+      ]
       .where((x) => x)
       .length;
 
@@ -40,6 +47,11 @@ class CashFilter {
     final a = e.amount.abs();
     if (min != null && a < min!) return false;
     if (max != null && a > max!) return false;
+    final q = text.trim().toLowerCase();
+    if (q.isNotEmpty &&
+        ![e.note, e.categoryLabel, e.donor].any((x) => x.toLowerCase().contains(q))) {
+      return false;
+    }
     return true;
   }
 
@@ -50,6 +62,7 @@ class CashFilter {
         if (who != null) s.priestName(who!),
         if (min != null || max != null)
           '${min == null ? '' : 'от ${fmtEur(min!)} '}${max == null ? '' : 'до ${fmtEur(max!)}'}'.trim(),
+        if (text.trim().isNotEmpty) '„${text.trim()}“',
       ];
 }
 
@@ -57,6 +70,7 @@ Future<CashFilter?> showCashFilter(BuildContext context, CashFilter current, Str
   final s = AppScope.read(context);
   var from = current.from, to = current.to;
   String? cat = current.category, who = current.who;
+  final textC = TextEditingController(text: current.text);
   final minC = TextEditingController(text: current.min?.toStringAsFixed(2) ?? '');
   final maxC = TextEditingController(text: current.max?.toStringAsFixed(2) ?? '');
   final now = DateTime.now();
@@ -82,6 +96,13 @@ Future<CashFilter?> showCashFilter(BuildContext context, CashFilter current, Str
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const Text('Филтър', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
+            const FieldLabel('Търсене в бележката'),
+            TextField(
+              controller: textC,
+              decoration: const InputDecoration(
+                  hintText: 'например покрив, ток, име на дарител', prefixIcon: Icon(Icons.search_rounded)),
+            ),
+            const SizedBox(height: 16),
             const FieldLabel('Период'),
             Wrap(spacing: 8, runSpacing: 6, children: [
               quick('Този месец', thisMonth, DateTime(now.year, now.month + 1, 0)),
@@ -181,6 +202,7 @@ Future<CashFilter?> showCashFilter(BuildContext context, CashFilter current, Str
                         who: who,
                         min: parseAmount(minC.text),
                         max: parseAmount(maxC.text),
+                        text: textC.text,
                       )),
                   child: const Text('Покажи'),
                 ),
@@ -191,6 +213,7 @@ Future<CashFilter?> showCashFilter(BuildContext context, CashFilter current, Str
       );
     }),
   ).whenComplete(() {
+    textC.dispose();
     minC.dispose();
     maxC.dispose();
   });
@@ -298,6 +321,8 @@ class _CashReportScreenState extends State<CashReportScreen> {
             _breakdown(context, 'Приходи по видове', inc, incT, bookColor(context, CashBook.income)),
             const SizedBox(height: 18),
             _breakdown(context, 'Разходи по видове', exp, expT, bookColor(context, CashBook.expense)),
+            ..._donors(context, all, f, t),
+            ..._openings(context, all),
             const SizedBox(height: 14),
             Text('Справката е по влезлите в книгите записи (със сторната). Началното салдо и движенията с банката не се броят.',
                 style: TextStyle(fontSize: 13.5, color: p.textMuted)),
@@ -305,6 +330,62 @@ class _CashReportScreenState extends State<CashReportScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _donors(BuildContext context, List<CashEntry> all, DateTime f, DateTime t) {
+    final p = Palette.of(context);
+    final gifts = all
+        .where((e) =>
+            e.isApproved &&
+            e.book == CashBook.income &&
+            e.category == 'Дарение' &&
+            !e.date.isBefore(f) &&
+            e.date.isBefore(t))
+        .toList();
+    if (gifts.isEmpty) return [];
+    final by = <String, double>{};
+    for (final g in gifts) {
+      final k = g.donor.isEmpty ? 'Без име' : g.donor;
+      by[k] = (by[k] ?? 0) + g.amount;
+    }
+    final rows = by.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return [
+      const SizedBox(height: 18),
+      const Text('Дарители', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      for (final r in rows)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [
+            Icon(Icons.volunteer_activism_outlined, size: 20, color: p.textMuted),
+            const SizedBox(width: 10),
+            Expanded(child: Text(r.key, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+            Text(fmtEur(r.value), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          ]),
+        ),
+    ];
+  }
+
+  List<Widget> _openings(BuildContext context, List<CashEntry> all) {
+    final p = Palette.of(context);
+    final ops = all.where((e) => e.book == CashBook.opening && e.isApproved).toList();
+    if (ops.isEmpty) return [];
+    return [
+      const SizedBox(height: 18),
+      const Text('Начално салдо', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 6),
+      for (final o in ops)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [
+            Expanded(
+              child: Text('${o.account == 'bank' ? 'Банка' : 'Брой'} · ${o.ref} · ${_dShort.format(o.date)}',
+                  style: TextStyle(fontSize: 15, color: p.textMuted)),
+            ),
+            Text(fmtEur(o.amount), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          ]),
+        ),
+    ];
   }
 
   Widget _total(BuildContext context, String label, double v, Color c) {

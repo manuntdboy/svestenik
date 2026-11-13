@@ -627,6 +627,7 @@ class CashEntry {
   final String? reverses;
   final String? reversedBy;
   final bool backdated; // със задна дата в приключен месец
+  final String donor; // дарител (по желание) при „Дарение“
 
   CashEntry({
     required this.id,
@@ -651,6 +652,7 @@ class CashEntry {
     this.reversedBy,
     this.backdated = false,
     this.decidedAt,
+    this.donor = '',
   });
 
   final DateTime? decidedAt;
@@ -709,6 +711,7 @@ class CashEntry {
         reverses: r['reverses'] as String?,
         reversedBy: r['reversed_by'] as String?,
         backdated: (r['backdated'] as bool?) ?? false,
+        donor: (r['donor'] as String?) ?? '',
         decidedAt: r['decided_at'] == null ? null : DateTime.parse(r['decided_at'] as String).toLocal(),
       );
 }
@@ -889,4 +892,43 @@ Map<StockItem, int> stockBalances(Iterable<StockMove> moves) {
     if (mv.isApproved) m[mv.item] = m[mv.item]! + mv.qty;
   }
   return m;
+}
+
+/// Ревизия: преброено срещу книгата. Само проверка – не мени наличността.
+class StockAudit {
+  final String id;
+  final String churchId;
+  final String batch;
+  final StockItem item;
+  final int counted;
+  final int bookQty;
+  final String note;
+  final String createdBy;
+  final DateTime createdAt;
+
+  StockAudit({
+    required this.id,
+    required this.churchId,
+    required this.batch,
+    required this.item,
+    required this.counted,
+    required this.bookQty,
+    this.note = '',
+    required this.createdBy,
+    required this.createdAt,
+  });
+
+  int get diff => counted - bookQty;
+
+  factory StockAudit.fromRow(Map<String, dynamic> r) => StockAudit(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        batch: r['batch'] as String,
+        item: StockItem.fromCode(r['item'] as String?) ?? StockItem.diploma,
+        counted: (r['counted'] as num).toInt(),
+        bookQty: (r['book_qty'] as num).toInt(),
+        note: (r['note'] as String?) ?? '',
+        createdBy: (r['created_by'] as String?) ?? '',
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+      );
 }

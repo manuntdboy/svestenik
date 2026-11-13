@@ -47,6 +47,7 @@ class AppState extends ChangeNotifier {
   final Map<String, CashSettings> _cashSettings = {};
   final List<CashPeriod> _periods = [];
   final List<StockMove> _stock = [];
+  final List<StockAudit> _audits = [];
   final Map<String, int> _stockMin = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
@@ -129,6 +130,7 @@ class AppState extends ChangeNotifier {
     _cashSettings.clear();
     _periods.clear();
     _stock.clear();
+    _audits.clear();
     _stockMin.clear();
     _details.clear();
     _photos.clear();
@@ -162,6 +164,7 @@ class AppState extends ChangeNotifier {
         _db.from('cash_periods').select(),
         _db.from('stock_moves').select(),
         _db.from('stock_thresholds').select(),
+        _db.from('stock_audits').select(),
       ]);
       _profiles
         ..clear()
@@ -191,6 +194,9 @@ class AppState extends ChangeNotifier {
       _stock
         ..clear()
         ..addAll(results[9].map(StockMove.fromRow));
+      _audits
+        ..clear()
+        ..addAll(results[11].map(StockAudit.fromRow));
       _stockMin.clear();
       for (final r in results[10]) {
         final it = StockItem.fromCode(r['item'] as String?);
@@ -729,6 +735,48 @@ class AppState extends ChangeNotifier {
     unawaited(_invokeNotify({'type': 'stock_decided', 'move_id': mv.id}));
   }
 
+  /// Ревизиите, групирани по проверка (най-новите отгоре).
+  List<List<StockAudit>> stockAudits(String churchId) {
+    final by = <String, List<StockAudit>>{};
+    for (final a in _audits.where((a) => a.churchId == churchId)) {
+      (by[a.batch] ??= []).add(a);
+    }
+    final list = by.values.toList()
+      ..sort((a, b) => b.first.createdAt.compareTo(a.first.createdAt));
+    for (final l in list) {
+      l.sort((a, b) => a.item.index.compareTo(b.item.index));
+    }
+    return list;
+  }
+
+  static String _uuid() {
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    final h = b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+  }
+
+  /// Записва ревизия (само проверка – наличността не се променя).
+  Future<void> saveAudit(String churchId, Map<StockItem, int> counted, String note) async {
+    final batch = _uuid();
+    try {
+      for (final e in counted.entries) {
+        await _db.rpc('stock_audit', params: {
+          'p_church': churchId,
+          'p_batch': batch,
+          'p_item': e.key.code,
+          'p_counted': e.value,
+          'p_note': note,
+        });
+      }
+      await refresh();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
   Future<void> setStockMin(String churchId, StockItem item, int min) async {
     try {
       await _db.rpc('stock_set_threshold', params: {'p_church': churchId, 'p_item': item.code, 'p_min': min});
@@ -825,6 +873,7 @@ class AppState extends ChangeNotifier {
     String? direction,
     String? eventId,
     DateTime? date,
+    String donor = '',
   }) async {
     String iso(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -841,7 +890,11 @@ class AppState extends ChangeNotifier {
         'p_event': eventId,
         'p_date': date == null ? null : iso(date),
       });
-      final e = CashEntry.fromRow(Map<String, dynamic>.from(row as Map));
+      var e = CashEntry.fromRow(Map<String, dynamic>.from(row as Map));
+      if (donor.trim().isNotEmpty && book == CashBook.income && category == 'Дарение') {
+        await _db.rpc('cash_set_donor', params: {'p_entry': e.id, 'p_donor': donor.trim()});
+        e = CashEntry.fromRow({...Map<String, dynamic>.from(row), 'donor': donor.trim()});
+      }
       _cash.add(e);
       notifyListeners();
       if (e.isPending) unawaited(_invokeNotify({'type': 'cash_pending', 'entry_id': e.id}));

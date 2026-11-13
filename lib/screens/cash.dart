@@ -155,8 +155,7 @@ class _CashScreenState extends State<CashScreen> {
             ]),
           ]),
         ),
-        for (final o in all.where((e) => e.book == CashBook.opening && e.isApproved))
-          Padding(padding: const EdgeInsets.only(top: 10), child: CashRow(entry: o)),
+        // Началното салдо – само докато не е въведено; после е в „Справки“.
         if (s.openingAccountsLeft(church).isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 10),
@@ -505,6 +504,7 @@ class CashRow extends StatelessWidget {
                       [
                         _dayShort.format(e.date),
                         s.priestName(e.createdBy),
+                        if (e.donor.isNotEmpty) e.donor,
                         if (e.account == 'bank' && e.book != CashBook.transfer) 'банка',
                         if (status.isNotEmpty) status,
                       ].join(' · '),
@@ -563,6 +563,7 @@ Future<void> showCashEntry(BuildContext context, CashEntry e) async {
             Text(fmtEur(e.amount.abs()), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             if (e.book != CashBook.transfer) row('Вид', e.categoryLabel),
+            if (e.donor.isNotEmpty) row('Дарител', e.donor),
             row('Дата', _day.format(e.date)),
             if (e.book != CashBook.transfer) row('Сметка', e.account == 'bank' ? 'Банка' : 'Брой'),
             if (e.note.isNotEmpty) row('Бележка', e.note),
@@ -788,6 +789,7 @@ class _CashEntryFormState extends State<CashEntryForm> {
           : incomeCategories.first;
   final _amount = TextEditingController();
   final _other = TextEditingController();
+  final _donor = TextEditingController();
   late final _note = TextEditingController(
       text: widget.event == null
           ? ''
@@ -799,6 +801,7 @@ class _CashEntryFormState extends State<CashEntryForm> {
   void dispose() {
     _amount.dispose();
     _other.dispose();
+    _donor.dispose();
     _note.dispose();
     super.dispose();
   }
@@ -841,6 +844,7 @@ class _CashEntryFormState extends State<CashEntryForm> {
         account: _account,
         direction: _book == CashBook.transfer ? _direction : null,
         eventId: widget.event?.id,
+        donor: _book == CashBook.income && _category == 'Дарение' ? _donor.text : '',
         date: _date,
       );
       nav.pop();
@@ -951,6 +955,16 @@ class _CashEntryFormState extends State<CashEntryForm> {
                   onChanged: (v) => setState(() => _category = v ?? _cats.first),
                 ),
               ),
+              if (_book == CashBook.income && _category == 'Дарение')
+                section(
+                  'Дарител (по желание)',
+                  TextField(
+                    controller: _donor,
+                    textCapitalization: TextCapitalization.words,
+                    style: fieldStyle,
+                    decoration: const InputDecoration(hintText: 'име, ако дарителят желае'),
+                  ),
+                ),
               if (_category == 'Друго')
                 section(
                   'Какъв вид',

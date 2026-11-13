@@ -574,6 +574,15 @@ select public.stock_writeoff(:'cid2', 'cert_baptism', 3, 'повредени') \
 select t.fails($$update events set status = 'done' where for_whom = 'Скл-0'$$,
                'без кръщелни в склада кръщенето не се отбелязва проведено', 'not_enough_stock');
 select t.as_user(:'B');
+select t.ok((select book_qty from public.stock_audit(:'cid2', gen_random_uuid(), 'candle_1', 1, 'преброено')) = 4
+            and (select coalesce(sum(qty),0) from stock_moves where church_id = :'cid2' and item = 'candle_1' and status = 'approved') = 4,
+            'ревизията записва преброеното, без да мени наличността');
+select t.as_user(:'C');
+select t.fails(format($$select public.stock_audit(%L, gen_random_uuid(), 'candle_1', 1, null)$$, :'cid2'), 'свещеник не прави ревизия', 'not_cash_holder');
+select id as don from public.cash_add(:'cid2','income',25,'Дарение',null,null,'cash',null,null,null) \gset
+select public.cash_set_donor(:'don', 'Иван Петров') \g /dev/null
+select t.as_user(:'B');
+select t.ok((select donor from cash_entries where id = :'don') = 'Иван Петров', 'дарителят се записва към дарението');
 select public.stock_set_threshold(:'cid2', 'candle_040', 8);
 select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_040') = 8, 'границата за предупреждение се настройва');
 select t.fails($$insert into stock_moves(church_id, item, qty, kind) values (gen_random_uuid(), 'diploma', 1, 'load')$$,

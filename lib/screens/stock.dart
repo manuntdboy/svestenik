@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
 import '../data/app_state.dart';
@@ -66,6 +68,28 @@ class _StockScreenState extends State<StockScreen> {
                 icon: const Icon(Icons.menu_book_outlined),
                 label: const Text('Складова книга'),
               ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                    onPressed: () =>
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const StockAuditScreen())),
+                    icon: const Icon(Icons.fact_check_outlined),
+                    label: const Text('Ревизия'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                    onPressed: () =>
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const StockOrderScreen())),
+                    icon: const Icon(Icons.shopping_cart_outlined),
+                    label: const Text('Поръчка'),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 14),
               Row(children: [
                 for (final sec in StockSection.values) ...[
@@ -520,6 +544,8 @@ class _StockBookScreenState extends State<StockBookScreen> {
   StockSection? _section; // null = и двата раздела
   StockItem? _item; // null = всички видове
   String? _kind; // null = всички, 'in' = влизания, 'out' = излизания
+  bool _audits = false; // раздел „Ревизии“
+  String _q = '';
 
   @override
   Widget build(BuildContext context) {
@@ -530,6 +556,13 @@ class _StockBookScreenState extends State<StockBookScreen> {
         .stockMoves(church, item: _item)
         .where((m) => _section == null || m.item.section == _section)
         .where((m) => _kind == null || (_kind == 'in' ? m.qty > 0 : m.qty < 0))
+        .where((m) {
+          final q = _q.trim().toLowerCase();
+          if (q.isEmpty) return true;
+          final ev = m.eventId == null ? null : s.eventById(m.eventId!);
+          return [m.note, m.kindLabel, m.item.label, s.priestName(m.createdBy), ev?.forWhom ?? '']
+              .any((x) => x.toLowerCase().contains(q));
+        })
         .toList();
     final day = DateFormat('d MMMM y', 'bg');
     String? lastDay;
@@ -542,6 +575,23 @@ class _StockBookScreenState extends State<StockBookScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
+              SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Движения'), icon: Icon(Icons.swap_vert_rounded)),
+                  ButtonSegment(value: true, label: Text('Ревизии'), icon: Icon(Icons.fact_check_outlined)),
+                ],
+                selected: {_audits},
+                onSelectionChanged: (v) => setState(() => _audits = v.first),
+              ),
+              const SizedBox(height: 14),
+              if (_audits) ..._auditList(context, s, church) else ...[
+              TextField(
+                decoration: const InputDecoration(
+                    hintText: 'Търсене: причина, събитие, име', prefixIcon: Icon(Icons.search_rounded)),
+                onChanged: (v) => setState(() => _q = v),
+              ),
+              const SizedBox(height: 10),
               SegmentedButton<StockSection?>(
                 showSelectedIcon: false,
                 segments: const [
@@ -603,8 +653,338 @@ class _StockBookScreenState extends State<StockBookScreen> {
                 ],
                 _BookRow(move: m),
               ],
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _auditList(BuildContext context, AppState s, String church) {
+    final p = Palette.of(context);
+    final batches = s.stockAudits(church);
+    return [
+      Text('Ревизията е само проверка: записва преброеното и разликата с книгата, без да мени наличността.',
+          style: TextStyle(fontSize: 14, color: p.textMuted)),
+      const SizedBox(height: 10),
+      if (batches.isEmpty) Text('Още няма ревизии.', style: TextStyle(fontSize: 16, color: p.textMuted)),
+      for (final b in batches)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: SurfaceCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text('Ревизия · ${_stamp.format(b.first.createdAt)}',
+                  style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
+              Text([s.priestName(b.first.createdBy), if (b.first.note.isNotEmpty) b.first.note].join(' · '),
+                  style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+              const SizedBox(height: 8),
+              for (final a in b) _AuditLine(audit: a),
+            ]),
+          ),
+        ),
+    ];
+  }
+}
+
+class _AuditLine extends StatelessWidget {
+  final StockAudit audit;
+  const _AuditLine({required this.audit});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final a = audit;
+    final d = a.diff;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        Expanded(child: Text(a.item.label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
+        Text('книга ${a.bookQty} · преброено ${a.counted}', style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 70,
+          child: Text(
+              d == 0 ? 'точно' : '${d > 0 ? '+' : '−'}${a.item.qty(d.abs())}',
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  color: d == 0 ? Colors.green.shade700 : (d < 0 ? _red : Colors.orange.shade700))),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Ревизия: преброявате, Кайрос показва разликата. Само проверка.
+class StockAuditScreen extends StatefulWidget {
+  const StockAuditScreen({super.key});
+
+  @override
+  State<StockAuditScreen> createState() => _StockAuditScreenState();
+}
+
+class _StockAuditScreenState extends State<StockAuditScreen> {
+  final _c = {for (final i in StockItem.values) i: TextEditingController()};
+  final _note = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final church = s.currentChurchId!;
+    final bal = s.stockOf(church);
+    Widget line(StockItem i) {
+      final n = int.tryParse(_c[i]!.text.trim());
+      final d = n == null ? null : n - bal[i]!;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(i.label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text('по книга ${i.qty(bal[i]!)}', style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+              if (d != null)
+                Text(d == 0 ? 'съвпада' : (d < 0 ? 'липсват ${i.qty(-d)}' : 'в повече ${i.qty(d)}'),
+                    style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: d == 0 ? Colors.green.shade700 : (d < 0 ? _red : Colors.orange.shade700))),
+            ]),
+          ),
+          SizedBox(
+            width: 110,
+            child: TextField(
+              controller: _c[i],
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              decoration: InputDecoration(hintText: 'преброено', suffixText: i.unit),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Ревизия')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          children: [
+            Text(
+                'Преброете и въведете колко има реално. Попълнете само видовете, които сте броили. '
+                'Ревизията е проверка – не променя наличността и не влиза в складовата книга.',
+                style: TextStyle(fontSize: 14.5, color: p.textMuted, height: 1.4)),
+            const SizedBox(height: 14),
+            const Text('Свещи', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            for (final i in StockItem.values.where((i) => i.section == StockSection.candles)) line(i),
+            const SizedBox(height: 8),
+            const Text('Ценни книжа', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            for (final i in StockItem.values.where((i) => i.section == StockSection.papers)) line(i),
+            TextField(controller: _note, decoration: const InputDecoration(hintText: 'Бележка (по желание)')),
+            const SizedBox(height: 16),
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      final counted = <StockItem, int>{
+                        for (final e in _c.entries)
+                          if (int.tryParse(e.value.text.trim()) != null) e.key: int.parse(e.value.text.trim()),
+                      };
+                      if (counted.isEmpty) {
+                        showMessage(context, 'Въведете поне едно преброено количество.');
+                        return;
+                      }
+                      if (counted.values.any((v) => v < 0)) {
+                        showMessage(context, 'Количествата не могат да са отрицателни.');
+                        return;
+                      }
+                      setState(() => _saving = true);
+                      final nav = Navigator.of(context);
+                      final m = ScaffoldMessenger.of(context);
+                      try {
+                        await s.saveAudit(church, counted, _note.text.trim());
+                        nav.pop();
+                        m.showSnackBar(const SnackBar(content: Text('Ревизията е записана в раздел „Ревизии“.')));
+                      } on AppError catch (e) {
+                        if (!mounted) return;
+                        setState(() => _saving = false);
+                        m.showSnackBar(SnackBar(content: Text(e.message)));
+                      }
+                    },
+              child: const Text('Запиши ревизията'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Поръчка: всички видове с наличностите; въвеждате колко да се поръча
+/// и пращате списъка (Viber, WhatsApp или копиране).
+class StockOrderScreen extends StatefulWidget {
+  const StockOrderScreen({super.key});
+
+  @override
+  State<StockOrderScreen> createState() => _StockOrderScreenState();
+}
+
+class _StockOrderScreenState extends State<StockOrderScreen> {
+  final _c = {for (final i in StockItem.values) i: TextEditingController()};
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  String _text(AppState s) {
+    final church = s.currentChurch!;
+    final lines = [
+      for (final e in _c.entries)
+        if ((int.tryParse(e.value.text.trim()) ?? 0) > 0) '• ${e.key.label}: ${e.key.qty(int.parse(e.value.text.trim()))}',
+    ];
+    return 'Поръчка за склада – ${church.name}, ${church.settlement}\n'
+        '${DateFormat('d MMMM y', 'bg').format(DateTime.now())}\n\n${lines.join('\n')}\n\n– ${s.currentUser?.fullName ?? ''}';
+  }
+
+  Future<void> _send(BuildContext context, AppState s, String how) async {
+    if (!_c.values.any((c) => (int.tryParse(c.text.trim()) ?? 0) > 0)) {
+      showMessage(context, 'Въведете какво да се поръча.');
+      return;
+    }
+    final text = _text(s);
+    if (how == 'copy') {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (context.mounted) showMessage(context, 'Списъкът е копиран.');
+      return;
+    }
+    final uri = how == 'viber'
+        ? Uri.parse('viber://forward?text=${Uri.encodeComponent(text)}')
+        : Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+    var ok = false;
+    try {
+      ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!ok && context.mounted) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (context.mounted) {
+        showMessage(context, '${how == 'viber' ? 'Viber' : 'WhatsApp'} не се отвори – списъкът е копиран.');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final church = s.currentChurchId!;
+    final bal = s.stockOf(church);
+    final items = [...StockItem.values]
+      ..sort((a, b) {
+        final la = bal[a]! <= s.stockMin(church, a) ? 0 : 1;
+        final lb = bal[b]! <= s.stockMin(church, b) ? 0 : 1;
+        return la != lb ? la - lb : a.index - b.index;
+      });
+    return Scaffold(
+      appBar: AppBar(title: const Text('Поръчка')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          children: [
+            Text('Видовете под границата са най-отгоре. Попълнете колко да се поръча и изпратете списъка.',
+                style: TextStyle(fontSize: 14.5, color: p.textMuted, height: 1.4)),
+            const SizedBox(height: 14),
+            for (final i in items)
+              Builder(builder: (context) {
+                final alert = stockAlert(bal[i]!, s.stockMin(church, i));
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: p.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: alert ?? p.border, width: alert != null ? 2 : 1),
+                  ),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(i.label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                        Text('налично ${i.qty(bal[i]!)}${alert != null ? ' · под границата' : ''}',
+                            style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: alert != null ? FontWeight.w700 : FontWeight.w400,
+                                color: alert == _red ? _red : p.textMuted)),
+                      ]),
+                    ),
+                    SizedBox(
+                      width: 110,
+                      child: TextField(
+                        controller: _c[i],
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                        decoration: InputDecoration(hintText: '0', suffixText: i.unit),
+                      ),
+                    ),
+                  ]),
+                );
+              }),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+                backgroundColor: const Color(0xFF7360F2),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => _send(context, s, 'viber'),
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+              label: const Text('Изпрати по Viber'),
+            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    backgroundColor: const Color(0xFF1FA855),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => _send(context, s, 'whatsapp'),
+                  icon: const Icon(Icons.chat_outlined),
+                  label: const Text('WhatsApp'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  onPressed: () => _send(context, s, 'copy'),
+                  icon: const Icon(Icons.copy_rounded),
+                  label: const Text('Копирай'),
+                ),
+              ),
+            ]),
+          ],
         ),
       ),
     );
