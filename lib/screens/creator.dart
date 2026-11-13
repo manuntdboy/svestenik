@@ -78,8 +78,8 @@ class _CreatorScreenState extends State<CreatorScreen> {
                     )
                   : TabBarView(children: [
                       _Overview(d!, onRefresh: _load),
-                      _People(d!, onRefresh: _load),
-                      _Churches(d!, onRefresh: _load),
+                      _People(d, onRefresh: _load),
+                      _Churches(d, onRefresh: _load),
                     ]),
         ),
       ),
