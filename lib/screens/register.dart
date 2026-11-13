@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'privacy.dart';
 import '../data/app_state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -15,6 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _name = TextEditingController();
   final _user = TextEditingController();
   final _email = TextEditingController();
+  bool _agree = false;
   final _pass = TextEditingController();
   final _pass2 = TextEditingController();
   bool _show = false;
@@ -127,8 +129,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         color: Theme.of(context).colorScheme.error,
                         fontWeight: FontWeight.w600)),
               ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _agree,
+              onChanged: (v) => setState(() => _agree = v ?? false),
+              title: const Text('Прочетох и съм съгласен с „Лични данни и поверителност“',
+                  style: TextStyle(fontSize: 16)),
+              subtitle: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  onPressed: () =>
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyScreen())),
+                  child: const Text('Прочети'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             FilledButton(
-              onPressed: _busy ? null : _submit,
+              onPressed: _busy || !_agree ? null : _submit,
               child: const Text('Създай профил'),
             ),
           ],

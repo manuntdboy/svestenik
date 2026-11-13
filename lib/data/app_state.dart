@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models.dart';
 import 'notifier.dart';
 import 'push.dart';
+import '../screens/privacy.dart' show kPrivacyVersion;
 import '../widgets/whats_new.dart' show buildNumber;
 
 /// Адрес и публичен ключ на Supabase. Подават се при изграждането
@@ -345,6 +346,18 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Приел ли е текущия текст за личните данни.
+  bool get needsPrivacy => currentUser != null && currentUser!.privacyVersion < kPrivacyVersion;
+
+  Future<void> acceptPrivacy() async {
+    try {
+      await _db.rpc('privacy_accept', params: {'p_version': kPrivacyVersion});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Влязъл е с временна парола от председателя – трябва да си избере своя.
   bool mustChangePassword = false;
 
@@ -447,6 +460,10 @@ class AppState extends ChangeNotifier {
         return 'Профилът е създаден. Отворете писмото, което изпратихме на ${email.trim()}, '
             'потвърдете имейла и после влезте.';
       }
+      // Съгласието е дадено с отметката при регистрацията.
+      try {
+        await _db.rpc('privacy_accept', params: {'p_version': kPrivacyVersion});
+      } catch (_) {}
       currentChurchId = null;
       await _prefs.remove(_kChurch);
       loading = true;

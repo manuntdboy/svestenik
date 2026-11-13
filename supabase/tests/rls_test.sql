@@ -725,6 +725,10 @@ select t.ok(public.password_must_change(), 'след временна парол
 select public.password_changed() \g /dev/null
 select t.ok(not public.password_must_change(), 'след смяната повече не се иска');
 select t.fails($$select * from password_resets$$, 'дневникът на паролите е затворен', 'permission denied');
+select t.as_user(:'C');
+select public.privacy_accept(1) \g /dev/null
+select t.ok((select privacy_version from profiles where id = :'C') = 1
+            and (select privacy_accepted_at from profiles where id = :'C') is not null, 'съгласието за личните данни се записва');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

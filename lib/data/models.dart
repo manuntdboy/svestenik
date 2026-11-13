@@ -63,6 +63,8 @@ class AppUser {
   /// Телефон за колегите (по желание).
   final String phone;
   final String email;
+  /// Коя версия на текста за личните данни е приел (0 = още не).
+  final int privacyVersion;
 
   AppUser({
     required this.id,
@@ -71,6 +73,7 @@ class AppUser {
     this.rank,
     this.phone = '',
     this.email = '',
+    this.privacyVersion = 0,
   }) : name = fullName;
 
   /// Името за показване – със сана отпред, ако е избран.
@@ -83,6 +86,7 @@ class AppUser {
         rank: ClergyRank.fromCode(r['rank']),
         phone: (r['phone'] as String?) ?? '',
         email: email,
+        privacyVersion: (r['privacy_version'] as num?)?.toInt() ?? 0,
       );
 }
 
