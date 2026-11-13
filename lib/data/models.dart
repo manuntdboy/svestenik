@@ -816,8 +816,10 @@ class CashSettings {
 enum StockSection { candles, papers }
 
 enum StockItem {
-  candle040('candle_040', 'Свещи 0,40 €', StockSection.candles, 5),
+  candle020('candle_020', 'Свещи 0,20 €', StockSection.candles, 5),
+  candle050('candle_050', 'Свещи 0,50 €', StockSection.candles, 5),
   candle1('candle_1', 'Свещи 1 €', StockSection.candles, 3),
+  candle2('candle_2', 'Свещи 2 €', StockSection.candles, 2),
   candle4('candle_4', 'Свещи 4 €', StockSection.candles, 1),
   certBaptism('cert_baptism', 'Кръщелни свидетелства', StockSection.papers, 10),
   certWedding('cert_wedding', 'Венчални свидетелства', StockSection.papers, 10),

@@ -661,8 +661,8 @@ select id as don from public.cash_add(:'cid2','income',25,'Дарение',null,
 select public.cash_set_donor(:'don', 'Иван Петров') \g /dev/null
 select t.as_user(:'B');
 select t.ok((select donor from cash_entries where id = :'don') = 'Иван Петров', 'дарителят се записва към дарението');
-select public.stock_set_threshold(:'cid2', 'candle_040', 8);
-select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_040') = 8, 'границата за предупреждение се настройва');
+select public.stock_set_threshold(:'cid2', 'candle_020', 8);
+select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_020') = 8, 'границата за предупреждение се настройва');
 select t.fails($$insert into stock_moves(church_id, item, qty, kind) values (gen_random_uuid(), 'diploma', 1, 'load')$$,
                'складът не се пише директно', 'row-level security');
 select t.as_user(:'A');

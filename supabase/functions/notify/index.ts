@@ -292,7 +292,8 @@ async function handle(req: Request): Promise<Response> {
     const { data: mv } = await admin.from("stock_moves").select("*").eq("id", moveId).maybeSingle();
     if (!mv) return json(404, { error: "not_found" });
     const ITEMS: Record<string, [string, string]> = {
-      candle_040: ["свещи 0,40 €", "кг"], candle_1: ["свещи 1 €", "кг"], candle_4: ["свещи 4 €", "кг"],
+      candle_020: ["свещи 0,20 €", "кг"], candle_050: ["свещи 0,50 €", "кг"], candle_1: ["свещи 1 €", "кг"],
+      candle_2: ["свещи 2 €", "кг"], candle_4: ["свещи 4 €", "кг"],
       cert_baptism: ["кръщелни свидетелства", "бр."], cert_wedding: ["венчални свидетелства", "бр."],
       diploma: ["грамоти", "бр."],
     };
