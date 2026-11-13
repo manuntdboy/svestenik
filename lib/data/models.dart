@@ -100,6 +100,7 @@ class Church {
   final String? chairProposedById;
   final bool cashEnabled; // касата е включена за храма (решава създателят)
   final bool stockEnabled;
+  final bool approvalsToggleAllowed; // създателят разрешава тестовия режим без второ одобрение
 
   Church({
     required this.id,
@@ -111,6 +112,7 @@ class Church {
     this.chairProposedById,
     this.cashEnabled = true,
     this.stockEnabled = true,
+    this.approvalsToggleAllowed = false,
   });
 
   String get place => '$settlement, общ. $municipality';
@@ -125,6 +127,7 @@ class Church {
         chairProposedById: r['chair_proposed_by'] as String?,
         cashEnabled: (r['cash_enabled'] as bool?) ?? true,
         stockEnabled: (r['stock_enabled'] as bool?) ?? true,
+        approvalsToggleAllowed: (r['approvals_toggle_allowed'] as bool?) ?? false,
       );
 }
 

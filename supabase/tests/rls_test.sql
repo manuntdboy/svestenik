@@ -582,6 +582,12 @@ select t.fails(format('select public.cash_close_request(%L, %L)', :'cid2', :'pre
 select t.as_user(:'B');
 select t.fails(format('select public.cash_save_settings(%L, 100, true, true)', :'cid2'), 'само председателят изключва одобрението', 'not_manager');
 select t.as_user(:'D');
+select t.fails(format('select public.cash_save_settings(%L, 100, true, true)', :'cid2'),
+               'без разрешение от създателя председателят не изключва одобрението', 'approvals_locked');
+reset role;
+update churches set approvals_toggle_allowed = true where id = :'cid2';
+set role authenticated;
+select t.as_user(:'D');
 select public.cash_save_settings(:'cid2', 100, true, true) \g /dev/null
 select id as off1 from public.cash_add(:'cid2','expense',900,'Ремонти',null,null,'cash',null,null,null) \gset
 select t.ok((select status = 'approved' and auto_reason = 'off' from cash_entries where id = :'off1'),

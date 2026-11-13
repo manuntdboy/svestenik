@@ -337,6 +337,7 @@ class AppState extends ChangeNotifier {
       return 'Новата парола трябва да е различна от старата.';
     }
     if (t.contains('weak_password') || t.contains('at least')) return 'Паролата е твърде кратка – поне 6 знака.';
+    if (t.contains('approvals_locked')) return 'Второто одобрение е задължително (решение на създателя).';
     if (t.contains('amount_check')) return 'Сумата е твърде голяма – най-много 12 цифри.';
     if (t.contains('duty_overlap')) return 'В тези дни вече има дежурен. Изберете други дати.';
     if (t.contains('duty_too_long')) return 'Едно дежурство е най-много 2 месеца.';

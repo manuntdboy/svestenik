@@ -709,7 +709,12 @@ class _ChurchControlsState extends State<_ChurchControls> {
       const Divider(height: 20),
       sw('Каса', v('cash', true), (x) => _set(cash: x)),
       sw('Склад', v('stock', true), (x) => _set(stock: x)),
-      sw('Без второ одобрение (тест)', v('approvals_off', false), (x) => _set(off: x)),
+      sw('Тестов режим без второ одобрение', v('approvals_allowed', false), (x) => _set(off: x)),
+      Text(
+          v('approvals_allowed', false)
+              ? 'Разрешено – председателят сам го пуска и спира (сега: ${v('approvals_off', false) ? 'пуснат' : 'спрян'}).'
+              : 'Заключено – второто одобрение е задължително.',
+          style: TextStyle(fontSize: 13, color: Palette.of(context).textMuted)),
       Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(

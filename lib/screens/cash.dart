@@ -406,6 +406,19 @@ class _CashScreenState extends State<CashScreen> {
               subtitle: const Text('Брой и банка се водят отделно; внасяне и теглене минават през двамата.'),
             ),
             const Divider(),
+            if (s.currentChurch?.approvalsToggleAllowed != true)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(children: [
+                  const Icon(Icons.lock_outline_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Второто одобрение е задължително (решение на създателя).',
+                        style: TextStyle(fontSize: 14.5, color: Palette.of(ctx).textMuted)),
+                  ),
+                ]),
+              )
+            else
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: off,
