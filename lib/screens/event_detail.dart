@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'cash.dart';
 import 'event_form.dart';
+import 'priest_profile.dart';
 import '../widgets/requests.dart';
 
 class EventDetailScreen extends StatelessWidget {
@@ -127,13 +128,24 @@ class EventDetailScreen extends StatelessWidget {
                       child: ContactButtons(e.phone),
                     ),
                   ],
-                  row('Свещеник',
-                      s.isMine(e) ? '${s.priestName(e.assigneeId)} (аз)' : s.priestName(e.assigneeId),
-                      trailing: PriestBadge(
-                          name: s.priestName(e.assigneeId),
-                          color: p.priest(s.priestIndex(e.churchId, e.assigneeId)),
-                          size: 40,
-                          userId: e.assigneeId)),
+                  // Натискане → профилът на свещеника.
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => PriestProfileScreen(churchId: e.churchId, userId: e.assigneeId))),
+                    child: row('Свещеник',
+                        s.isMine(e) ? '${s.priestName(e.assigneeId)} (аз)' : s.priestName(e.assigneeId),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          PriestBadge(
+                              name: s.priestName(e.assigneeId),
+                              color: p.priest(s.priestIndex(e.churchId, e.assigneeId)),
+                              size: 40,
+                              userId: e.assigneeId),
+                          Icon(Icons.chevron_right_rounded, color: p.textMuted),
+                        ])),
+                  ),
                   row('Къде', e.outsideChurch ? 'Извън храма' : 'В храма'),
                   if (e.outsideChurch && e.fullAddress.isNotEmpty)
                     row('Адрес', e.fullAddress,

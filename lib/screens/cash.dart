@@ -89,7 +89,7 @@ class _CashScreenState extends State<CashScreen> {
     final tabs = [CashBook.income, CashBook.expense, if (st.hasBank) CashBook.transfer, null];
     if (!tabs.contains(_tab)) _tab = CashBook.income;
     final shown = (_tab == null
-            ? [...waiting, ...returned]
+            ? [...waiting]
             : all.where((e) => e.isApproved && e.book == _tab).toList())
         .where(_filter.matches)
         .toList();
@@ -105,7 +105,7 @@ class _CashScreenState extends State<CashScreen> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: cash + bank < 0 ? _negativeBg : p.heroBg,
+            color: cash < 0 || cash + bank < 0 ? _negativeBg : p.heroBg,
             borderRadius: BorderRadius.circular(24),
             border: pendingCount > 0 ? Border.all(color: Palette.yellow, width: 4) : null,
             boxShadow: pendingCount > 0
@@ -126,13 +126,14 @@ class _CashScreenState extends State<CashScreen> {
                   ),
                 ),
               ),
-            Text(cash + bank < 0 ? 'Касата е на минус' : 'В касата на храма',
+            // Едро – парите в брой в храма; банката и общото – отдолу.
+            Text(cash < 0 ? 'Касата е на минус' : 'В брой в храма',
                 style: TextStyle(
                     fontSize: 15,
-                    color: cash + bank < 0 ? Colors.white : p.heroMuted,
-                    fontWeight: cash + bank < 0 ? FontWeight.w800 : FontWeight.w400)),
+                    color: cash < 0 ? Colors.white : p.heroMuted,
+                    fontWeight: cash < 0 ? FontWeight.w800 : FontWeight.w400)),
             const SizedBox(height: 4),
-            Text(fmtEur(cash + bank),
+            Text(fmtEur(cash),
                 style: TextStyle(
                     fontSize: 38,
                     fontWeight: FontWeight.w800,
@@ -140,7 +141,7 @@ class _CashScreenState extends State<CashScreen> {
                     fontFeatures: const [FontFeature.tabularFigures()])),
             if (st.hasBank) ...[
               const SizedBox(height: 6),
-              Text('Брой ${fmtEur(cash)}  ·  Банка ${fmtEur(bank)}',
+              Text('Банка ${fmtEur(bank)}  ·  Общо ${fmtEur(cash + bank)}',
                   style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 14),
@@ -236,7 +237,7 @@ class _CashScreenState extends State<CashScreen> {
                   book: t,
                   selected: _tab == t,
                   count: t == null
-                      ? waiting.length + returned.length
+                      ? waiting.length
                       : all.where((e) => e.isApproved && e.book == t).length,
                   onTap: () => setState(() => _tab = t),
                 ),
@@ -250,7 +251,7 @@ class _CashScreenState extends State<CashScreen> {
               padding: const EdgeInsets.only(left: 12),
               decoration:
                   BoxDecoration(border: Border(left: BorderSide(color: bookColor(context, _tab), width: 5))),
-              child: Text(_tab == null ? 'Чакащи и върнати' : _tab!.bookName,
+              child: Text(_tab == null ? 'Чакат одобрение' : _tab!.bookName,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             ),
           ),
@@ -287,11 +288,22 @@ class _CashScreenState extends State<CashScreen> {
                 _filter.isActive
                     ? 'Няма записи по този филтър.'
                     : _tab == null
-                        ? 'Няма чакащи или върнати записи.'
+                        ? 'Няма записи, които чакат одобрение.'
                         : 'Още няма записи в тази книга.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
           ),
         for (final e in shown) CashRow(entry: e),
+        // Върнатите не влизат в книгите; остават само за историята.
+        if (_tab == null && returned.where(_filter.matches).isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Text('Върнати – само за сведение', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: p.textMuted)),
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 8),
+            child: Text('Не влизат в книгите и не се броят. Пазят се, защото записите не се трият.',
+                style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+          ),
+          for (final e in returned.where(_filter.matches)) Opacity(opacity: .7, child: CashRow(entry: e)),
+        ],
       ],
     );
   }
