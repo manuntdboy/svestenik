@@ -951,3 +951,99 @@ class StockAudit {
         createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
       );
 }
+
+// ---------------------------------------------------------------------
+// График на дежурствата
+// ---------------------------------------------------------------------
+
+DateTime _dateOf(String s) {
+  final p = DateTime.parse(s);
+  return DateTime(p.year, p.month, p.day);
+}
+
+/// Дежурство: свещеник от начало до край (включително).
+class Duty {
+  final String id;
+  final String churchId;
+  final String userId;
+  final DateTime start;
+  final DateTime end;
+  final String note;
+
+  Duty({
+    required this.id,
+    required this.churchId,
+    required this.userId,
+    required this.start,
+    required this.end,
+    this.note = '',
+  });
+
+  bool covers(DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    return !d.isBefore(start) && !d.isAfter(end);
+  }
+
+  int get days => end.difference(start).inDays + 1;
+
+  bool overlaps(DateTime a, DateTime b) => !start.isAfter(b) && !end.isBefore(a);
+
+  factory Duty.fromRow(Map<String, dynamic> r) => Duty(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        userId: r['user_id'] as String,
+        start: _dateOf(r['start_date'] as String),
+        end: _dateOf(r['end_date'] as String),
+        note: (r['note'] as String?) ?? '',
+      );
+}
+
+/// Размяна на дежурства: колегата приема → председателят одобрява.
+class DutySwap {
+  final String id;
+  final String churchId;
+  final String fromDuty;
+  final String toDuty;
+  final String fromUser;
+  final String toUser;
+  final String note;
+  final String status; // peer / chair / approved / rejected / cancelled
+  final String reason;
+  final DateTime createdAt;
+
+  DutySwap({
+    required this.id,
+    required this.churchId,
+    required this.fromDuty,
+    required this.toDuty,
+    required this.fromUser,
+    required this.toUser,
+    this.note = '',
+    required this.status,
+    this.reason = '',
+    required this.createdAt,
+  });
+
+  bool get isOpen => status == 'peer' || status == 'chair';
+
+  String get statusLabel => switch (status) {
+        'peer' => 'чака колегата',
+        'chair' => 'чака председателя',
+        'approved' => 'одобрена',
+        'rejected' => 'не е приета',
+        _ => 'оттеглена',
+      };
+
+  factory DutySwap.fromRow(Map<String, dynamic> r) => DutySwap(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        fromDuty: r['from_duty'] as String,
+        toDuty: r['to_duty'] as String,
+        fromUser: r['from_user'] as String,
+        toUser: r['to_user'] as String,
+        note: (r['note'] as String?) ?? '',
+        status: (r['status'] as String?) ?? 'peer',
+        reason: (r['reason'] as String?) ?? '',
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+      );
+}

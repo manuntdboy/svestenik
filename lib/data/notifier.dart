@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -187,10 +188,36 @@ class Notifier {
   }
 
   /// Пренасрочва всички напомняния (при вход или стартиране).
-  static Future<void> rescheduleAll(Iterable<ChurchEvent> events) async {
+  static Future<void> rescheduleAll(Iterable<ChurchEvent> events, {Iterable<Duty> duties = const []}) async {
     await cancelAll();
     for (final e in events) {
       await schedule(e);
+    }
+    for (final d in duties) {
+      await scheduleDuty(d);
+    }
+  }
+
+  /// Напомняне вечерта преди дежурството (19:00): „От утре сте дежурен“.
+  static Future<void> scheduleDuty(Duty d) async {
+    if (!_ready) return;
+    final day = d.start.subtract(const Duration(days: 1));
+    final when = DateTime(day.year, day.month, day.day, 19);
+    if (!when.isAfter(DateTime.now())) return;
+    final f = DateFormat('d MMMM', 'bg');
+    final period = d.start == d.end ? f.format(d.start) : '${f.format(d.start)} – ${f.format(d.end)}';
+    try {
+      await _plugin.zonedSchedule(
+        id: _idFor('duty:${d.id}'),
+        title: 'От утре сте дежурен',
+        body: period,
+        payload: jsonEncode({'type': 'duty', 'church_id': d.churchId}),
+        scheduledDate: tz.TZDateTime.from(when, tz.UTC),
+        notificationDetails: _details,
+        androidScheduleMode: await _mode(),
+      );
+    } catch (err) {
+      debugPrint('Не може да се планира напомняне за дежурство: $err');
     }
   }
 

@@ -9,6 +9,7 @@ import '../widgets/common.dart';
 import 'event_detail.dart';
 import 'event_form.dart';
 import 'leaves.dart';
+import 'duties.dart';
 import 'search.dart';
 import '../widgets/requests.dart';
 import '../widgets/church_banner.dart';
@@ -86,6 +87,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           for (final id in s.priestsOn(d)) p.priest(s.priestIndex(s.currentChurchId!, id)),
         ];
     int countFor(DateTime d) => s.eventsOn(d).where((e) => !e.isCancelled).length;
+    // Дежурният в деня – датата е в неговия цвят.
+    Color? dutyFor(DateTime d) {
+      final du = s.dutyOn(s.currentChurchId!, d);
+      return du == null ? null : p.priest(s.priestIndex(du.churchId, du.userId));
+    }
     bool archiFor(DateTime d) => s.eventsOn(d).any((e) => e.kind.occupiesChurch && !e.isCancelled);
     final monthTitle = '${capitalize(DateFormat('LLLL', 'bg').format(_selected))} ${_selected.year}';
 
@@ -105,6 +111,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 _RoundButton(Icons.search_rounded, 'Търсене',
                     () => Navigator.push(
                         context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+                    size: 40),
+                const SizedBox(width: 8),
+                _RoundButton(Icons.event_repeat_rounded, 'График на дежурствата',
+                    () => Navigator.push(
+                        context, MaterialPageRoute(builder: (_) => const DutyScreen())),
                     size: 40),
                 const SizedBox(width: 8),
                 _RoundButton(Icons.beach_access_outlined, 'Почивки',
@@ -149,6 +160,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 leaves: leavesFor,
                 count: countFor,
                 archi: archiFor,
+                duty: dutyFor,
                 onSelect: (d) => setState(() => _selected = d),
               )
             else
@@ -159,6 +171,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 leaves: leavesFor,
                 count: countFor,
                 archi: archiFor,
+                duty: dutyFor,
                 onSelect: (d) => setState(() => _selected = d),
               ),
             const SizedBox(height: 14),
@@ -210,6 +223,30 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ],
         ),
       ),
+      if (s.dutyOn(s.currentChurchId!, day) case final du?)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DutyScreen())),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: p.priest(s.priestIndex(du.churchId, du.userId)).withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: p.priest(s.priestIndex(du.churchId, du.userId)), width: 1.5),
+              ),
+              child: Row(children: [
+                Icon(Icons.event_repeat_rounded, color: p.priest(s.priestIndex(du.churchId, du.userId))),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Дежурен: ${s.priestName(du.userId)} · ${fmtDutyPeriod(du.start, du.end)}',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ]),
+            ),
+          ),
+        ),
       // Почивки в този ден: одобрените виждат всички, чакащите – председателят и заявилият.
       for (final l in leaves)
         Padding(
@@ -352,6 +389,7 @@ class _DayCell extends StatelessWidget {
   final bool dimmed;
   final int count; // събития в деня (без отменените)
   final bool archi; // Архиерейска Литургия
+  final Color? duty; // цветът на дежурния свещеник
   final VoidCallback onTap;
   const _DayCell(
       {required this.day,
@@ -361,7 +399,8 @@ class _DayCell extends StatelessWidget {
       required this.onTap,
       this.dimmed = false,
       this.count = 0,
-      this.archi = false});
+      this.archi = false,
+      this.duty});
 
   @override
   Widget build(BuildContext context) {
@@ -372,7 +411,8 @@ class _DayCell extends StatelessWidget {
         (selected ? ', избран' : '') +
         (count > 0 ? ', събития: $count' : '') +
         (archi ? ', Архиерейска Литургия' : '') +
-        (leaves.isNotEmpty ? ', почивка' : '');
+        (leaves.isNotEmpty ? ', почивка' : '') +
+        (duty != null ? ', има дежурен' : '');
     return Semantics(
       label: label,
       button: true,
@@ -411,10 +451,18 @@ class _DayCell extends StatelessWidget {
                           ? p.onPrimary
                           : dimmed
                               ? p.textMuted.withValues(alpha: 0.5)
-                              : p.text)),
+                              : duty ?? p.text)),
             ),
           ),
-          const SizedBox(height: 2),
+          // Лента в цвета на дежурния – дежурството се вижда като непрекъсната линия.
+          Container(
+            height: 4,
+            margin: const EdgeInsets.only(top: 2),
+            decoration: BoxDecoration(
+              color: duty?.withValues(alpha: dimmed ? .35 : 1),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           // Точки под деня: по една в цвета на всеки свещеник със събитие;
           // плажен чадър в цвета на свещеника, който почива.
           SizedBox(
@@ -450,6 +498,7 @@ class _WeekStrip extends StatelessWidget {
   final List<Color> Function(DateTime) leaves;
   final int Function(DateTime) count;
   final bool Function(DateTime) archi;
+  final Color? Function(DateTime)? duty;
   final ValueChanged<DateTime> onSelect;
   const _WeekStrip(
       {required this.weekStart,
@@ -458,6 +507,7 @@ class _WeekStrip extends StatelessWidget {
       required this.leaves,
       required this.count,
       required this.archi,
+      this.duty,
       required this.onSelect});
 
   @override
@@ -488,6 +538,7 @@ class _WeekStrip extends StatelessWidget {
                     leaves: leaves(d),
                     count: count(d),
                     archi: archi(d),
+                    duty: duty?.call(d),
                     onTap: () => onSelect(d),
                   ),
                 ],
@@ -506,6 +557,7 @@ class _MonthGrid extends StatelessWidget {
   final List<Color> Function(DateTime) leaves;
   final int Function(DateTime) count;
   final bool Function(DateTime) archi;
+  final Color? Function(DateTime)? duty;
   final ValueChanged<DateTime> onSelect;
   const _MonthGrid(
       {required this.month,
@@ -514,6 +566,7 @@ class _MonthGrid extends StatelessWidget {
       required this.leaves,
       required this.count,
       required this.archi,
+      this.duty,
       required this.onSelect});
 
   @override
@@ -559,6 +612,7 @@ class _MonthGrid extends StatelessWidget {
                           leaves: leaves(d),
                           count: count(d),
                           archi: archi(d),
+                          duty: duty?.call(d),
                           dimmed: d.month != month.month,
                           onTap: () => onSelect(d),
                         ),

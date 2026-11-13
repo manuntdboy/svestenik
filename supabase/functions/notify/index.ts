@@ -127,7 +127,71 @@ async function handle(req: Request): Promise<Response> {
   let text = "";
   let data: Record<string, string> = {};
 
-  if (type === "join_request") {
+  const fmtD = (d: string) =>
+    new Date(d + "T12:00:00Z").toLocaleDateString("bg-BG", { day: "numeric", month: "long" });
+  const rangeD = (a: string, b: string) => (a === b ? fmtD(a) : `${fmtD(a)} – ${fmtD(b)}`);
+
+  if (type === "duty") {
+    // Промени в графика на дежурствата → до засегнатия свещеник (един ред на човек).
+    const userId = String(body.user_id ?? "");
+    const ids = (Array.isArray(body.log_ids) ? body.log_ids : []).map((x) => Number(x)).filter((x) => x > 0);
+    if (!userId || ids.length === 0) return json(400, { error: "bad_request" });
+    const { data: logs } = await admin.from("duty_log").select("*").in("id", ids.slice(0, 120))
+      .eq("user_id", userId).eq("by_user", caller.id)
+      .gte("at", new Date(Date.now() - 15 * 60 * 1000).toISOString()).order("start_date");
+    if (!logs || logs.length === 0) return json(404, { error: "not_found" });
+    const add = logs.filter((l) => l.kind === "assigned").map((l) => rangeD(l.start_date, l.end_date));
+    const rem = logs.filter((l) => l.kind === "removed").map((l) => rangeD(l.start_date, l.end_date));
+    const chg = logs.filter((l) => l.kind === "changed").map((l) => rangeD(l.start_date, l.end_date));
+    const lines: string[] = [];
+    if (add.length) lines.push(`Дежурен сте: ${add.join("; ")}`);
+    if (chg.length) lines.push(`Нови дати: ${chg.join("; ")}`);
+    if (rem.length) lines.push(`Отпада: ${rem.join("; ")}`);
+    recipients = [userId];
+    title = add.length && !rem.length && !chg.length ? "Дежурство" : "Промяна в дежурствата";
+    text = `${lines.join("\n")}\n${callerName}`;
+    data = { type: "duty", church_id: String(logs[0].church_id) };
+  } else if (type === "duty_swap") {
+    const { data: w } = await admin.from("duty_swaps").select("*").eq("id", String(body.swap_id ?? "")).maybeSingle();
+    if (!w) return json(404, { error: "not_found" });
+    const { data: ds } = await admin.from("duties").select("id,start_date,end_date").in("id", [w.from_duty, w.to_duty]);
+    const a = (ds ?? []).find((d) => d.id === w.from_duty);
+    const b = (ds ?? []).find((d) => d.id === w.to_duty);
+    const ra = a ? rangeD(a.start_date, a.end_date) : "";
+    const rb = b ? rangeD(b.start_date, b.end_date) : "";
+    const { data: names } = await admin.from("profiles").select("id,full_name,rank").in("id", [w.from_user, w.to_user]);
+    const nm = (id: string) => {
+      const p = (names ?? []).find((x) => x.id === id);
+      return p ? withRank(p.rank, p.full_name) : "";
+    };
+    const { data: managers } = await admin.from("church_members").select("user_id")
+      .eq("church_id", w.church_id).eq("role", "manager").eq("status", "active");
+    const isManager = (managers ?? []).some((m) => m.user_id === caller.id);
+    const involved = caller.id === w.from_user || caller.id === w.to_user;
+    if (!involved && !isManager) return json(403, { error: "forbidden" });
+    if (w.status === "peer") {
+      recipients = [w.to_user];
+      title = "Молба за размяна на дежурство";
+      text = `${nm(w.from_user)} предлага: вашето ${rb} срещу неговото ${ra}${w.note ? "\n„" + w.note + "“" : ""}`;
+    } else if (w.status === "chair") {
+      recipients = (managers ?? []).map((m) => m.user_id);
+      title = "Размяна на дежурства чака одобрение";
+      text = `${nm(w.from_user)} (${ra}) ⇄ ${nm(w.to_user)} (${rb})`;
+    } else if (w.status === "approved") {
+      recipients = [w.from_user, w.to_user];
+      title = "Размяната на дежурства е одобрена";
+      text = `${nm(w.from_user)} поема ${rb} · ${nm(w.to_user)} поема ${ra}`;
+    } else if (w.status === "rejected") {
+      recipients = [w.from_user, w.to_user];
+      title = "Размяната на дежурства не е приета";
+      text = `${ra} ⇄ ${rb} · ${callerName}${w.reason ? "\n„" + w.reason + "“" : ""}`;
+    } else {
+      recipients = [w.to_user];
+      title = "Молбата за размяна е оттеглена";
+      text = `${ra} ⇄ ${rb}`;
+    }
+    data = { type: "duty", church_id: String(w.church_id) };
+  } else if (type === "join_request") {
     // Нов свещеник чака одобрение → до председателите на храма.
     const churchId = String(body.church_id ?? "");
     const { data: me } = await admin.from("church_members").select("status")

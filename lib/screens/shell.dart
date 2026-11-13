@@ -13,6 +13,7 @@ import 'cash.dart';
 import 'stock.dart';
 import 'event_detail.dart';
 import 'leaves.dart';
+import 'duties.dart';
 import 'home.dart';
 import 'profile.dart';
 
@@ -96,6 +97,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       nav.push(MaterialPageRoute(builder: (_) => const CashScreen()));
     } else if (type == 'stock') {
       nav.push(MaterialPageRoute(builder: (_) => const StockScreen()));
+    } else if (type.startsWith('duty')) {
+      nav.push(MaterialPageRoute(builder: (_) => const DutyScreen()));
     } else if (type.startsWith('leave_')) {
       final rid = data['request_id'];
       nav.push(MaterialPageRoute(

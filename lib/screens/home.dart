@@ -13,6 +13,7 @@ import '../widgets/church_banner.dart';
 import 'event_form.dart';
 import 'cash.dart';
 import 'stock.dart';
+import 'duties.dart';
 
 /// Начален екран – табло, вариант Б.
 class HomeScreen extends StatelessWidget {
@@ -68,6 +69,8 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const ChurchBanner(),
             const SizedBox(height: 12),
+            // Дежурен тази седмица – видимо за всички в храма.
+            const DutyNowCard(compact: true),
             _PriestsStrip(churchId: s.currentChurchId!),
             const SizedBox(height: 12),
             // Моля, потвърдете · отказани събития · заявки за почивка

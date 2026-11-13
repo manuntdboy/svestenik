@@ -130,6 +130,8 @@ const _notifyNames = {
   'leave_request': 'Заявка за почивка',
   'leave_decided': 'Решение за почивка',
   'leave_ended': 'Прекратена почивка',
+  'duty': 'Дежурство',
+  'duty_swap': 'Размяна на дежурства',
   'cash_pending': 'Каса – чака',
   'cash_decided': 'Каса – решено',
   'cash_close_pending': 'Затваряне – чака',

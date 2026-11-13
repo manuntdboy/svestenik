@@ -49,6 +49,8 @@ class AppState extends ChangeNotifier {
   final List<CashPeriod> _periods = [];
   final List<StockMove> _stock = [];
   final List<StockAudit> _audits = [];
+  final List<Duty> _duties = [];
+  final List<DutySwap> _swaps = [];
   final Map<String, int> _stockMin = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
@@ -137,6 +139,8 @@ class AppState extends ChangeNotifier {
     _periods.clear();
     _stock.clear();
     _audits.clear();
+    _duties.clear();
+    _swaps.clear();
     _stockMin.clear();
     _details.clear();
     _photos.clear();
@@ -171,6 +175,8 @@ class AppState extends ChangeNotifier {
         _db.from('stock_moves').select(),
         _db.from('stock_thresholds').select(),
         _db.from('stock_audits').select(),
+        _db.from('duties').select().order('start_date'),
+        _db.from('duty_swaps').select().order('created_at'),
       ]);
       _profiles
         ..clear()
@@ -203,6 +209,12 @@ class AppState extends ChangeNotifier {
       _audits
         ..clear()
         ..addAll(results[11].map(StockAudit.fromRow));
+      _duties
+        ..clear()
+        ..addAll(results[12].map(Duty.fromRow));
+      _swaps
+        ..clear()
+        ..addAll(results[13].map(DutySwap.fromRow));
       _stockMin.clear();
       for (final r in results[10]) {
         final it = StockItem.fromCode(r['item'] as String?);
@@ -295,6 +307,10 @@ class AppState extends ChangeNotifier {
     }
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
+    if (t.contains('duty_overlap')) return 'В тези дни вече има дежурен. Изберете други дати.';
+    if (t.contains('duty_too_long')) return 'Едно дежурство е най-много 2 месеца.';
+    if (t.contains('swap_exists')) return 'За това дежурство вече има молба за размяна.';
+    if (t.contains('duty_past')) return 'Минало дежурство не се разменя.';
     if (t.contains('leave_over')) return 'Тази почивка вече е приключила.';
     if (t.contains('last_manager')) return 'Храмът трябва да има поне един председател.';
     if (t.contains('row-level security') || t.contains('permission')) {
@@ -476,7 +492,173 @@ class AppState extends ChangeNotifier {
         e.isAccepted);
   }
 
-  Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents);
+  Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents, duties: _myDuties);
+
+  Iterable<Duty> get _myDuties {
+    final u = currentUser;
+    if (u == null) return const [];
+    final ids = myChurches.map((c) => c.id).toSet();
+    return _duties.where((d) => d.userId == u.id && ids.contains(d.churchId));
+  }
+
+  // ------------------------------------------------------------------
+  // График на дежурствата
+  // ------------------------------------------------------------------
+  List<Duty> dutiesOf(String churchId) => _duties.where((d) => d.churchId == churchId).toList()
+    ..sort((a, b) => a.start.compareTo(b.start));
+
+  Duty? dutyOn(String churchId, DateTime day) =>
+      _duties.where((d) => d.churchId == churchId && d.covers(day)).firstOrNull;
+
+  Duty? dutyById(String id) => _duties.where((d) => d.id == id).firstOrNull;
+
+  /// Дежурният днес (или следващият, ако днес няма).
+  Duty? currentDuty(String churchId) => dutyOn(churchId, DateTime.now());
+
+  Duty? nextDuty(String churchId) {
+    final n = DateTime.now();
+    final today = DateTime(n.year, n.month, n.day);
+    return dutiesOf(churchId).where((d) => d.start.isAfter(today)).firstOrNull;
+  }
+
+  /// Одобрена почивка на свещеника, която се застъпва с периода.
+  LeaveRequest? leaveConflict(String churchId, String userId, DateTime a, DateTime b) => _leaves
+      .where((l) =>
+          l.churchId == churchId &&
+          l.userId == userId &&
+          l.status == LeaveStatus.approved &&
+          !l.start.isAfter(b) &&
+          !l.end.isBefore(a))
+      .firstOrNull;
+
+  List<DutySwap> swapsOf(String churchId) =>
+      _swaps.where((w) => w.churchId == churchId).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  /// Молби за размяна към мен (чакат моя отговор).
+  List<DutySwap> swapsForMe(String churchId) =>
+      swapsOf(churchId).where((w) => w.status == 'peer' && w.toUser == currentUser?.id).toList();
+
+  /// Размени, които чакат председателя.
+  List<DutySwap> swapsForChair(String churchId) =>
+      isManagerOf(churchId) ? swapsOf(churchId).where((w) => w.status == 'chair').toList() : [];
+
+  DutySwap? openSwapFor(String dutyId) =>
+      _swaps.where((w) => w.isOpen && (w.fromDuty == dutyId || w.toDuty == dutyId)).firstOrNull;
+
+  Future<void> _dutyNotify(dynamic res) async {
+    final by = <String, List<int>>{};
+    for (final r in (res as List? ?? const [])) {
+      final m = Map<String, dynamic>.from(r as Map);
+      (by[m['user_id'] as String] ??= []).add((m['log_id'] as num).toInt());
+    }
+    for (final e in by.entries) {
+      if (e.key == currentUser?.id) continue;
+      unawaited(_invokeNotify({'type': 'duty', 'user_id': e.key, 'log_ids': e.value}));
+    }
+  }
+
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> addDuty(String churchId, String userId, DateTime start, DateTime end, String note) async {
+    try {
+      final res = await _db.rpc('duty_add', params: {
+        'p_church': churchId,
+        'p_user': userId,
+        'p_start': _iso(start),
+        'p_end': _iso(end),
+        'p_note': note.trim().isEmpty ? null : note.trim(),
+      });
+      await refresh();
+      unawaited(_dutyNotify(res));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> updateDuty(Duty d, String userId, DateTime start, DateTime end, String note) async {
+    try {
+      final res = await _db.rpc('duty_update', params: {
+        'p_duty': d.id,
+        'p_user': userId,
+        'p_start': _iso(start),
+        'p_end': _iso(end),
+        'p_note': note.trim().isEmpty ? null : note.trim(),
+      });
+      await refresh();
+      unawaited(_dutyNotify(res));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> deleteDuty(Duty d) async {
+    try {
+      final res = await _db.rpc('duty_delete', params: {'p_duty': d.id});
+      await refresh();
+      unawaited(_dutyNotify(res));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> addDutySeries(String churchId, DateTime start, int days, List<String> users, int count) async {
+    try {
+      final res = await _db.rpc('duty_series', params: {
+        'p_church': churchId,
+        'p_start': _iso(start),
+        'p_days': days,
+        'p_users': users,
+        'p_count': count,
+      });
+      await refresh();
+      unawaited(_dutyNotify(res));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> requestSwap(Duty mine, Duty other, String note) async {
+    try {
+      final r = await _db.rpc('duty_swap_request',
+          params: {'p_from': mine.id, 'p_to': other.id, 'p_note': note.trim().isEmpty ? null : note.trim()});
+      await refresh();
+      unawaited(_invokeNotify({'type': 'duty_swap', 'swap_id': (r as Map)['id']}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> answerSwap(DutySwap w, bool accept) async {
+    try {
+      await _db.rpc('duty_swap_peer', params: {'p_swap': w.id, 'p_accept': accept});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'duty_swap', 'swap_id': w.id}));
+  }
+
+  Future<void> decideSwap(DutySwap w, bool approve, String reason) async {
+    try {
+      await _db.rpc('duty_swap_decide',
+          params: {'p_swap': w.id, 'p_approve': approve, 'p_reason': reason.trim().isEmpty ? null : reason.trim()});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'duty_swap', 'swap_id': w.id}));
+  }
+
+  Future<void> cancelSwap(DutySwap w) async {
+    try {
+      await _db.rpc('duty_swap_cancel', params: {'p_swap': w.id});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'duty_swap', 'swap_id': w.id}));
+  }
 
   Future<void> logout() async {
     await Notifier.cancelAll();

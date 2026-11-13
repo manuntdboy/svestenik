@@ -8,6 +8,7 @@ import 'common.dart';
 import '../screens/cash.dart' show CashReviewCard;
 import '../screens/cash_more.dart' show CloseMonthCard;
 import '../screens/stock.dart' show LowStockCard, StockReviewCard;
+import '../screens/duties.dart' show fmtDutyPeriod;
 
 final _fmtDm = DateFormat('d MMMM', 'bg');
 final _fmtSeen = DateFormat('d MMMM, HH:mm', 'bg');
@@ -479,6 +480,12 @@ class _LeaveReviewCardState extends State<LeaveReviewCard> {
       Text('${fmtLeavePeriod(l)} · ${l.days == 1 ? '1 ден' : '${l.days} дни'}',
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
       if (l.note.isNotEmpty) Text(l.note, style: TextStyle(fontSize: 15, color: p.textMuted)),
+      for (final d in s.dutiesOf(l.churchId).where((d) => d.userId == l.userId && d.overlaps(l.start, l.end)))
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('Внимание: дежурен е ${fmtDutyPeriod(d.start, d.end)}. При одобрение сменете дежурния в графика.',
+              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.error)),
+        ),
       const SizedBox(height: 12),
       Row(children: [
         Expanded(child: OutlinedButton(onPressed: _busy ? null : () => go(false), child: const Text('Откажи'))),
@@ -579,8 +586,97 @@ List<Widget> requestCards(AppState s) {
           child: CloseMonthCard(key: ValueKey('cm${per.month}'), period: per)),
     for (final c in s.cashToDecide(church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: CashReviewCard(key: ValueKey('cs${c.id}'), entry: c)),
+    for (final w in [...s.swapsForMe(church), ...s.swapsForChair(church)])
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: DutySwapCard(key: ValueKey('ds${w.id}'), swap: w)),
     for (final l in s.pendingLeaves(church))
       Padding(
           padding: const EdgeInsets.only(bottom: 12), child: LeaveReviewCard(key: ValueKey('lv${l.id}'), leave: l)),
   ];
+}
+
+
+/// Молба за размяна на дежурства: към колегата (приема/отказва) или към
+/// председателя (одобрява/отказва).
+class DutySwapCard extends StatefulWidget {
+  final DutySwap swap;
+  const DutySwapCard({super.key, required this.swap});
+
+  @override
+  State<DutySwapCard> createState() => _DutySwapCardState();
+}
+
+class _DutySwapCardState extends State<DutySwapCard> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final w = widget.swap;
+    final a = s.dutyById(w.fromDuty);
+    final b = s.dutyById(w.toDuty);
+    final forChair = w.status == 'chair';
+    final ra = a == null ? '' : fmtDutyPeriod(a.start, a.end);
+    final rb = b == null ? '' : fmtDutyPeriod(b.start, b.end);
+
+    Future<void> go(bool yes) async {
+      var reason = '';
+      if (forChair && !yes) {
+        final c = await askComment(context,
+            title: 'Отказ на размяната',
+            body: '${s.priestName(w.fromUser)} ⇄ ${s.priestName(w.toUser)}',
+            hint: 'Причина (по желание)',
+            action: 'Откажи');
+        if (c == null || !mounted) return;
+        reason = c;
+      }
+      setState(() => _busy = true);
+      await _guard(
+          context,
+          () => forChair ? s.decideSwap(w, yes, reason) : s.answerSwap(w, yes),
+          yes
+              ? (forChair ? 'Размяната е одобрена.' : 'Приехте – чака председателя.')
+              : 'Размяната е отказана.');
+      if (mounted) setState(() => _busy = false);
+    }
+
+    Widget side(String user, String range) => Row(children: [
+          PriestBadge(name: s.priestName(user), color: p.priest(s.priestIndex(w.churchId, user)), size: 30, userId: user),
+          const SizedBox(width: 8),
+          Expanded(child: Text(s.priestName(user), style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700))),
+          Text(range, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        ]);
+
+    return _RequestFrame(tag: forChair ? 'Размяна на дежурства' : 'Молба за размяна', icon: Icons.swap_horiz_rounded, children: [
+      if (!forChair)
+        Text('${s.priestName(w.fromUser)} предлага да си размените дежурствата:',
+            style: const TextStyle(fontSize: 16)),
+      const SizedBox(height: 6),
+      side(w.fromUser, ra),
+      const Padding(padding: EdgeInsets.symmetric(vertical: 2), child: Icon(Icons.swap_vert_rounded)),
+      side(w.toUser, rb),
+      if (w.note.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('„${w.note}“', style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: p.text)),
+        ),
+      if (!forChair)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('След като приемете, одобрява председателят.', style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+        ),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: OutlinedButton(onPressed: _busy ? null : () => go(false), child: const Text('Откажи'))),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: _busy ? null : () => go(true),
+            child: Text(forChair ? 'Одобри' : 'Приемам'),
+          ),
+        ),
+      ]),
+    ]);
+  }
 }

@@ -354,6 +354,46 @@ select t.fails(format('select public.end_leave(%L, null)', (select id from leave
                'вече прекратена почивка не се прекратява пак', 'leave_over');
 delete from leave_requests where note in ('за отказ', 'бъдеща', 'тече');
 
+\echo '== Дежурства'
+select t.as_user(:'B');
+select t.fails(format('select public.duty_add(%L, %L, current_date, current_date + 6)', :'cid', :'B'),
+               'свещеник не задава дежурства', 'not_manager');
+select t.as_user(:'A');
+select public.duty_series(:'cid', current_date + 100, 7, array[:'B', :'C']::uuid[], 4) as ser \gset
+select t.ok(jsonb_array_length(:'ser'::jsonb) = 4
+            and (select count(*) from duties where church_id = :'cid' and start_date >= current_date + 100) = 4
+            and (select user_id from duties where church_id = :'cid' and start_date = current_date + 107) = :'C',
+            'серия дежурства по ред');
+select t.fails(format('select public.duty_add(%L, %L, current_date + 103, current_date + 104)', :'cid', :'A'),
+               'дежурствата не се застъпват', 'duty_overlap');
+select t.ok(jsonb_array_length(public.duty_add(:'cid', :'A', current_date + 200, current_date + 203, 'празници')) = 1,
+            'дежурство с ръчно избрани дни');
+select id as d1 from duties where church_id = :'cid' and start_date = current_date + 100 \gset
+select id as d2 from duties where church_id = :'cid' and start_date = current_date + 107 \gset
+select t.ok(jsonb_array_length(public.duty_update(:'d1', :'C', current_date + 100, current_date + 106)) = 2,
+            'смяна на дежурния – известие и за двамата');
+select public.duty_update(:'d1', :'B', current_date + 100, current_date + 106) \g /dev/null
+select t.as_user(:'C');
+select t.ok((select count(*) from duties where church_id = :'cid') >= 5, 'целият храм вижда графика');
+select t.fails($$insert into duties(church_id,user_id,start_date,end_date) values ((select id from churches limit 1), auth.uid(), current_date, current_date)$$,
+               'дежурства не се пишат директно', 'row-level security');
+select t.fails(format('select public.duty_swap_request(%L, %L)', :'d1', :'d2'), 'не се разменя чуждо дежурство', 'not_yours');
+select t.as_user(:'B');
+select id as sw from public.duty_swap_request(:'d1', :'d2', 'имам сватба') \gset
+select t.fails(format('select public.duty_swap_request(%L, %L)', :'d1', :'d2'), 'една отворена размяна на дежурство', 'swap_exists');
+select t.fails(format('select public.duty_swap_peer(%L, true)', :'sw'), 'предложилият не приема сам', 'not_yours');
+select t.as_user(:'C');
+select t.ok((public.duty_swap_peer(:'sw', true)).status = 'chair', 'колегата приема – чака председателя');
+select t.ok((select user_id from duties where id = :'d1') = :'B', 'преди одобрение нищо не се сменя');
+select t.fails(format('select public.duty_swap_decide(%L, true)', :'sw'), 'свещеник не одобрява размяна', 'not_manager');
+select t.as_user(:'A');
+select (public.duty_swap_decide(:'sw', true)).status as sws \gset
+select t.ok(:'sws' = 'approved'
+            and (select user_id from duties where id = :'d1') = :'C'
+            and (select user_id from duties where id = :'d2') = :'B', 'председателят одобрява – дежурствата се разменят');
+select t.ok(jsonb_array_length(public.duty_delete(:'d1')) = 1, 'председателят трие дежурство');
+delete from duties where church_id = :'cid';
+
 \echo '== Смяна на председателя'
 select t.as_user(:'B');
 select t.fails(format('select public.propose_chair(%L,%L)', :'cid', :'B'), 'свещеник не предлага председател', 'not_manager');
