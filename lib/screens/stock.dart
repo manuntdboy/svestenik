@@ -57,6 +57,13 @@ class _StockScreenState extends State<StockScreen> {
               ],
               for (final mv in toDecide)
                 Padding(padding: const EdgeInsets.only(bottom: 12), child: StockReviewCard(move: mv)),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockBookScreen())),
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('Складова книга'),
+              ),
+              const SizedBox(height: 14),
               Row(children: [
                 for (final sec in StockSection.values) ...[
                   Expanded(
@@ -208,7 +215,9 @@ class _ItemCard extends StatelessWidget {
 
   Future<void> _move(BuildContext context, AppState s, String church, {required bool load}) async {
     final qtyC = TextEditingController();
-    final noteC = TextEditingController();
+    // Изписване на свещи – по подразбиране „За храма“ (може да се смени).
+    final noteC = TextEditingController(
+        text: !load && item.section == StockSection.candles ? 'За храма' : '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -488,6 +497,154 @@ class _StockReviewCardState extends State<StockReviewCard> {
           ),
         ]),
       ]),
+    );
+  }
+}
+
+
+/// Складова книга: всички зареждания и изписвания, най-новите отгоре.
+class StockBookScreen extends StatefulWidget {
+  const StockBookScreen({super.key});
+
+  @override
+  State<StockBookScreen> createState() => _StockBookScreenState();
+}
+
+class _StockBookScreenState extends State<StockBookScreen> {
+  StockItem? _item; // null = всички
+  String? _kind; // null = всички, 'in' = влизания, 'out' = излизания
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final church = s.currentChurchId!;
+    final moves = s
+        .stockMoves(church, item: _item)
+        .where((m) => _kind == null || (_kind == 'in' ? m.qty > 0 : m.qty < 0))
+        .toList();
+    final day = DateFormat('d MMMM y', 'bg');
+    String? lastDay;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Складова книга')),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: s.refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              DropdownButtonFormField<StockItem?>(
+                initialValue: _item,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Вид'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Всички видове')),
+                  for (final i in StockItem.values) DropdownMenuItem(value: i, child: Text(i.label)),
+                ],
+                onChanged: (v) => setState(() => _item = v),
+              ),
+              const SizedBox(height: 10),
+              SegmentedButton<String?>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: null, label: Text('Всички')),
+                  ButtonSegment(value: 'in', label: Text('Влезли')),
+                  ButtonSegment(value: 'out', label: Text('Излезли')),
+                ],
+                selected: {_kind},
+                onSelectionChanged: (v) => setState(() => _kind = v.first),
+              ),
+              if (_item != null) ...[
+                const SizedBox(height: 12),
+                Text('Наличност: ${_item!.qty(s.stockOf(church)[_item]!)}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ],
+              const SizedBox(height: 12),
+              if (moves.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text('Няма движения.', style: TextStyle(fontSize: 16, color: p.textMuted)),
+                ),
+              for (final m in moves) ...[
+                if (lastDay != day.format(m.createdAt)) ...[
+                  Builder(builder: (_) {
+                    lastDay = day.format(m.createdAt);
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 6),
+                      child: Text(lastDay!,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: p.textMuted)),
+                    );
+                  }),
+                ],
+                _BookRow(move: m),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookRow extends StatelessWidget {
+  final StockMove move;
+  const _BookRow({required this.move});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final m = move;
+    final inbound = m.qty > 0;
+    final ev = m.eventId == null ? null : s.eventById(m.eventId!);
+    final status = [
+      if (m.isPending) 'чака одобрение',
+      if (m.isReturned) 'върнато${m.returnReason.isEmpty ? '' : ': ${m.returnReason}'}',
+      if (m.isApproved && m.kind == 'writeoff' && m.autoReason == null && m.decidedBy != null)
+        'одобри ${s.priestName(m.decidedBy!)}',
+      if (m.autoReason == 'single') 'без второ одобрение',
+      if (m.autoReason == 'off') 'одобрението е изключено',
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border(
+            left: BorderSide(color: inbound ? Colors.green.shade600 : _red, width: 5),
+            top: BorderSide(color: p.border),
+            right: BorderSide(color: p.border),
+            bottom: BorderSide(color: p.border),
+          ),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${m.kindLabel} · ${m.item.label}',
+                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+              Text(
+                  [
+                    if (ev != null) '${ev.kind.label}${ev.forWhom.isEmpty ? '' : ' – ${ev.forWhom}'}',
+                    if (m.note.isNotEmpty) m.note,
+                    s.priestName(m.createdBy),
+                    DateFormat('HH:mm').format(m.createdAt),
+                    ...status,
+                  ].join(' · '),
+                  style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Text('${inbound ? '+' : '−'}${m.item.qty(m.qty.abs())}',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: m.isApproved ? (inbound ? Colors.green.shade700 : _red) : p.textMuted,
+                  decoration: m.isReturned ? TextDecoration.lineThrough : null)),
+        ]),
+      ),
     );
   }
 }
