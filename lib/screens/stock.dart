@@ -8,6 +8,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/church_banner.dart';
+import 'cash.dart' show fmtEur, parseAmount;
 
 final _stamp = DateFormat('d MMM y, HH:mm', 'bg');
 const _red = Color(0xFFB23A3A);
@@ -201,6 +202,9 @@ class _ItemCard extends StatelessWidget {
                         fontSize: 13.5,
                         fontWeight: alert != null ? FontWeight.w700 : FontWeight.w400,
                         color: alert == _red ? _red : p.textMuted)),
+                if (s.stockPrice(church, item) case final pr?)
+                  Text('Покупна: ${fmtEur(pr)} за ${item.section == StockSection.candles ? 'кг' : 'брой'}',
+                      style: TextStyle(fontSize: 13.5, color: p.textMuted)),
               ]),
             ),
             Text(item.qty(qty),
@@ -231,6 +235,11 @@ class _ItemCard extends StatelessWidget {
             ),
           ),
           IconButton(
+            tooltip: 'Покупна цена',
+            onPressed: () => _setPrice(context, s, church),
+            icon: const Icon(Icons.sell_outlined),
+          ),
+          IconButton(
             tooltip: 'Граница за предупреждение',
             onPressed: () => _setMin(context, s, church),
             icon: const Icon(Icons.notifications_active_outlined),
@@ -245,18 +254,52 @@ class _ItemCard extends StatelessWidget {
     // Изписване на свещи – по подразбиране „За храма“ (може да се смени).
     final noteC = TextEditingController(
         text: !load && item.section == StockSection.candles ? 'За храма' : '');
+    final known = s.stockPrice(church, item);
+    final priceC = TextEditingController(text: known == null ? '' : known.toStringAsFixed(2).replaceAll('.', ','));
+    var toCash = true;
+    final perUnit = item.section == StockSection.candles ? 'кг' : 'брой';
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(builder: (ctx, set) {
+        final q0 = int.tryParse(qtyC.text.trim()) ?? 0;
+        final pr0 = parseAmount(priceC.text);
+        final total = pr0 == null ? null : q0 * pr0;
+        return AlertDialog(
         title: Text('${load ? 'Зареди' : 'Изпиши'}: ${item.label}'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
             controller: qtyC,
             autofocus: true,
             keyboardType: TextInputType.number,
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
             decoration: InputDecoration(hintText: 'Количество', suffixText: item.unit),
+            onChanged: (_) => set(() {}),
           ),
+          if (load) ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: priceC,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              decoration: InputDecoration(
+                  labelText: 'Покупна цена за $perUnit (без ДДС)', suffixText: '€', hintText: 'по желание'),
+              onChanged: (_) => set(() {}),
+            ),
+            if (total != null && q0 > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('Общо: ${fmtEur(total)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              ),
+            if (total != null && q0 > 0)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: toCash,
+                onChanged: (v) => set(() => toCash = v ?? false),
+                title: Text('Запиши и разход в касата (${fmtEur(total)})', style: const TextStyle(fontSize: 15)),
+                subtitle: Text(item.section == StockSection.candles ? 'Свещи (доставка)' : 'Ценни книжа (доставка)'),
+              ),
+          ],
           const SizedBox(height: 10),
           TextField(
             controller: noteC,
@@ -273,17 +316,20 @@ class _ItemCard extends StatelessWidget {
                     ? 'Изписването влиза веднага.'
                     : 'Изписването чака одобрение от другия от двамата.',
                 style: TextStyle(fontSize: 13.5, color: Palette.of(ctx).textMuted)),
-        ]),
+        ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(load ? 'Зареди' : 'Изпиши')),
         ],
-      ),
+      );
+      }),
     );
     final q = int.tryParse(qtyC.text.trim());
     final note = noteC.text.trim();
+    final price = priceC.text.trim().isEmpty ? null : parseAmount(priceC.text);
     qtyC.dispose();
     noteC.dispose();
+    priceC.dispose();
     if (ok != true || !context.mounted) return;
     if (q == null || q <= 0) {
       showMessage(context, 'Въведете цяло число, по-голямо от нула.');
@@ -295,14 +341,69 @@ class _ItemCard extends StatelessWidget {
     }
     try {
       if (load) {
-        await s.loadStock(church, item, q, note);
-        if (context.mounted) showMessage(context, 'Заредено: ${item.qty(q)} ${item.label.toLowerCase()}.');
+        if (price != null && price < 0) {
+          showMessage(context, 'Цената не може да е отрицателна.');
+          return;
+        }
+        await s.loadStock(church, item, q, note, price: price);
+        var msg = 'Заредено: ${item.qty(q)} ${item.label.toLowerCase()}.';
+        if (price != null && price > 0 && toCash) {
+          final e = await s.addCash(
+            book: CashBook.expense,
+            amount: (q * price * 100).roundToDouble() / 100,
+            category: item.section == StockSection.candles ? 'Свещи (доставка)' : 'Ценни книжа (доставка)',
+            note: '${item.label}: ${item.qty(q)} × ${fmtEur(price)}${note.isEmpty ? '' : ' · $note'}',
+          );
+          msg += e.isPending ? ' Разходът в касата чака одобрение.' : ' Разходът е записан в касата.';
+        }
+        if (context.mounted) showMessage(context, msg);
       } else {
         final mv = await s.writeOffStock(church, item, q, note);
         if (context.mounted) {
           showMessage(context, mv.isPending ? 'Изписването чака одобрение.' : 'Изписано: ${item.qty(q)}.');
         }
       }
+    } on AppError catch (e) {
+      if (context.mounted) showMessage(context, e.message);
+    }
+  }
+
+  Future<void> _setPrice(BuildContext context, AppState s, String church) async {
+    final cur = s.stockPrice(church, item);
+    final c = TextEditingController(text: cur == null ? '' : cur.toStringAsFixed(2).replaceAll('.', ','));
+    final perUnit = item.section == StockSection.candles ? 'кг' : 'брой';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Покупна цена: ${item.label}'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Цена за $perUnit, без ДДС. Излиза в поръчката и при зареждане.'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: c,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            decoration: const InputDecoration(suffixText: '€', hintText: 'празно = без цена'),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Запази')),
+        ],
+      ),
+    );
+    final text = c.text.trim();
+    c.dispose();
+    if (ok != true || !context.mounted) return;
+    final v = text.isEmpty ? null : parseAmount(text);
+    if (text.isNotEmpty && (v == null || v < 0)) {
+      showMessage(context, 'Въведете цена, напр. 12,50.');
+      return;
+    }
+    try {
+      await s.setStockPrice(church, item, v);
+      if (context.mounted) showMessage(context, v == null ? 'Цената е премахната.' : 'Цената е запазена.');
     } on AppError catch (e) {
       if (context.mounted) showMessage(context, e.message);
     }
@@ -387,7 +488,8 @@ Future<void> showStockHistory(BuildContext context, StockItem item) async {
                             [
                               s.priestName(m.createdBy),
                               _stamp.format(m.createdAt),
-                              if (m.isPending) 'чака одобрение',
+                              if (m.unitPrice != null) 'по ${fmtEur(m.unitPrice!)}',
+      if (m.isPending) 'чака одобрение',
                               if (m.isReturned) 'върнато${m.returnReason.isEmpty ? '' : ': ${m.returnReason}'}',
                               if (m.isApproved && m.kind == 'writeoff' && m.autoReason == null && m.decidedBy != null)
                                 'одобри ${s.priestName(m.decidedBy!)}',
@@ -937,12 +1039,24 @@ class _StockOrderScreenState extends State<StockOrderScreen> {
 
   String _text(AppState s) {
     final church = s.currentChurch!;
-    final lines = [
-      for (final e in _c.entries)
-        if ((int.tryParse(e.value.text.trim()) ?? 0) > 0) '• ${e.key.label}: ${e.key.qty(int.parse(e.value.text.trim()))}',
-    ];
+    var total = 0.0;
+    var anyPrice = false;
+    final lines = <String>[];
+    for (final e in _c.entries) {
+      final n = int.tryParse(e.value.text.trim()) ?? 0;
+      if (n <= 0) continue;
+      final pr = s.stockPrice(church.id, e.key);
+      if (pr == null) {
+        lines.add('• ${e.key.label}: ${e.key.qty(n)}');
+      } else {
+        anyPrice = true;
+        total += n * pr;
+        lines.add('• ${e.key.label}: ${e.key.qty(n)} × ${fmtEur(pr)} = ${fmtEur(n * pr)}');
+      }
+    }
     return 'Поръчка за склада – ${church.name}, ${church.settlement}\n'
-        '${DateFormat('d MMMM y', 'bg').format(DateTime.now())}\n\n${lines.join('\n')}\n\n– ${s.currentUser?.fullName ?? ''}';
+        '${DateFormat('d MMMM y', 'bg').format(DateTime.now())}\n\n${lines.join('\n')}'
+        '${anyPrice ? '\n\nОбщо: ${fmtEur(total)}' : ''}\n\n– ${s.currentUser?.fullName ?? ''}';
   }
 
   Future<void> _send(BuildContext context, AppState s, String how) async {
@@ -1007,7 +1121,8 @@ class _StockOrderScreenState extends State<StockOrderScreen> {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(i.label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                        Text('налично ${i.qty(bal[i]!)}${alert != null ? ' · под границата' : ''}',
+                        Text('налично ${i.qty(bal[i]!)}${alert != null ? ' · под границата' : ''}'
+                            '${s.stockPrice(church, i) == null ? '' : ' · ${fmtEur(s.stockPrice(church, i)!)}/${i.section == StockSection.candles ? 'кг' : 'бр.'}'}',
                             style: TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: alert != null ? FontWeight.w700 : FontWeight.w400,
@@ -1081,6 +1196,7 @@ class _BookRow extends StatelessWidget {
     final inbound = m.qty > 0;
     final ev = m.eventId == null ? null : s.eventById(m.eventId!);
     final status = [
+      if (m.unitPrice != null) 'по ${fmtEur(m.unitPrice!)}',
       if (m.isPending) 'чака одобрение',
       if (m.isReturned) 'върнато${m.returnReason.isEmpty ? '' : ': ${m.returnReason}'}',
       if (m.isApproved && m.kind == 'writeoff' && m.autoReason == null && m.decidedBy != null)

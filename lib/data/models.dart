@@ -624,6 +624,7 @@ const expenseCategories = [
   'Отопление',
   'Ремонти и поддръжка',
   'Свещи (доставка)',
+  'Ценни книжа (доставка)',
   'Вноска към митрополията',
   'Канцеларски',
   'Друго',
@@ -875,6 +876,7 @@ class StockMove {
   final String? decidedBy;
   final DateTime? decidedAt;
   final String returnReason;
+  final double? unitPrice; // покупна цена при зареждане (без ДДС)
 
   StockMove({
     required this.id,
@@ -891,6 +893,7 @@ class StockMove {
     this.decidedBy,
     this.decidedAt,
     this.returnReason = '',
+    this.unitPrice,
   });
 
   bool get isPending => status == 'pending';
@@ -919,6 +922,7 @@ class StockMove {
         decidedBy: r['decided_by'] as String?,
         decidedAt: r['decided_at'] == null ? null : DateTime.parse(r['decided_at'] as String).toLocal(),
         returnReason: (r['return_reason'] as String?) ?? '',
+        unitPrice: (r['unit_price'] as num?)?.toDouble(),
       );
 }
 

@@ -666,6 +666,12 @@ select id as don from public.cash_add(:'cid2','income',25,'Дарение',null,
 select public.cash_set_donor(:'don', 'Иван Петров') \g /dev/null
 select t.as_user(:'B');
 select t.ok((select donor from cash_entries where id = :'don') = 'Иван Петров', 'дарителят се записва към дарението');
+select (public.stock_load(:'cid2', 'candle_2', 3, 'доставка', 18.5)).unit_price as up \gset
+select t.ok(:up = 18.50
+            and (select price from stock_prices where church_id = :'cid2' and item = 'candle_2') = 18.50,
+            'зареждане с покупна цена – пази се в движението и става текуща');
+select public.stock_set_price(:'cid2', 'diploma', 0.8) \g /dev/null
+select t.ok((select price from stock_prices where church_id = :'cid2' and item = 'diploma') = 0.80, 'цената се настройва');
 select public.stock_set_threshold(:'cid2', 'candle_020', 8);
 select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_020') = 8, 'границата за предупреждение се настройва');
 select t.fails($$insert into stock_moves(church_id, item, qty, kind) values (gen_random_uuid(), 'diploma', 1, 'load')$$,

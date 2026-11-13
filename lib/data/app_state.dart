@@ -53,6 +53,7 @@ class AppState extends ChangeNotifier {
   final List<Duty> _duties = [];
   final List<DutySwap> _swaps = [];
   final Map<String, int> _stockMin = {};
+  final Map<String, double> _stockPrice = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
 
@@ -144,6 +145,7 @@ class AppState extends ChangeNotifier {
     _duties.clear();
     _swaps.clear();
     _stockMin.clear();
+    _stockPrice.clear();
     _details.clear();
     _photos.clear();
     _photoStamp.clear();
@@ -179,6 +181,7 @@ class AppState extends ChangeNotifier {
         _db.from('stock_audits').select(),
         _db.from('duties').select().order('start_date'),
         _db.from('duty_swaps').select().order('created_at'),
+        _db.from('stock_prices').select(),
       ]);
       _profiles
         ..clear()
@@ -217,6 +220,10 @@ class AppState extends ChangeNotifier {
       _swaps
         ..clear()
         ..addAll(results[13].map(DutySwap.fromRow));
+      _stockPrice.clear();
+      for (final r in results[14]) {
+        _stockPrice['${r['church_id']}|${r['item']}'] = (r['price'] as num).toDouble();
+      }
       _stockMin.clear();
       for (final r in results[10]) {
         final it = StockItem.fromCode(r['item'] as String?);
@@ -958,6 +965,24 @@ class AppState extends ChangeNotifier {
 
   int stockMin(String churchId, StockItem i) => _stockMin['$churchId|${i.code}'] ?? i.defaultMin;
 
+  /// Текуща покупна цена (без ДДС) – null, ако не е въведена.
+  double? stockPrice(String churchId, StockItem i) => _stockPrice['$churchId|${i.code}'];
+
+  Future<void> setStockPrice(String churchId, StockItem item, double? price) async {
+    try {
+      await _db.rpc('stock_set_price', params: {'p_church': churchId, 'p_item': item.code, 'p_price': price});
+      final k = '$churchId|${item.code}';
+      if (price == null) {
+        _stockPrice.remove(k);
+      } else {
+        _stockPrice[k] = price;
+      }
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Видовете под границата (за предупреждението на началния екран).
   List<StockItem> lowStock(String churchId) {
     if (!canSeeCash(churchId)) return [];
@@ -971,10 +996,16 @@ class AppState extends ChangeNotifier {
     return _stock.where((m) => m.churchId == churchId && m.isPending && m.createdBy != me).toList();
   }
 
-  Future<void> loadStock(String churchId, StockItem item, int qty, String note) async {
+  Future<void> loadStock(String churchId, StockItem item, int qty, String note, {double? price}) async {
     try {
-      final row = await _db.rpc('stock_load',
-          params: {'p_church': churchId, 'p_item': item.code, 'p_qty': qty, 'p_note': note});
+      final row = await _db.rpc('stock_load', params: {
+        'p_church': churchId,
+        'p_item': item.code,
+        'p_qty': qty,
+        'p_note': note,
+        'p_price': price,
+      });
+      if (price != null) _stockPrice['$churchId|${item.code}'] = price;
       final mv = StockMove.fromRow(Map<String, dynamic>.from(row as Map));
       _stock.add(mv);
       notifyListeners();
