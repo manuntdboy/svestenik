@@ -576,9 +576,15 @@ class _ChairOfferCardState extends State<ChairOfferCard> {
 List<Widget> requestCards(AppState s) {
   final church = s.currentChurchId;
   if (church == null) return [];
+  final ch = s.currentChurch;
+  final cashOn = ch?.cashEnabled ?? true;
+  final stockOn = ch?.stockEnabled ?? true;
   return [
+    for (final a in s.announcementsToAck(church))
+      Padding(padding: const EdgeInsets.only(bottom: 12), child: AnnouncementCard(key: ValueKey('an${a.id}'), item: a)),
     for (final l in s.leavesToAck(church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: LeaveDecisionCard(key: ValueKey('la${l.id}'), leave: l)),
+    if (cashOn)
     for (final e in s.cashReturnsToAck(church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: CashReturnedCard(key: ValueKey('cr${e.id}'), entry: e)),
     for (final c in s.chairOffers.where((c) => c.id == church))
@@ -591,14 +597,17 @@ List<Widget> requestCards(AppState s) {
       Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: DeclinedReviewCard(key: ValueKey('dr${e.id}'), event: e)),
-    if (s.lowStock(church).isNotEmpty)
+    if (stockOn && s.lowStock(church).isNotEmpty)
       Padding(padding: const EdgeInsets.only(bottom: 12), child: LowStockCard(items: s.lowStock(church))),
+    if (stockOn)
     for (final mv in s.stockToDecide(church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: StockReviewCard(key: ValueKey('st${mv.id}'), move: mv)),
+    if (cashOn)
     for (final per in s.closesToApprove(church))
       Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: CloseMonthCard(key: ValueKey('cm${per.month}'), period: per)),
+    if (cashOn)
     for (final c in s.cashToDecide(church))
       Padding(padding: const EdgeInsets.only(bottom: 12), child: CashReviewCard(key: ValueKey('cs${c.id}'), entry: c)),
     for (final w in [...s.swapsForMe(church), ...s.swapsForChair(church)])
@@ -818,6 +827,30 @@ class CashReturnedCard extends StatelessWidget {
         const SizedBox(height: 4),
         const Text('Записът не влиза в книгите. Ако е нужно, въведете го отново поправен.',
             style: TextStyle(fontSize: 14)),
+      ],
+    );
+  }
+}
+
+
+/// Съобщение от създателя – стои, докато не се натисне „ОК“.
+class AnnouncementCard extends StatelessWidget {
+  final Announcement item;
+  const AnnouncementCard({super.key, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return _AckFrame(
+      color: const Color(0xFF2F5D8C),
+      icon: Icons.campaign_rounded,
+      title: item.title,
+      onOk: () => s.ackAnnouncement(item),
+      children: [
+        if (item.body.isNotEmpty) Text(item.body, style: const TextStyle(fontSize: 16, height: 1.35)),
+        const SizedBox(height: 4),
+        Text('Съобщение от създателя · ${DateFormat('d.MM.y').format(item.createdAt)}',
+            style: TextStyle(fontSize: 13.5, color: Palette.of(context).textMuted)),
       ],
     );
   }

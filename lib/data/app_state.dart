@@ -52,6 +52,10 @@ class AppState extends ChangeNotifier {
   final List<StockAudit> _audits = [];
   final List<Duty> _duties = [];
   final List<DutySwap> _swaps = [];
+  final List<Announcement> _announcements = [];
+  final Set<String> _announcementsSeen = {};
+  /// Най-старата версия, която създателят още приема (0 = без напомняне).
+  int minBuild = 0;
   final Map<String, int> _stockMin = {};
   final Map<String, double> _stockPrice = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
@@ -143,6 +147,8 @@ class AppState extends ChangeNotifier {
     _stock.clear();
     _audits.clear();
     _duties.clear();
+    _announcements.clear();
+    _announcementsSeen.clear();
     _swaps.clear();
     _stockMin.clear();
     _stockPrice.clear();
@@ -182,6 +188,9 @@ class AppState extends ChangeNotifier {
         _db.from('duties').select().order('start_date'),
         _db.from('duty_swaps').select().order('created_at'),
         _db.from('stock_prices').select(),
+        _db.from('announcements').select().order('created_at'),
+        _db.from('announcement_seen').select('announcement_id').eq('user_id', authUser.id),
+        _db.from('app_config').select(),
       ]);
       _profiles
         ..clear()
@@ -220,6 +229,13 @@ class AppState extends ChangeNotifier {
       _swaps
         ..clear()
         ..addAll(results[13].map(DutySwap.fromRow));
+      _announcements
+        ..clear()
+        ..addAll(results[15].map(Announcement.fromRow));
+      _announcementsSeen
+        ..clear()
+        ..addAll(results[16].map((r) => r['announcement_id'] as String));
+      minBuild = results[17].isEmpty ? 0 : ((results[17].first['min_build'] as num?)?.toInt() ?? 0);
       _stockPrice.clear();
       for (final r in results[14]) {
         _stockPrice['${r['church_id']}|${r['item']}'] = (r['price'] as num).toDouble();
@@ -353,6 +369,125 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------------------------
+  // Съобщения, обратна връзка и инструменти на създателя
+  // ------------------------------------------------------------------
+  /// Съобщения от създателя, които още не съм потвърдил с „ОК“.
+  List<Announcement> announcementsToAck(String churchId) => _announcements
+      .where((a) => !_announcementsSeen.contains(a.id) && (a.churchId == null || a.churchId == churchId))
+      .toList();
+
+  Future<void> ackAnnouncement(Announcement a) async {
+    _announcementsSeen.add(a.id);
+    notifyListeners();
+    try {
+      await _db.rpc('announcement_ack', params: {'p_id': a.id});
+    } catch (_) {}
+  }
+
+  Future<void> sendFeedback(String body, {Uint8List? photo}) async {
+    final me = currentUser;
+    if (me == null) return;
+    try {
+      String? path;
+      if (photo != null) {
+        path = '${me.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await _db.storage.from('feedback').uploadBinary(path, photo,
+            fileOptions: const FileOptions(contentType: 'image/jpeg'));
+      }
+      await _db.from('feedback').insert({
+        'body': body.trim(),
+        'build': buildNumber,
+        'church_id': currentChurchId,
+        'photo_path': path,
+      });
+      unawaited(_invokeNotify({'type': 'creator_event', 'kind': 'feedback'}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<Uint8List?> feedbackPhoto(String path) async {
+    try {
+      return await _db.storage.from('feedback').download(path);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> creatorExtra() async {
+    final r = await _db.rpc('creator_extra');
+    return Map<String, dynamic>.from(r as Map);
+  }
+
+  Future<void> creatorAnnounce(String title, String body, String? churchId) async {
+    try {
+      final r = await _db.rpc('creator_announce', params: {'p_title': title, 'p_body': body, 'p_church': churchId});
+      unawaited(_invokeNotify({'type': 'announcement', 'announcement_id': (r as Map)['id']}));
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> creatorSetMinBuild(int build) async {
+    try {
+      await _db.rpc('creator_set_min_build', params: {'p_build': build});
+      minBuild = build;
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> creatorChurchSettings(String churchId, {bool? cash, bool? stock, bool? approvalsOff}) async {
+    try {
+      await _db.rpc('creator_church_settings',
+          params: {'p_church': churchId, 'p_cash': cash, 'p_stock': stock, 'p_approvals_off': approvalsOff});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> creatorChurchMembers(String churchId) async {
+    final r = await _db.rpc('creator_church_members', params: {'p_church': churchId});
+    return (r as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<void> creatorSetChair(String churchId, String userId) async {
+    try {
+      await _db.rpc('creator_set_chair', params: {'p_church': churchId, 'p_user': userId});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> creatorFeedbackDone(String id, bool done) async {
+    try {
+      await _db.rpc('creator_feedback_done', params: {'p_id': id, 'p_done': done});
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> creatorDeleteUser(String userId) async {
+    try {
+      final r = await _db.functions.invoke('delete_user', body: {'user_id': userId});
+      final d = r.data;
+      if (d is! Map || d['ok'] != true) throw AppError('Профилът не можа да се изтрие.');
+    } on AppError {
+      rethrow;
+    } catch (e) {
+      final t = e.toString();
+      if (t.contains('is_chair')) {
+        throw AppError('Той е председател на храм с други свещеници. Първо определете нов председател.');
+      }
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Приел ли е текущия текст за личните данни.
   bool get needsPrivacy => currentUser != null && currentUser!.privacyVersion < kPrivacyVersion;
 
@@ -471,6 +606,7 @@ class AppState extends ChangeNotifier {
       try {
         await _db.rpc('privacy_accept', params: {'p_version': kPrivacyVersion});
       } catch (_) {}
+      unawaited(_invokeNotify({'type': 'creator_event', 'kind': 'new_user'}));
       currentChurchId = null;
       await _prefs.remove(_kChurch);
       loading = true;
@@ -1315,6 +1451,7 @@ class AppState extends ChangeNotifier {
       final c = Church.fromRow(Map<String, dynamic>.from(row as Map));
       await refresh();
       await selectChurch(c.id);
+      unawaited(_invokeNotify({'type': 'creator_event', 'kind': 'new_church'}));
       return c;
     } catch (e) {
       throw AppError(_friendly(e));

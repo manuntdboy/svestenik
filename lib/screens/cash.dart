@@ -46,6 +46,15 @@ class _CashScreenState extends State<CashScreen> {
     final s = AppScope.of(context);
     final church = s.currentChurchId!;
     final holder = s.canSeeCash(church);
+    if (s.currentChurch?.cashEnabled == false) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Каса')),
+        body: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Касата е изключена за този храм.', style: TextStyle(fontSize: 17)),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Каса'),

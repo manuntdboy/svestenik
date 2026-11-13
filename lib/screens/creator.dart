@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/church_banner.dart';
 import '../widgets/common.dart';
+import '../widgets/whats_new.dart' show buildNumber;
+import 'priest_profile.dart' show showTempPassword;
 
 /// „Кайрос в числа“ – общ преглед за създателя. Данните идват от
 /// creator_stats(), която отговаря само на профила на създателя.
@@ -31,9 +34,13 @@ class _CreatorScreenState extends State<CreatorScreen> {
     setState(() => _loading = true);
     try {
       final r = await Supabase.instance.client.rpc('creator_stats');
+      Map<String, dynamic> extra = {};
+      try {
+        extra = Map<String, dynamic>.from(await Supabase.instance.client.rpc('creator_extra') as Map);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
-        _d = Map<String, dynamic>.from(r as Map);
+        _d = {...Map<String, dynamic>.from(r as Map), 'extra': extra};
         _error = null;
         _loading = false;
       });
@@ -53,7 +60,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
   Widget build(BuildContext context) {
     final d = _d;
     return DefaultTabController(
-      length: 3,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Кайрос в числа'),
@@ -64,7 +71,14 @@ class _CreatorScreenState extends State<CreatorScreen> {
               icon: const Icon(Icons.refresh_rounded),
             ),
           ],
-          bottom: const TabBar(tabs: [Tab(text: 'Обобщение'), Tab(text: 'Хора'), Tab(text: 'Храмове')]),
+          bottom: const TabBar(isScrollable: true, tabAlignment: TabAlignment.start, tabs: [
+            Tab(text: 'Обобщение'),
+            Tab(text: 'Хора'),
+            Tab(text: 'Храмове'),
+            Tab(text: 'Грешки'),
+            Tab(text: 'Отзиви'),
+            Tab(text: 'Съобщения'),
+          ]),
         ),
         body: SafeArea(
           child: _loading && d == null
@@ -80,6 +94,9 @@ class _CreatorScreenState extends State<CreatorScreen> {
                       _Overview(d!, onRefresh: _load),
                       _People(d, onRefresh: _load),
                       _Churches(d, onRefresh: _load),
+                      _Errors(d, onRefresh: _load),
+                      _FeedbackList(d, onRefresh: _load),
+                      _Announce(d, onRefresh: _load),
                     ]),
         ),
       ),
@@ -269,6 +286,7 @@ class _Overview extends StatelessWidget {
         (_notifyNames[e.key] ?? e.key): (e.value as num).toInt(),
     };
     final failed = (d['notify_failed'] as List).cast<Map>();
+    final ex = Map<String, dynamic>.from((d['extra'] as Map?) ?? const {});
     final nt = Map<String, dynamic>.from((d['notify'] as Map?) ?? const {});
     final n1 = Map<String, dynamic>.from((nt['d1'] as Map?) ?? const {});
     final n7 = Map<String, dynamic>.from((nt['d7'] as Map?) ?? const {});
@@ -314,6 +332,37 @@ class _Overview extends StatelessWidget {
                 sub: '+${_n(t, 'stock_30')} за 30 дни'),
             _Stat('${_n(t, 'leaves')}', 'Почивки', Icons.beach_access_rounded,
                 sub: '${_n(t, 'leaves_pending')} чакат решение'),
+          ]),
+          const _Section('Грешки и версия'),
+          _grid([
+            _Stat('${_n(ex, 'errors_24')}', 'Грешки · 24 ч', Icons.bug_report_rounded,
+                color: _n(ex, 'errors_24') > 0 ? red : green, sub: '${_n(ex, 'errors_7')} за 7 дни · раздел „Грешки“'),
+            _Stat(_n(ex, 'min_build') == 0 ? '—' : '${_n(ex, 'min_build')}', 'Минимална версия', Icons.system_update_rounded,
+                sub: 'по-старите виждат „обновете“'),
+          ]),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            OutlinedButton(
+              onPressed: buildNumber <= 0
+                  ? null
+                  : () async {
+                      try {
+                        await AppScope.read(context).creatorSetMinBuild(buildNumber);
+                        await onRefresh();
+                      } on AppError catch (e) {
+                        if (context.mounted) showMessage(context, e.message);
+                      }
+                    },
+              child: Text('Искай версия $buildNumber'),
+            ),
+            if (_n(ex, 'min_build') > 0)
+              TextButton(
+                onPressed: () async {
+                  await AppScope.read(context).creatorSetMinBuild(0);
+                  await onRefresh();
+                },
+                child: const Text('Без напомняне'),
+              ),
           ]),
           const _Section('Известия (push)'),
           _grid([
@@ -420,7 +469,7 @@ class _PeopleState extends State<_People> {
           Text('${list.length} от ${all.length}', style: TextStyle(color: p.textMuted, fontSize: 13.5)),
           const SizedBox(height: 8),
           for (final u in list) ...[
-            _PersonCard(u, name(u)),
+            _PersonCard(u, name(u), onRefresh: widget.onRefresh),
             const SizedBox(height: 10),
           ],
         ],
@@ -432,7 +481,8 @@ class _PeopleState extends State<_People> {
 class _PersonCard extends StatelessWidget {
   final Map<String, dynamic> u;
   final String name;
-  const _PersonCard(this.u, this.name);
+  final Future<void> Function()? onRefresh;
+  const _PersonCard(this.u, this.name, {this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -458,6 +508,35 @@ class _PersonCard extends StatelessWidget {
           ),
           Icon(u['push'] == true ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
               size: 20, color: u['push'] == true ? p.primary : p.textMuted),
+          if (u['id'] != AppScope.of(context).currentUser?.id)
+            PopupMenuButton<String>(
+              tooltip: 'Действия',
+              onSelected: (v) async {
+                final s = AppScope.read(context);
+                if (v == 'pass') {
+                  await showTempPassword(context, '', u['id'] as String, name, username: u['username'] as String?);
+                } else if (v == 'delete') {
+                  final ok = await confirm(
+                      context,
+                      'Изтриване на профила',
+                      '$name ще бъде изтрит окончателно. Събитията, записани от него за колеги, минават към '
+                          'председателя; записите в касата остават. Това не може да се върне.',
+                      'Изтрий');
+                  if (!ok || !context.mounted) return;
+                  try {
+                    await s.creatorDeleteUser(u['id'] as String);
+                    if (context.mounted) showMessage(context, 'Профилът е изтрит.');
+                    await onRefresh?.call();
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'pass', child: Text('Временна парола')),
+                PopupMenuItem(value: 'delete', child: Text('Изтрий профила')),
+              ],
+            ),
         ]),
         const SizedBox(height: 4),
         Text([if (u['username'] != null) '@${u['username']}', if (u['email'] != null) '${u['email']}'].join(' · '),
@@ -534,9 +613,352 @@ class _Churches extends StatelessWidget {
                 line(ChurchRole.cashier.icon, 'Касиер: ${c['cashier'] ?? 'няма'}'),
                 line(Icons.event_rounded, 'Събития: ${c['events']} (+${c['events_30']} за 30 дни)'),
                 line(Icons.payments_rounded, 'Каса: ${c['cash']} записа · Склад: ${c['stock']} движения'),
+                _ChurchControls(church: c, settings: Map<String, dynamic>.from(
+                    ((d['extra'] as Map?)?['church_settings'] as Map?)?[c['id']] as Map? ?? const {}),
+                    onRefresh: onRefresh),
               ]),
             ),
             const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+
+// ------------------------------------------------------------ настройки по храм
+
+class _ChurchControls extends StatefulWidget {
+  final Map<String, dynamic> church;
+  final Map<String, dynamic> settings;
+  final Future<void> Function() onRefresh;
+  const _ChurchControls({required this.church, required this.settings, required this.onRefresh});
+
+  @override
+  State<_ChurchControls> createState() => _ChurchControlsState();
+}
+
+class _ChurchControlsState extends State<_ChurchControls> {
+  bool _busy = false;
+
+  Future<void> _set({bool? cash, bool? stock, bool? off}) async {
+    setState(() => _busy = true);
+    try {
+      await AppScope.read(context)
+          .creatorChurchSettings(widget.church['id'] as String, cash: cash, stock: stock, approvalsOff: off);
+      await widget.onRefresh();
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _chair() async {
+    final s = AppScope.read(context);
+    final id = widget.church['id'] as String;
+    List<Map<String, dynamic>> members;
+    try {
+      members = (await s.creatorChurchMembers(id)).where((m) => m['status'] == 'active').toList();
+    } catch (_) {
+      if (mounted) showMessage(context, 'Свещениците не можаха да се заредят.');
+      return;
+    }
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [
+          Text('Нов председател на ${widget.church['name']}',
+              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          for (final m in members)
+            ListTile(
+              title: Text(withRank(ClergyRank.fromCode(m['rank']), '${m['name']}')),
+              trailing: m['role'] == 'manager' ? const Text('председател') : null,
+              onTap: m['role'] == 'manager' ? null : () => Navigator.pop(ctx, m),
+            ),
+        ]),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final ok = await confirm(context, 'Смяна на председателя',
+        '${picked['name']} става председател веднага, без да чака съгласие. Сегашният става редови свещеник.', 'Смени');
+    if (!ok || !mounted) return;
+    try {
+      await s.creatorSetChair(id, picked['id'] as String);
+      if (mounted) showMessage(context, 'Председателят е сменен.');
+      await widget.onRefresh();
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final st = widget.settings;
+    bool v(String k, bool def) => (st[k] as bool?) ?? def;
+    Widget sw(String label, bool value, ValueChanged<bool> on) => SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(label, style: const TextStyle(fontSize: 15)),
+          value: value,
+          onChanged: _busy ? null : on,
+        );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Divider(height: 20),
+      sw('Каса', v('cash', true), (x) => _set(cash: x)),
+      sw('Склад', v('stock', true), (x) => _set(stock: x)),
+      sw('Без второ одобрение (тест)', v('approvals_off', false), (x) => _set(off: x)),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: _busy ? null : _chair,
+          icon: const Icon(Icons.workspace_premium_outlined),
+          label: const Text('Смени председателя'),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ------------------------------------------------------------ грешки
+
+class _Errors extends StatelessWidget {
+  final Map<String, dynamic> d;
+  final Future<void> Function() onRefresh;
+  const _Errors(this.d, {required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final list = (((d['extra'] as Map?)?['errors'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        children: [
+          Text('Грешки от телефоните (последните 40). Без лични данни – само екран, версия и описание.',
+              style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+          const SizedBox(height: 8),
+          if (list.isEmpty) const Text('Няма грешки. 🙂', style: TextStyle(fontSize: 16)),
+          for (final e in list)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SurfaceCard(
+                child: Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: Text('${e['message']}',
+                        maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15)),
+                    subtitle: Text(
+                        '${_ago(_dt(e['at']))} · ${e['user']} · версия ${e['build'] ?? '?'}'
+                        '${(e['screen'] as String?)?.isNotEmpty == true ? ' · ${e['screen']}' : ''}',
+                        style: TextStyle(fontSize: 13, color: p.textMuted)),
+                    children: [
+                      SelectableText('${e['message']}\n\n${e['stack'] ?? ''}',
+                          style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------ обратна връзка
+
+class _FeedbackList extends StatelessWidget {
+  final Map<String, dynamic> d;
+  final Future<void> Function() onRefresh;
+  const _FeedbackList(this.d, {required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final list = (((d['extra'] as Map?)?['feedback'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        children: [
+          Text('${list.where((f) => f['done'] != true).length} нови · ${list.length} общо',
+              style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+          const SizedBox(height: 8),
+          if (list.isEmpty) const Text('Още няма отзиви.', style: TextStyle(fontSize: 16)),
+          for (final f in list)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Opacity(
+                opacity: f['done'] == true ? .55 : 1,
+                child: SurfaceCard(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(withRank(ClergyRank.fromCode(f['rank']), '${f['user']}'),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      ),
+                      Checkbox(
+                        value: f['done'] == true,
+                        onChanged: (v) async {
+                          await s.creatorFeedbackDone(f['id'] as String, v ?? false);
+                          await onRefresh();
+                        },
+                      ),
+                    ]),
+                    Text('${_ago(_dt(f['at']))} · версия ${f['build'] ?? '?'}${f['church'] == null ? '' : ' · ${f['church']}'}',
+                        style: TextStyle(fontSize: 13, color: p.textMuted)),
+                    const SizedBox(height: 6),
+                    SelectableText('${f['body']}', style: const TextStyle(fontSize: 15.5)),
+                    if (f['photo'] != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            final bytes = await s.feedbackPhoto(f['photo'] as String);
+                            if (!context.mounted) return;
+                            if (bytes == null) {
+                              showMessage(context, 'Снимката не можа да се зареди.');
+                              return;
+                            }
+                            await showDialog<void>(
+                              context: context,
+                              builder: (ctx) => Dialog(
+                                child: InteractiveViewer(child: Image.memory(bytes)),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.image_outlined),
+                          label: const Text('Снимка на екрана'),
+                        ),
+                      ),
+                  ]),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------ съобщения
+
+class _Announce extends StatefulWidget {
+  final Map<String, dynamic> d;
+  final Future<void> Function() onRefresh;
+  const _Announce(this.d, {required this.onRefresh});
+
+  @override
+  State<_Announce> createState() => _AnnounceState();
+}
+
+class _AnnounceState extends State<_Announce> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  String? _church; // null = всички
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_title.text.trim().isEmpty) {
+      showMessage(context, 'Напишете заглавие.');
+      return;
+    }
+    final churches = (widget.d['churches'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final target = _church == null ? 'всички' : '${churches.firstWhere((c) => c['id'] == _church)['name']}';
+    final ok = await confirm(context, 'Изпращане', 'Съобщението отива до: $target. Всеки ще получи известие.', 'Изпрати');
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await AppScope.read(context).creatorAnnounce(_title.text.trim(), _body.text.trim(), _church);
+      _title.clear();
+      _body.clear();
+      if (mounted) showMessage(context, 'Съобщението е изпратено.');
+      await widget.onRefresh();
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final churches = (widget.d['churches'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final sent = (((widget.d['extra'] as Map?)?['announcements'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        children: [
+          Text('Излиза като известие и като карта с „ОК“ в приложението.',
+              style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String?>(
+            initialValue: _church,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'До'),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('Всички')),
+              for (final c in churches)
+                DropdownMenuItem<String?>(value: c['id'] as String, child: Text('${c['name']}', overflow: TextOverflow.ellipsis)),
+            ],
+            onChanged: (v) => setState(() => _church = v),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _title,
+            maxLength: 120,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Заглавие', hintText: 'напр. Има нова версия'),
+          ),
+          TextField(
+            controller: _body,
+            maxLength: 1000,
+            minLines: 3,
+            maxLines: 6,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Текст (по желание)'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+            onPressed: _busy ? null : _send,
+            icon: const Icon(Icons.campaign_rounded),
+            label: const Text('Изпрати съобщението'),
+          ),
+          if (sent.isNotEmpty) ...[
+            const _Section('Изпратени'),
+            for (final a in sent)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SurfaceCard(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${a['title']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    if ((a['body'] as String?)?.isNotEmpty == true) Text('${a['body']}', style: const TextStyle(fontSize: 14.5)),
+                    Text('${_ago(_dt(a['at']))} · до ${a['church'] ?? 'всички'} · видели: ${a['seen']}',
+                        style: TextStyle(fontSize: 13, color: p.textMuted)),
+                  ]),
+                ),
+              ),
           ],
         ],
       ),

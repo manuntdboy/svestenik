@@ -9,6 +9,7 @@ import 'church_connect.dart';
 import 'church_priests.dart';
 import 'change_password.dart';
 import 'creator.dart';
+import 'feedback.dart';
 import 'privacy.dart';
 import 'my_profile.dart';
 import '../widgets/whats_new.dart' show buildNumber, isTestBuild;
@@ -216,36 +217,35 @@ class ProfileScreen extends StatelessWidget {
             ]),
           ),
         ),
-        // Обратна връзка – само в тестовата версия: направо Viber към създателя.
-        if (isTestBuild) ...[
-          const SizedBox(height: 12),
-          Material(
-            color: const Color(0xFF7360F2).withValues(alpha: .12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: const BorderSide(color: Color(0xFF7360F2), width: 1.5),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => ContactButtons.viber(context, _feedbackViber),
-              child: const Padding(
-                padding: EdgeInsets.fromLTRB(16, 14, 12, 14),
-                child: Row(children: [
-                  Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF7360F2), size: 30),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Обратна връзка', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                      SizedBox(height: 2),
-                      Text('Пишете ми във Viber – грешка, идея или въпрос.', style: TextStyle(fontSize: 15)),
-                    ]),
-                  ),
-                  Icon(Icons.chevron_right_rounded),
-                ]),
-              ),
+        // Обратна връзка: в приложението (до създателя), а в тестовата версия – и Viber.
+        const SizedBox(height: 12),
+        Material(
+          color: const Color(0xFF7360F2).withValues(alpha: .12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFF7360F2), width: 1.5),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => FeedbackScreen(viber: isTestBuild ? _feedbackViber : null))),
+            child: const Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 12, 14),
+              child: Row(children: [
+                Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF7360F2), size: 30),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Обратна връзка', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    SizedBox(height: 2),
+                    Text('Грешка, идея или въпрос – пишете на създателя.', style: TextStyle(fontSize: 15)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded),
+              ]),
             ),
           ),
-        ],
+        ),
         const SizedBox(height: 28),
         FilledButton(
           onPressed: () => s.logout(),

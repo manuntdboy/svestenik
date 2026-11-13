@@ -49,19 +49,24 @@ Deno.serve(async (req) => {
   } catch {
     return json(400, { error: "bad_request" });
   }
-  if (!churchId || !userId) return json(400, { error: "bad_request" });
+  if (!userId) return json(400, { error: "bad_request" });
   if (userId === caller.id) return json(400, { error: "own_password" });
 
-  const { data: me } = await admin.from("church_members").select("role,status")
-    .eq("church_id", churchId).eq("user_id", caller.id).maybeSingle();
-  if (!me || me.role !== "manager" || me.status !== "active") return json(403, { error: "not_manager" });
-  const { data: target } = await admin.from("church_members").select("status")
-    .eq("church_id", churchId).eq("user_id", userId).maybeSingle();
-  if (!target) return json(404, { error: "not_member" });
+  // Създателят може за всеки; председателят – само в своя храм.
+  const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();
+  if (!creator) {
+    if (!churchId) return json(400, { error: "bad_request" });
+    const { data: me } = await admin.from("church_members").select("role,status")
+      .eq("church_id", churchId).eq("user_id", caller.id).maybeSingle();
+    if (!me || me.role !== "manager" || me.status !== "active") return json(403, { error: "not_manager" });
+    const { data: target } = await admin.from("church_members").select("status")
+      .eq("church_id", churchId).eq("user_id", userId).maybeSingle();
+    if (!target) return json(404, { error: "not_member" });
+  }
 
   const password = tempPassword();
   const { error } = await admin.auth.admin.updateUserById(userId, { password });
   if (error) return json(500, { error: "update_failed" });
-  await admin.from("password_resets").insert({ church_id: churchId, user_id: userId, by_user: caller.id });
+  await admin.from("password_resets").insert({ church_id: churchId || null, user_id: userId, by_user: caller.id });
   return json(200, { password });
 });

@@ -12,3 +12,7 @@ verify_jwt = false
 [functions.reset_password]
 # Проверява токена сама (admin.auth.getUser) и че викащият е председател.
 verify_jwt = false
+
+[functions.delete_user]
+# Проверява токена сама и че викащият е създателят.
+verify_jwt = false

@@ -98,6 +98,8 @@ class Church {
   String joinCode;
   final String? pendingChairId; // предложен за председател, чака отговор
   final String? chairProposedById;
+  final bool cashEnabled; // касата е включена за храма (решава създателят)
+  final bool stockEnabled;
 
   Church({
     required this.id,
@@ -107,6 +109,8 @@ class Church {
     required this.joinCode,
     this.pendingChairId,
     this.chairProposedById,
+    this.cashEnabled = true,
+    this.stockEnabled = true,
   });
 
   String get place => '$settlement, общ. $municipality';
@@ -119,6 +123,26 @@ class Church {
         joinCode: r['join_code'] as String,
         pendingChairId: r['pending_chair'] as String?,
         chairProposedById: r['chair_proposed_by'] as String?,
+        cashEnabled: (r['cash_enabled'] as bool?) ?? true,
+        stockEnabled: (r['stock_enabled'] as bool?) ?? true,
+      );
+}
+
+/// Съобщение от създателя (до всички или до един храм).
+class Announcement {
+  final String id;
+  final String? churchId;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+  Announcement({required this.id, this.churchId, required this.title, this.body = '', required this.createdAt});
+
+  factory Announcement.fromRow(Map<String, dynamic> r) => Announcement(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String?,
+        title: r['title'] as String,
+        body: (r['body'] as String?) ?? '',
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
       );
 }
 

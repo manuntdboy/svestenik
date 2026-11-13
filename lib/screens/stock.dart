@@ -32,6 +32,15 @@ class _StockScreenState extends State<StockScreen> {
     final p = Palette.of(context);
     final s = AppScope.of(context);
     final church = s.currentChurchId!;
+    if (s.currentChurch?.stockEnabled == false) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Склад')),
+        body: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Складът е изключен за този храм.', style: TextStyle(fontSize: 17)),
+        ),
+      );
+    }
     if (!s.canSeeCash(church)) {
       return Scaffold(
         appBar: AppBar(title: const Text('Склад')),

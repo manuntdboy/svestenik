@@ -315,7 +315,8 @@ class PriestProfileScreen extends StatelessWidget {
 
 
 /// Председателят дава временна парола на свещеник, който е забравил своята.
-Future<void> showTempPassword(BuildContext context, String churchId, String userId, String name) async {
+Future<void> showTempPassword(BuildContext context, String churchId, String userId, String name,
+    {String? username}) async {
   final s = AppScope.read(context);
   final ok = await confirm(
       context,
@@ -332,8 +333,8 @@ Future<void> showTempPassword(BuildContext context, String churchId, String user
     return;
   }
   if (!context.mounted) return;
-  final username = s.priestsOf(churchId).where((x) => x.$1.id == userId).firstOrNull?.$1.username ?? '';
-  final text = 'Кайрос – вход\nПотребител: $username\nВременна парола: $pass\n'
+  final uname = username ?? s.priestsOf(churchId).where((x) => x.$1.id == userId).firstOrNull?.$1.username ?? '';
+  final text = 'Кайрос – вход\nПотребител: $uname\nВременна парола: $pass\n'
       'След входа приложението ще ви помоли да изберете своя парола.';
   await showDialog<void>(
     context: context,
@@ -342,7 +343,7 @@ Future<void> showTempPassword(BuildContext context, String churchId, String user
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Кажете на $name:', style: const TextStyle(fontSize: 16)),
         const SizedBox(height: 10),
-        if (username.isNotEmpty) Text('Потребител: $username', style: const TextStyle(fontSize: 17)),
+        if (uname.isNotEmpty) Text('Потребител: $uname', style: const TextStyle(fontSize: 17)),
         SelectableText(pass,
             style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 3)),
         const SizedBox(height: 8),

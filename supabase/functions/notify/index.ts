@@ -131,7 +131,56 @@ async function handle(req: Request): Promise<Response> {
     new Date(d + "T12:00:00Z").toLocaleDateString("bg-BG", { day: "numeric", month: "long" });
   const rangeD = (a: string, b: string) => (a === b ? fmtD(a) : `${fmtD(a)} – ${fmtD(b)}`);
 
-  if (type === "duty") {
+  const recent = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  if (type === "announcement") {
+    // Съобщение от създателя → до всички или до членовете на един храм.
+    const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();
+    if (!creator) return json(403, { error: "forbidden" });
+    const { data: a } = await admin.from("announcements").select("*").eq("id", String(body.announcement_id ?? "")).maybeSingle();
+    if (!a) return json(404, { error: "not_found" });
+    if (a.church_id) {
+      const { data: ms } = await admin.from("church_members").select("user_id").eq("church_id", a.church_id).eq("status", "active");
+      recipients = (ms ?? []).map((m) => m.user_id);
+    } else {
+      const { data: ps } = await admin.from("profiles").select("id");
+      recipients = (ps ?? []).map((p) => p.id);
+    }
+    title = a.title;
+    text = a.body ?? "";
+    data = { type: "announcement", church_id: String(a.church_id ?? "") };
+  } else if (type === "creator_event") {
+    // Важно за създателя: нов потребител, нов храм, грешка, обратна връзка.
+    const kind = String(body.kind ?? "");
+    let ok = false;
+    if (kind === "new_user") {
+      const { data: u } = await admin.from("profiles").select("created_at").eq("id", caller.id).maybeSingle();
+      ok = !!u && u.created_at >= recent;
+      title = "Нов потребител";
+      text = callerName;
+    } else if (kind === "new_church") {
+      const { data: c } = await admin.from("churches").select("name,settlement").eq("created_by", caller.id)
+        .gte("created_at", recent).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      ok = !!c;
+      title = "Нов храм";
+      text = c ? `${c.name}, ${c.settlement} · ${callerName}` : "";
+    } else if (kind === "error") {
+      const { data: e } = await admin.from("app_errors").select("message,build,screen").eq("user_id", caller.id)
+        .gte("at", recent).order("at", { ascending: false }).limit(1).maybeSingle();
+      ok = !!e;
+      title = "Грешка в приложението";
+      text = e ? `${callerName} · версия ${e.build ?? "?"}${e.screen ? " · " + e.screen : ""}\n${String(e.message).slice(0, 140)}` : "";
+    } else if (kind === "feedback") {
+      const { data: f } = await admin.from("feedback").select("body").eq("user_id", caller.id)
+        .gte("at", recent).order("at", { ascending: false }).limit(1).maybeSingle();
+      ok = !!f;
+      title = "Обратна връзка";
+      text = f ? `${callerName}: ${String(f.body).slice(0, 160)}` : "";
+    }
+    if (!ok) return json(404, { error: "not_found" });
+    const { data: cs } = await admin.from("app_creators").select("user_id");
+    recipients = (cs ?? []).map((c) => c.user_id);
+    data = { type: "creator", kind };
+  } else if (type === "duty") {
     // Промени в графика на дежурствата → до засегнатия свещеник (един ред на човек).
     const userId = String(body.user_id ?? "");
     const ids = (Array.isArray(body.log_ids) ? body.log_ids : []).map((x) => Number(x)).filter((x) => x > 0);

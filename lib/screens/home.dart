@@ -69,6 +69,26 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const ChurchBanner(),
             const SizedBox(height: 12),
+            // Стара версия – напомняне от създателя.
+            if (buildNumber > 0 && buildNumber < s.minBuild)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Palette.yellow,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.system_update_rounded, color: Palette.onYellow, size: 30),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text('Има нова версия на Кайрос. Отворете App Tester и натиснете „Обнови“.',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Palette.onYellow)),
+                    ),
+                  ]),
+                ),
+              ),
             // Дежурен тази седмица – видимо за всички в храма.
             const DutyNowCard(compact: true),
             _PriestsStrip(churchId: s.currentChurchId!),
@@ -89,18 +109,20 @@ class HomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(child: _CalendarTile(count: todayCount, onTap: openCalendar)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Каса: председател и касиер – цялата; свещеник – предава приходи.
-                        Expanded(child: _CashTile(churchId: s.currentChurchId!)),
-                        const SizedBox(height: 12),
-                        Expanded(child: _StockTile(churchId: s.currentChurchId!)),
-                      ],
+                  if (s.currentChurch!.cashEnabled || s.currentChurch!.stockEnabled) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Каса: председател и касиер – цялата; свещеник – предава приходи.
+                          if (s.currentChurch!.cashEnabled) Expanded(child: _CashTile(churchId: s.currentChurchId!)),
+                          if (s.currentChurch!.cashEnabled && s.currentChurch!.stockEnabled) const SizedBox(height: 12),
+                          if (s.currentChurch!.stockEnabled) Expanded(child: _StockTile(churchId: s.currentChurchId!)),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

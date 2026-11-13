@@ -735,6 +735,31 @@ select t.as_user(:'C');
 select public.privacy_accept(1) \g /dev/null
 select t.ok((select privacy_version from profiles where id = :'C') = 1
             and (select privacy_accepted_at from profiles where id = :'C') is not null, 'съгласието за личните данни се записва');
+\echo '== Инструменти на създателя'
+select t.as_user(:'B');
+select t.fails($$select public.creator_announce('x', null, null)$$, 'само създателят праща съобщения', 'forbidden');
+select t.fails($$select public.creator_set_min_build(5)$$, 'само създателят задава версия', 'forbidden');
+select t.ok(public.report_error(90, 'Каса', 'Null check operator', 'stack') is not null, 'грешката от телефона се записва');
+select t.fails($$select * from app_errors$$, 'дневникът на грешките е затворен', 'permission denied');
+insert into feedback (body, build) values ('Бутонът се реже', 104);
+select t.ok((select count(*) from feedback) = 1, 'свещеникът вижда своята обратна връзка');
+select t.as_user(:'C');
+select t.ok((select count(*) from feedback) = 0, 'чуждата обратна връзка не се вижда');
+select t.as_user(:'A');
+select (public.creator_announce('Нова версия', 'Обновете', null)).id as ann \gset
+select public.creator_set_min_build(105) \g /dev/null
+select t.ok((select min_build from app_config) = 105, 'минималната версия се задава');
+select (public.creator_extra()) as cx \gset
+select t.ok(jsonb_array_length(:'cx'::jsonb->'feedback') = 1 and (:'cx'::jsonb->>'errors_24')::int >= 1,
+            'създателят вижда обратната връзка и грешките');
+select public.creator_church_settings(:'cid2', true, false, null) \g /dev/null
+select t.ok((public.creator_extra()->'church_settings'->:'cid2'->>'stock')::boolean = false, 'складът се изключва за храм');
+select public.creator_church_settings(:'cid2', true, true, null) \g /dev/null
+select t.as_user(:'C');
+select t.ok((select count(*) from announcements where id = :'ann') = 1, 'съобщението до всички се вижда');
+select public.announcement_ack(:'ann') \g /dev/null
+select t.ok((select count(*) from announcement_seen where announcement_id = :'ann' and user_id = :'C') = 1, '„ОК“ на съобщението се пази');
+select t.as_user(:'A');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

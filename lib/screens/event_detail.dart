@@ -299,7 +299,9 @@ class _StatusButtons extends StatelessWidget {
     }
     try {
       await s.setStatus(event, st);
-      if (context.mounted && st == EventStatus.done && s.myChurches.any((c) => c.id == event.churchId)) {
+      if (context.mounted &&
+          st == EventStatus.done &&
+          s.myChurches.any((c) => c.id == event.churchId && c.cashEnabled)) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Отбелязано като проведено.', style: TextStyle(fontSize: 16)),
           duration: const Duration(seconds: 6),
@@ -331,7 +333,7 @@ class _StatusButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     if (event.status != EventStatus.planned) {
       final s = AppScope.of(context);
-      final inChurch = s.myChurches.any((c) => c.id == event.churchId);
+      final inChurch = s.myChurches.any((c) => c.id == event.churchId && c.cashEnabled);
       final hasIncome = s.cashEntries(event.churchId).any((x) =>
           x.eventId == event.id && !x.isReturned && !x.isReversal && x.reversedBy == null);
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
