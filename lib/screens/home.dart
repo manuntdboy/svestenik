@@ -241,9 +241,17 @@ class _CalendarTile extends StatelessWidget {
                   Text(count == 1 ? 'ваше събитие днес' : 'ваши събития днес',
                       style: TextStyle(fontSize: 15, color: p.calendarTileMuted)),
                   const SizedBox(height: 6),
-                  Text('Календар',
-                      style: TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w700, color: p.onCalendarTile)),
+                  Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                    Text('Календар',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w700, color: p.onCalendarTile)),
+                    const SizedBox(width: 8),
+                    // Днешната дата като дд.мм.
+                    Text(
+                        '${DateTime.now().day.toString().padLeft(2, '0')}.${DateTime.now().month.toString().padLeft(2, '0')}.',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w800, color: p.onCalendarTile)),
+                  ]),
                 ],
               ),
             ],
@@ -302,7 +310,7 @@ class _CashTile extends StatelessWidget {
               ]),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Каса', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                Text(holder ? fmtEur(cash + bank) : 'Предай приход',
+                Text(holder ? 'в брой ${fmtEur(cash)}' : 'Предай приход',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

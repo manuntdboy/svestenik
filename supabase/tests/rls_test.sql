@@ -559,12 +559,21 @@ select t.ok((select sum(qty) from stock_moves where church_id = :'cid2' and item
 delete from events where for_whom = 'Скл-вен';
 select t.ok((select sum(qty) from stock_moves where church_id = :'cid2' and item = 'cert_wedding') = 4,
             'изтрито проведено събитие връща бланките');
+select public.stock_load(:'cid2', 'candle_1', 5, null) \g /dev/null
 select id as sw from public.stock_writeoff(:'cid2', 'candle_1', 1, 'повредени') \gset
 select t.ok((select status from stock_moves where id = :'sw') = 'pending', 'ръчното изписване чака другия');
 select t.fails(format($$select public.stock_decide(%L, true, null)$$, :'sw'), 'никой не одобрява своето изписване', 'own_entry');
 select t.fails(format($$select public.stock_writeoff(%L, 'candle_1', 1, '')$$, :'cid2'), 'изписване без причина се отказва', 'reason_required');
 select t.as_user(:'B');
 select t.ok((select status from public.stock_decide(:'sw', true, null)) = 'approved', 'касиерът одобрява изписването');
+select t.fails(format($$select public.stock_writeoff(%L, 'candle_4', 1, 'За храма')$$, :'cid2'),
+               'не се изписва повече от наличното', 'not_enough_stock');
+select t.as_user(:'D');
+insert into events (church_id, kind, starts_at, visibility, for_whom) values (:'cid2', 'krashtene', now(), 'church', 'Скл-0');
+select public.stock_writeoff(:'cid2', 'cert_baptism', 3, 'повредени') \g /dev/null
+select t.fails($$update events set status = 'done' where for_whom = 'Скл-0'$$,
+               'без кръщелни в склада кръщенето не се отбелязва проведено', 'not_enough_stock');
+select t.as_user(:'B');
 select public.stock_set_threshold(:'cid2', 'candle_040', 8);
 select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_040') = 8, 'границата за предупреждение се настройва');
 select t.fails($$insert into stock_moves(church_id, item, qty, kind) values (gen_random_uuid(), 'diploma', 1, 'load')$$,

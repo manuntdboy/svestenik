@@ -263,6 +263,16 @@ class AppState extends ChangeNotifier {
     if (t.contains('not_reversible')) return 'Този запис не може да се сторнира.';
     if (t.contains('reason_required')) return 'Напишете причина за сторното.';
     if (t.contains('not_church_event')) return 'Това събитие не изисква потвърждение.';
+    if (t.contains('not_enough_stock')) {
+      final what = t.contains('cert_baptism')
+          ? 'кръщелни свидетелства'
+          : t.contains('cert_wedding')
+              ? 'венчални свидетелства'
+              : t.contains('diploma')
+                  ? 'грамоти'
+                  : 'наличност';
+      return 'В склада няма достатъчно $what. Заредете склада и опитайте пак.';
+    }
     if (t.contains('event_has_income')) {
       return 'Приходът от събитието е записан в касата. Първо го сторнирайте, после върнете събитието.';
     }

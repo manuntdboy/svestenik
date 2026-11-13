@@ -517,7 +517,8 @@ class StockBookScreen extends StatefulWidget {
 }
 
 class _StockBookScreenState extends State<StockBookScreen> {
-  StockItem? _item; // null = всички
+  StockSection? _section; // null = и двата раздела
+  StockItem? _item; // null = всички видове
   String? _kind; // null = всички, 'in' = влизания, 'out' = излизания
 
   @override
@@ -527,6 +528,7 @@ class _StockBookScreenState extends State<StockBookScreen> {
     final church = s.currentChurchId!;
     final moves = s
         .stockMoves(church, item: _item)
+        .where((m) => _section == null || m.item.section == _section)
         .where((m) => _kind == null || (_kind == 'in' ? m.qty > 0 : m.qty < 0))
         .toList();
     final day = DateFormat('d MMMM y', 'bg');
@@ -540,13 +542,29 @@ class _StockBookScreenState extends State<StockBookScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
+              SegmentedButton<StockSection?>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: null, label: Text('Всичко')),
+                  ButtonSegment(value: StockSection.candles, label: Text('Свещи')),
+                  ButtonSegment(value: StockSection.papers, label: Text('Ценни книжа')),
+                ],
+                selected: {_section},
+                onSelectionChanged: (v) => setState(() {
+                  _section = v.first;
+                  if (_item != null && _section != null && _item!.section != _section) _item = null;
+                }),
+              ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<StockItem?>(
+                key: ValueKey(_section),
                 initialValue: _item,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Вид'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Всички видове')),
-                  for (final i in StockItem.values) DropdownMenuItem(value: i, child: Text(i.label)),
+                  for (final i in StockItem.values.where((i) => _section == null || i.section == _section))
+                    DropdownMenuItem(value: i, child: Text(i.label)),
                 ],
                 onChanged: (v) => setState(() => _item = v),
               ),

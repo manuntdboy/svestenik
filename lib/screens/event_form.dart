@@ -599,9 +599,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
                             _ => e.key.label,
                           }}')
                       .join(' и ');
+                  final short = bal != null && need.entries.any((e) => bal[e.key]! < e.value && bal[e.key]! >= 0);
                   final have = bal == null
                       ? ''
-                      : ' В склада: ${need.keys.map((i) => '${i.label.toLowerCase()} ${bal[i]}').join(', ')}.';
+                      : ' В склада: ${need.keys.map((i) => '${i.label.toLowerCase()} ${bal[i]}').join(', ')}.'
+                          '${short ? ' Не стигат – заредете склада, иначе събитието няма да може да се отбележи като проведено.' : ''}';
                   return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Icon(Icons.inventory_2_outlined, size: 20, color: p.textMuted),
                     const SizedBox(width: 8),
