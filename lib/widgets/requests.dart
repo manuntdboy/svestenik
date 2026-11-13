@@ -33,7 +33,11 @@ String fmtLeavePeriod(LeaveRequest l) {
 
 /// Диалог с поле за коментар (по желание). Връща текста или null при „Отказ“.
 Future<String?> askComment(BuildContext context,
-    {required String title, required String body, required String hint, required String action}) async {
+    {required String title,
+    required String body,
+    required String hint,
+    required String action,
+    String label = 'Коментар'}) async {
   final c = TextEditingController();
   final ok = await showDialog<bool>(
     context: context,
@@ -47,9 +51,15 @@ Future<String?> askComment(BuildContext context,
           maxLength: 300,
           minLines: 2,
           maxLines: 4,
+          autofocus: true,
           textCapitalization: TextCapitalization.sentences,
           style: const TextStyle(fontSize: 17),
-          decoration: InputDecoration(hintText: hint),
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            border: const OutlineInputBorder(),
+          ),
         ),
       ]),
       actions: [
@@ -456,8 +466,9 @@ class _LeaveReviewCardState extends State<LeaveReviewCard> {
       if (!approve) {
         final c = await askComment(context,
             title: 'Отказ на почивката',
-            body: '${s.priestName(l.userId)} · ${fmtLeavePeriod(l)}\nКоментарът ще получи като известие.',
-            hint: 'Коментар (по желание), напр. „Имаме кръщене тогава“',
+            body: '${s.priestName(l.userId)} · ${fmtLeavePeriod(l)}\nПричината ще получи като известие.',
+            hint: 'напр. „Имаме кръщене тогава“',
+            label: 'Причина за отказа (по желание)',
             action: 'Откажи');
         if (c == null || !mounted) return;
         note = c;

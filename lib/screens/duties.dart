@@ -108,7 +108,7 @@ class DutyScreen extends StatefulWidget {
 
 class _DutyScreenState extends State<DutyScreen> {
   bool _past = false;
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _shown = DateTime(DateTime.now().year, DateTime.now().month, 1);
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +137,8 @@ class _DutyScreenState extends State<DutyScreen> {
               const DutyNowCard(),
               // Месец с датите в цвета на дежурния.
               _DutyMonth(
-                month: _month,
-                onShift: (d) => setState(() => _month = DateTime(_month.year, _month.month + d, 1)),
+                month: _shown,
+                onShift: (d) => setState(() => _shown = DateTime(_shown.year, _shown.month + d, 1)),
               ),
               const SizedBox(height: 12),
               for (final w in s.swapsForMe(church))
