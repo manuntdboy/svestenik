@@ -74,9 +74,9 @@ class _StockScreenState extends State<StockScreen> {
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
                     onPressed: () =>
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const StockAuditScreen())),
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const StockAuditsScreen())),
                     icon: const Icon(Icons.fact_check_outlined),
-                    label: const Text('Ревизия'),
+                    label: Text('Ревизии${s.stockAudits(church).isEmpty ? '' : ' (${s.stockAudits(church).length})'}'),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -585,7 +585,7 @@ class _StockBookScreenState extends State<StockBookScreen> {
                 onSelectionChanged: (v) => setState(() => _audits = v.first),
               ),
               const SizedBox(height: 14),
-              if (_audits) ..._auditList(context, s, church) else ...[
+              if (_audits) ...auditArchive(context, s, church) else ...[
               TextField(
                 decoration: const InputDecoration(
                     hintText: 'Търсене: причина, събитие, име', prefixIcon: Icon(Icons.search_rounded)),
@@ -661,29 +661,107 @@ class _StockBookScreenState extends State<StockBookScreen> {
     );
   }
 
-  List<Widget> _auditList(BuildContext context, AppState s, String church) {
-    final p = Palette.of(context);
-    final batches = s.stockAudits(church);
+}
+
+/// Архив на ревизиите – само за сведение, не влияе на склада и касата.
+/// Председателят може да изтрие ревизия.
+List<Widget> auditArchive(BuildContext context, AppState s, String church) {
+  final p = Palette.of(context);
+  final batches = s.stockAudits(church);
+  final manager = s.isManagerOf(church);
+  String summary(List<StockAudit> b) {
+    final less = b.where((a) => a.diff < 0).toList();
+    final more = b.where((a) => a.diff > 0).toList();
+    if (less.isEmpty && more.isEmpty) return 'Всичко съвпада с книгата (${b.length} вида).';
     return [
-      Text('Ревизията е само проверка: записва преброеното и разликата с книгата, без да мени наличността.',
-          style: TextStyle(fontSize: 14, color: p.textMuted)),
-      const SizedBox(height: 10),
-      if (batches.isEmpty) Text('Още няма ревизии.', style: TextStyle(fontSize: 16, color: p.textMuted)),
-      for (final b in batches)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: SurfaceCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('Ревизия · ${_stamp.format(b.first.createdAt)}',
-                  style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
-              Text([s.priestName(b.first.createdBy), if (b.first.note.isNotEmpty) b.first.note].join(' · '),
-                  style: TextStyle(fontSize: 13.5, color: p.textMuted)),
-              const SizedBox(height: 8),
-              for (final a in b) _AuditLine(audit: a),
+      if (less.isNotEmpty) 'Липсват: ${less.map((a) => '${a.item.label} ${a.item.qty(-a.diff)}').join(', ')}',
+      if (more.isNotEmpty) 'Излишък: ${more.map((a) => '${a.item.label} ${a.item.qty(a.diff)}').join(', ')}',
+    ].join('. ');
+  }
+
+  return [
+    Text('Ревизията е само за сведение: пази преброеното и разликата с книгата. '
+        'Не променя склада и не влиза в касата.',
+        style: TextStyle(fontSize: 14, color: p.textMuted)),
+    const SizedBox(height: 10),
+    if (batches.isEmpty) Text('Още няма ревизии.', style: TextStyle(fontSize: 16, color: p.textMuted)),
+    for (final b in batches)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: SurfaceCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Expanded(
+                child: Text('Ревизия · ${_stamp.format(b.first.createdAt)}',
+                    style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
+              ),
+              if (manager)
+                IconButton(
+                  tooltip: 'Изтрий ревизията',
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  onPressed: () async {
+                    final ok = await confirm(context, 'Изтриване на ревизията?',
+                        'Ревизия от ${_stamp.format(b.first.createdAt)}. Складът и касата не се променят.', 'Изтрий');
+                    if (!ok || !context.mounted) return;
+                    try {
+                      await s.deleteAudit(church, b.first.batch);
+                      if (context.mounted) showMessage(context, 'Ревизията е изтрита.');
+                    } on AppError catch (e) {
+                      if (context.mounted) showMessage(context, e.message);
+                    }
+                  },
+                ),
             ]),
+            Text('Извърши: ${s.priestName(b.first.createdBy)}', style: const TextStyle(fontSize: 15)),
+            if (b.first.note.isNotEmpty)
+              Text(b.first.note, style: TextStyle(fontSize: 14, color: p.textMuted)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: (b.every((a) => a.diff == 0) ? Colors.green : Colors.orange).withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text('Резултат: ${summary(b)}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 6),
+            for (final a in b) _AuditLine(audit: a),
+          ]),
+        ),
+      ),
+  ];
+}
+
+/// Раздел „Ревизии“ – архив.
+class StockAuditsScreen extends StatelessWidget {
+  const StockAuditsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final church = s.currentChurchId!;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Ревизии')),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: s.refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            children: [
+              FilledButton.icon(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockAuditScreen())),
+                icon: const Icon(Icons.fact_check_outlined),
+                label: const Text('Нова ревизия'),
+              ),
+              const SizedBox(height: 16),
+              ...auditArchive(context, s, church),
+            ],
           ),
         ),
-    ];
+      ),
+    );
   }
 }
 

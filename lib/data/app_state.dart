@@ -790,6 +790,17 @@ class AppState extends ChangeNotifier {
     return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
   }
 
+  /// Председателят изтрива ревизия (само архив – складът не се променя).
+  Future<void> deleteAudit(String churchId, String batch) async {
+    try {
+      await _db.rpc('stock_audit_delete', params: {'p_church': churchId, 'p_batch': batch});
+      _audits.removeWhere((a) => a.churchId == churchId && a.batch == batch);
+      notifyListeners();
+    } catch (err) {
+      throw AppError(_friendly(err));
+    }
+  }
+
   /// Записва ревизия (само проверка – наличността не се променя).
   Future<void> saveAudit(String churchId, Map<StockItem, int> counted, String note) async {
     final batch = _newUuid();

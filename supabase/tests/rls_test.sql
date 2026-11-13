@@ -602,6 +602,15 @@ select t.as_user(:'B');
 select t.ok((select book_qty from public.stock_audit(:'cid2', gen_random_uuid(), 'candle_1', 1, 'преброено')) = 4
             and (select coalesce(sum(qty),0) from stock_moves where church_id = :'cid2' and item = 'candle_1' and status = 'approved') = 4,
             'ревизията записва преброеното, без да мени наличността');
+select batch as ab from stock_audits where church_id = :'cid2' limit 1 \gset
+select t.fails(format('select public.stock_audit_delete(%L, %L)', :'cid2', :'ab'), 'касиерът не трие ревизии', 'not_manager');
+select t.as_user(:'D');
+select public.stock_audit_delete(:'cid2', :'ab') as dn \gset
+select t.ok(:dn = 1
+            and (select count(*) from stock_audits where batch = :'ab') = 0
+            and (select coalesce(sum(qty),0) from stock_moves where church_id = :'cid2' and item = 'candle_1' and status = 'approved') = 4,
+            'председателят трие ревизия, складът не се променя');
+select t.as_user(:'B');
 select t.as_user(:'C');
 select t.fails(format($$select public.stock_audit(%L, gen_random_uuid(), 'candle_1', 1, null)$$, :'cid2'), 'свещеник не прави ревизия', 'not_cash_holder');
 select id as don from public.cash_add(:'cid2','income',25,'Дарение',null,null,'cash',null,null,null) \gset
