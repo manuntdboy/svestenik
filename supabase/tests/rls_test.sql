@@ -718,5 +718,13 @@ select t.as_user(:'B');
 select t.ok(not public.is_creator(), 'другите не са създатели');
 select t.fails($$select * from app_versions$$, 'версиите не се четат директно', 'permission denied');
 reset role;
+insert into password_resets (user_id, by_user) values (:'C', :'A');
+set role authenticated;
+select t.as_user(:'C');
+select t.ok(public.password_must_change(), 'след временна парола свещеникът трябва да я смени');
+select public.password_changed() \g /dev/null
+select t.ok(not public.password_must_change(), 'след смяната повече не се иска');
+select t.fails($$select * from password_resets$$, 'дневникът на паролите е затворен', 'permission denied');
+reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

@@ -7,6 +7,7 @@ import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
 import 'church_priests.dart';
+import 'change_password.dart';
 import 'creator.dart';
 import 'my_profile.dart';
 import '../widgets/whats_new.dart' show buildNumber, isTestBuild;
@@ -170,6 +171,13 @@ class ProfileScreen extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 20),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen())),
+          icon: const Icon(Icons.key_rounded),
+          label: const Text('Смени паролата'),
         ),
         const SizedBox(height: 20),
         // „За приложението“ – създател и версия. За профила на създателя

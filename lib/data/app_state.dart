@@ -128,6 +128,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _clear() {
+    mustChangePassword = false;
     isCreator = false;
     _versionAt = null;
     currentUser = null;
@@ -239,6 +240,7 @@ class AppState extends ChangeNotifier {
       unawaited(_registerPush());
       unawaited(_reportVersion());
       unawaited(_checkCreator());
+      unawaited(_checkPassword());
     } catch (e) {
       debugPrint('Обновяването не успя: $e');
       syncError = 'Няма връзка със сървъра. Показват се последните заредени данни.';
@@ -307,6 +309,10 @@ class AppState extends ChangeNotifier {
     }
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
+    if (t.contains('same_password') || t.contains('should be different')) {
+      return 'Новата парола трябва да е различна от старата.';
+    }
+    if (t.contains('weak_password') || t.contains('at least')) return 'Паролата е твърде кратка – поне 6 знака.';
     if (t.contains('amount_check')) return 'Сумата е твърде голяма – най-много 12 цифри.';
     if (t.contains('duty_overlap')) return 'В тези дни вече има дежурен. Изберете други дати.';
     if (t.contains('duty_too_long')) return 'Едно дежурство е най-много 2 месеца.';
@@ -336,6 +342,44 @@ class AppState extends ChangeNotifier {
       await _db.rpc('report_version', params: {'p_build': buildNumber});
     } catch (e) {
       debugPrint('Версията не се записа: $e');
+    }
+  }
+
+  /// Влязъл е с временна парола от председателя – трябва да си избере своя.
+  bool mustChangePassword = false;
+
+  Future<void> _checkPassword() async {
+    try {
+      final v = await _db.rpc('password_must_change') == true;
+      if (v != mustChangePassword) {
+        mustChangePassword = v;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> changePassword(String newPassword) async {
+    try {
+      await _db.auth.updateUser(UserAttributes(password: newPassword));
+      await _db.rpc('password_changed');
+      mustChangePassword = false;
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Председателят дава временна парола на свещеник от храма си.
+  Future<String> resetPassword(String churchId, String userId) async {
+    try {
+      final r = await _db.functions.invoke('reset_password', body: {'church_id': churchId, 'user_id': userId});
+      final d = r.data;
+      if (d is Map && d['password'] is String) return d['password'] as String;
+      throw AppError('Паролата не можа да се смени.');
+    } on AppError {
+      rethrow;
+    } catch (e) {
+      throw AppError(_friendly(e));
     }
   }
 

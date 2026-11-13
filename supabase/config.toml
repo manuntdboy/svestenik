@@ -8,3 +8,7 @@ verify_jwt = false
 [functions.notify]
 # Проверява токена сама (admin.auth.getUser), затова без проверка от шлюза.
 verify_jwt = false
+
+[functions.reset_password]
+# Проверява токена сама (admin.auth.getUser) и че викащият е председател.
+verify_jwt = false

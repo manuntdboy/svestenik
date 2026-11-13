@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_state.dart';
 import '../theme.dart';
@@ -273,6 +275,13 @@ class PriestProfileScreen extends StatelessWidget {
             ],
             if (canRemove) ...[
               const SizedBox(height: 24),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                onPressed: () => showTempPassword(context, churchId, u.id, u.fullName),
+                icon: const Icon(Icons.key_rounded),
+                label: const Text('Забравена парола – дай временна'),
+              ),
+              const SizedBox(height: 8),
               TextButton.icon(
                 style: TextButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,
@@ -302,4 +311,62 @@ class PriestProfileScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Председателят дава временна парола на свещеник, който е забравил своята.
+Future<void> showTempPassword(BuildContext context, String churchId, String userId, String name) async {
+  final s = AppScope.read(context);
+  final ok = await confirm(
+      context,
+      'Временна парола',
+      '$name ще получи нова временна парола. Старата спира да работи. '
+          'При първия вход приложението ще го накара да си избере своя парола.',
+      'Дай временна парола');
+  if (!ok || !context.mounted) return;
+  String pass;
+  try {
+    pass = await s.resetPassword(churchId, userId);
+  } on AppError catch (e) {
+    if (context.mounted) showMessage(context, e.message);
+    return;
+  }
+  if (!context.mounted) return;
+  final username = s.priestsOf(churchId).where((x) => x.$1.id == userId).firstOrNull?.$1.username ?? '';
+  final text = 'Кайрос – вход\nПотребител: $username\nВременна парола: $pass\n'
+      'След входа приложението ще ви помоли да изберете своя парола.';
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Временна парола'),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Кажете на $name:', style: const TextStyle(fontSize: 16)),
+        const SizedBox(height: 10),
+        if (username.isNotEmpty) Text('Потребител: $username', style: const TextStyle(fontSize: 17)),
+        SelectableText(pass,
+            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 3)),
+        const SizedBox(height: 8),
+        const Text('Паролата се показва само сега.', style: TextStyle(fontSize: 14)),
+      ]),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: text));
+            if (ctx.mounted) showMessage(ctx, 'Копирано.');
+          },
+          child: const Text('Копирай'),
+        ),
+        TextButton(
+          onPressed: () async {
+            try {
+              await launchUrl(Uri.parse('viber://forward?text=${Uri.encodeComponent(text)}'),
+                  mode: LaunchMode.externalApplication);
+            } catch (_) {}
+          },
+          child: const Text('Прати по Viber'),
+        ),
+        FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Готово')),
+      ],
+    ),
+  );
 }

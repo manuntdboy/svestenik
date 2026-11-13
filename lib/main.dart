@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data/app_state.dart';
 import 'data/notifier.dart';
 import 'data/push.dart';
+import 'screens/change_password.dart';
 import 'screens/church_connect.dart';
 import 'screens/login.dart';
 import 'screens/shell.dart';
@@ -89,6 +90,7 @@ class RootGate extends StatelessWidget {
       );
     }
     if (!s.isLoggedIn) return const LoginScreen();
+    if (s.mustChangePassword) return const ChangePasswordScreen(forced: true);
     if (s.currentChurch == null) return const ChurchConnectScreen();
     // Ключът кара таблото да започне отначало при смяна на потребител или храм.
     return Shell(key: ValueKey('${s.currentUser!.id}-${s.currentChurch!.id}'));

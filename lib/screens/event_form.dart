@@ -242,6 +242,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
     // Само записалият може да смени свещеника; при един свещеник менюто не трябва.
     if (priests.length < 2 && !assigneeOnLeave) return const SizedBox.shrink();
     final canChange = widget.draft.ownerId == s.currentUser?.id;
+    // Дежурният за деня – предлага се за новите събития.
+    final duty = s.dutyOn(church, _start);
+    final String? dutyUser = duty != null && !s.isOnLeave(church, duty.userId, _start) ? duty.userId : null;
     return _section(
       'Свещеник',
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -263,7 +266,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 Flexible(
                   child: Text(
                       (u.id == s.currentUser?.id ? '${u.fullName} (аз)' : u.fullName) +
-                          (s.isOnLeave(church, u.id, _start) ? ' – в почивка' : ''),
+                          (s.isOnLeave(church, u.id, _start) ? ' – в почивка' : '') +
+                          (dutyUser == u.id ? ' · дежурен' : ''),
                       overflow: TextOverflow.ellipsis),
                 ),
               ]),
@@ -277,6 +281,38 @@ class _EventFormScreenState extends State<EventFormScreen> {
               }
             : null,
       ),
+      if (dutyUser != null && canChange && _assignee != dutyUser)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+            decoration: BoxDecoration(
+              color: p.priest(s.priestIndex(church, dutyUser)).withValues(alpha: .13),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: p.priest(s.priestIndex(church, dutyUser))),
+            ),
+            child: Row(children: [
+              const Icon(Icons.event_repeat_rounded, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Дежурен на тази дата: ${s.priestName(dutyUser)}',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() => _assignee = dutyUser);
+                  _announceOverlap();
+                },
+                child: const Text('Възложи'),
+              ),
+            ]),
+          ),
+        )
+      else if (dutyUser != null && _assignee == dutyUser)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('✓ Дежурният за тази дата', style: TextStyle(fontSize: 14, color: p.textMuted)),
+        ),
       if (assigneeOnLeave && _assignee != s.currentUser?.id)
         Padding(
           padding: const EdgeInsets.only(top: 6),
