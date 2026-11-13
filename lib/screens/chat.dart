@@ -334,7 +334,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         _Bubble(
                           msg: m,
                           mine: m.senderId == me,
-                          showName: general && m.senderId != me,
+                          showName: m.senderId != me,
                           onLongPress: () => _actions(m),
                         ),
                       ],
@@ -382,42 +382,46 @@ class _Bubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final s = AppScope.of(context);
-    final color = mine ? p.primary : p.surface;
+    // Всеки свещеник – в своя цвят: снимка/инициали, име и лента на балончето.
+    final who = p.priest(s.priestIndex(msg.churchId, msg.senderId));
+    final name = msg.senderId.isEmpty ? 'Изтрит потребител' : s.priestName(msg.senderId);
+    final bg = mine ? p.primary : Color.alphaBlend(who.withValues(alpha: p.dark ? .22 : .12), p.surface);
     final onColor = mine ? p.onPrimary : p.text;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: onLongPress,
-        child: Container(
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .78),
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft: Radius.circular(mine ? 16 : 4),
-              bottomRight: Radius.circular(mine ? 4 : 16),
-            ),
-            border: mine ? null : Border.all(color: p.border),
+    final bubble = GestureDetector(
+      onLongPress: onLongPress,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .74),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(mine ? 16 : 4),
+            bottomRight: Radius.circular(mine ? 4 : 16),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (showName)
-              Text(s.priestName(msg.senderId),
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: p.priest(s.priestIndex(msg.churchId, msg.senderId)))),
-            SelectableText(msg.body, style: TextStyle(fontSize: 16.5, color: onColor, height: 1.3)),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(DateFormat('HH:mm').format(msg.createdAt),
-                  style: TextStyle(fontSize: 11.5, color: onColor.withValues(alpha: .7))),
-            ),
-          ]),
+          border: mine ? null : Border(left: BorderSide(color: who, width: 5)),
         ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (showName)
+            Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: who)),
+          SelectableText(msg.body, style: TextStyle(fontSize: 16.5, color: onColor, height: 1.3)),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(DateFormat('HH:mm').format(msg.createdAt),
+                style: TextStyle(fontSize: 11.5, color: onColor.withValues(alpha: .7))),
+          ),
+        ]),
       ),
     );
+    if (mine) return Align(alignment: Alignment.centerRight, child: bubble);
+    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Padding(
+        padding: const EdgeInsets.only(right: 8, bottom: 8),
+        child: PriestBadge(name: name, color: who, size: 34, userId: msg.senderId.isEmpty ? null : msg.senderId),
+      ),
+      Flexible(child: bubble),
+    ]);
   }
 }
