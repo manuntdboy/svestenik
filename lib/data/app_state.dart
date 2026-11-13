@@ -465,6 +465,18 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Изтрива отзиви и снимките им (само създателят).
+  Future<void> creatorDeleteFeedback(List<(String id, String? photo)> items) async {
+    if (items.isEmpty) return;
+    try {
+      final photos = items.map((x) => x.$2).whereType<String>().toList();
+      if (photos.isNotEmpty) await _db.storage.from('feedback').remove(photos);
+      await _db.rpc('creator_feedback_delete', params: {'p_ids': items.map((x) => x.$1).toList()});
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   Future<void> creatorFeedbackDone(String id, bool done) async {
     try {
       await _db.rpc('creator_feedback_done', params: {'p_id': id, 'p_done': done});

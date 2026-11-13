@@ -758,6 +758,8 @@ select t.ok((select min_build from app_config) = 105, 'минималната в
 select (public.creator_extra()) as cx \gset
 select t.ok(jsonb_array_length(:'cx'::jsonb->'feedback') = 1 and (:'cx'::jsonb->>'errors_24')::int >= 1,
             'създателят вижда обратната връзка и грешките');
+select public.creator_feedback_delete(array(select id from feedback)) as fdel \gset
+select t.ok(:fdel = 1 and (public.creator_extra()->'feedback') = '[]'::jsonb, 'създателят изтрива отзиви');
 select public.creator_church_settings(:'cid2', true, false, null) \g /dev/null
 select t.ok((public.creator_extra()->'church_settings'->:'cid2'->>'stock')::boolean = false, 'складът се изключва за храм');
 select public.creator_church_settings(:'cid2', true, true, null) \g /dev/null

@@ -796,8 +796,30 @@ class _FeedbackList extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
         children: [
-          Text('${list.where((f) => f['done'] != true).length} нови · ${list.length} общо',
-              style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+          Row(children: [
+            Expanded(
+              child: Text('${list.where((f) => f['done'] != true).length} нови · ${list.length} общо',
+                  style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+            ),
+            if (list.any((f) => f['done'] == true))
+              TextButton.icon(
+                onPressed: () async {
+                  final done = list.where((f) => f['done'] == true).toList();
+                  final ok = await confirm(context, 'Изтриване на свършените',
+                      '${done.length} отзива и снимките им ще бъдат изтрити окончателно.', 'Изтрий');
+                  if (!ok || !context.mounted) return;
+                  try {
+                    await s.creatorDeleteFeedback([for (final f in done) (f['id'] as String, f['photo'] as String?)]);
+                    if (context.mounted) showMessage(context, 'Изтрити: ${done.length}.');
+                    await onRefresh();
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
+                },
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: const Text('Изтрий свършените'),
+              ),
+          ]),
           const SizedBox(height: 8),
           if (list.isEmpty) const Text('Още няма отзиви.', style: TextStyle(fontSize: 16)),
           for (final f in list)
@@ -817,6 +839,21 @@ class _FeedbackList extends StatelessWidget {
                         onChanged: (v) async {
                           await s.creatorFeedbackDone(f['id'] as String, v ?? false);
                           await onRefresh();
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Изтрий',
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        onPressed: () async {
+                          final ok = await confirm(context, 'Изтриване на отзива',
+                              'Отзивът${f['photo'] != null ? ' и снимката му' : ''} ще бъдат изтрити окончателно.', 'Изтрий');
+                          if (!ok || !context.mounted) return;
+                          try {
+                            await s.creatorDeleteFeedback([(f['id'] as String, f['photo'] as String?)]);
+                            await onRefresh();
+                          } on AppError catch (e) {
+                            if (context.mounted) showMessage(context, e.message);
+                          }
                         },
                       ),
                     ]),
