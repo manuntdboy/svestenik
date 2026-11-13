@@ -410,6 +410,9 @@ select t.fails(format('select public.chat_delete(%L)', :'m1'), 'свещеник
 select t.as_user(:'A');
 select t.ok((select count(*) from chat_messages where id = :'m2') = 0, 'чуждите лични съобщения не се виждат');
 select t.ok((select count(*) from chat_mutes where church_id = :'cid' and user_id = :'C') = 1, 'председателят вижда кой е заглушил');
+select t.ok((select count(*) from chat_reads where church_id = :'cid' and user_id = :'B' and thread = 'c') = 1,
+            'вижда се докъде са прочели колегите (видяно от)');
+select t.ok((select count(*) from chat_reads where user_id = :'B' and thread = :'C') = 0, 'чуждите лични прочитания не се виждат');
 select public.chat_delete(:'m1') \g /dev/null
 select t.ok((select count(*) from chat_messages where id = :'m1') = 0, 'председателят трие съобщение в общия чат');
 select t.fails($$select public.chat_send(gen_random_uuid(), null, 'x')$$, 'не се пише в чужд храм', 'not_member');

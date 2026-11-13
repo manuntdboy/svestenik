@@ -54,7 +54,8 @@ class AppState extends ChangeNotifier {
   final List<DutySwap> _swaps = [];
   final List<Announcement> _announcements = [];
   final List<ChatMessage> _chat = [];
-  final Map<String, DateTime> _chatReads = {}; // "church|thread" → прочетено до
+  final Map<String, DateTime> _chatReads = {}; // "church|thread" → прочетено до (моите)
+  final Map<String, DateTime> _chatSeen = {}; // "user|church|thread" → прочетено до (на колегите)
   final List<(String user, String church, String thread)> _chatMutes = [];
   /// Създателят е включил чата за всички.
   bool chatEnabledGlobal = false;
@@ -155,6 +156,7 @@ class AppState extends ChangeNotifier {
     _announcements.clear();
     _chat.clear();
     _chatReads.clear();
+    _chatSeen.clear();
     _chatMutes.clear();
     _announcementsSeen.clear();
     _swaps.clear();
@@ -251,10 +253,7 @@ class AppState extends ChangeNotifier {
       _chat
         ..clear()
         ..addAll(results[18].map(ChatMessage.fromRow));
-      _chatReads
-        ..clear()
-        ..addEntries(results[19].map((r) => MapEntry('${r['church_id']}|${r['thread']}',
-            DateTime.parse(r['read_at'] as String).toLocal())));
+      _setChatReads(results[19]);
       _chatMutes
         ..clear()
         ..addAll(results[20].map((r) => (r['user_id'] as String, r['church_id'] as String, r['thread'] as String)));
@@ -477,13 +476,47 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void _setChatReads(List<Map<String, dynamic>> rows) {
+    final me = currentUser?.id;
+    _chatReads.clear();
+    _chatSeen.clear();
+    for (final r in rows) {
+      final at = DateTime.parse(r['read_at'] as String).toLocal();
+      if (r['user_id'] == me) {
+        _chatReads['${r['church_id']}|${r['thread']}'] = at;
+      } else {
+        _chatSeen['${r['user_id']}|${r['church_id']}|${r['thread']}'] = at;
+      }
+    }
+  }
+
+  /// Кой е видял съобщението (без изпратилия). В общия чат – колегите,
+  /// в личен разговор – другият човек.
+  List<String> chatSeenBy(ChatMessage m) {
+    final out = <String>[];
+    _chatSeen.forEach((k, at) {
+      final parts = k.split('|');
+      if (parts.length != 3 || parts[1] != m.churchId || parts[0] == m.senderId) return;
+      final matches = m.recipientId == null
+          ? parts[2] == 'c'
+          : parts[0] == m.recipientId && parts[2] == m.senderId;
+      if (matches && !at.isBefore(m.createdAt)) out.add(parts[0]);
+    });
+    return out;
+  }
+
+  DateTime? chatSeenAt(String userId, ChatMessage m) =>
+      _chatSeen['$userId|${m.churchId}|${m.recipientId == null ? 'c' : m.senderId}'];
+
   /// Леко опресняване само на чата (докато разговорът е отворен).
   Future<void> pollChat(String churchId) async {
     try {
       final rows = await _db.from('chat_messages').select().eq('church_id', churchId).order('created_at');
+      final reads = await _db.from('chat_reads').select();
       _chat
         ..removeWhere((m) => m.churchId == churchId)
         ..addAll(rows.map(ChatMessage.fromRow));
+      _setChatReads(reads);
       notifyListeners();
     } catch (_) {}
   }

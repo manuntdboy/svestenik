@@ -387,8 +387,10 @@ class _Bubble extends StatelessWidget {
     final name = msg.senderId.isEmpty ? 'Изтрит потребител' : s.priestName(msg.senderId);
     final bg = mine ? p.primary : Color.alphaBlend(who.withValues(alpha: p.dark ? .22 : .12), p.surface);
     final onColor = mine ? p.onPrimary : p.text;
+    final seen = mine ? s.chatSeenBy(msg) : const <String>[];
     final bubble = GestureDetector(
       onLongPress: onLongPress,
+      onTap: mine ? () => _showSeen(context, s, msg, seen) : null,
       child: Container(
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .74),
         margin: const EdgeInsets.only(bottom: 8),
@@ -407,11 +409,28 @@ class _Bubble extends StatelessWidget {
           if (showName)
             Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: who)),
           SelectableText(msg.body, style: TextStyle(fontSize: 16.5, color: onColor, height: 1.3)),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(DateFormat('HH:mm').format(msg.createdAt),
+          Align(alignment: Alignment.centerRight, child: Row(mainAxisSize: MainAxisSize.min, children: [
+            if (mine && seen.isNotEmpty) ...[
+              Icon(Icons.done_all_rounded, size: 15, color: onColor.withValues(alpha: .85)),
+              const SizedBox(width: 3),
+              for (final u in seen.take(6))
+                Container(
+                  width: 11,
+                  height: 11,
+                  margin: const EdgeInsets.only(right: 2),
+                  decoration: BoxDecoration(
+                    color: p.priest(s.priestIndex(msg.churchId, u)),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: onColor.withValues(alpha: .9), width: 1.2),
+                  ),
+                ),
+              if (seen.length > 6)
+                Text('+${seen.length - 6}', style: TextStyle(fontSize: 11, color: onColor.withValues(alpha: .8))),
+              const SizedBox(width: 6),
+            ],
+            Text(DateFormat('HH:mm').format(msg.createdAt),
                 style: TextStyle(fontSize: 11.5, color: onColor.withValues(alpha: .7))),
-          ),
+          ])),
         ]),
       ),
     );
@@ -424,4 +443,47 @@ class _Bubble extends StatelessWidget {
       Flexible(child: bubble),
     ]);
   }
+}
+
+
+/// „Видяно от“ – кой е видял моето съобщение и кога.
+void _showSeen(BuildContext context, AppState s, ChatMessage m, List<String> seen) {
+  final p = Palette.of(context);
+  final all = m.recipientId == null
+      ? s.priestsOf(m.churchId).where((x) => x.$1.id != m.senderId && x.$2.isActive).map((x) => x.$1.id).toList()
+      : [m.recipientId!];
+  final notYet = all.where((u) => !seen.contains(u)).toList();
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 20), children: [
+        Text('Видяно от ${seen.length} от ${all.length}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        for (final u in seen)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: PriestBadge(name: s.priestName(u), color: p.priest(s.priestIndex(m.churchId, u)), size: 34, userId: u),
+            title: Text(s.priestName(u)),
+            trailing: Builder(builder: (_) {
+              final at = s.chatSeenAt(u, m);
+              return at == null ? const SizedBox.shrink() : Text(_when(at), style: TextStyle(color: p.textMuted));
+            }),
+          ),
+        if (notYet.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('Още не са видели', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: p.textMuted)),
+          for (final u in notYet)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Opacity(
+                opacity: .45,
+                child: PriestBadge(name: s.priestName(u), color: p.priest(s.priestIndex(m.churchId, u)), size: 34, userId: u),
+              ),
+              title: Text(s.priestName(u), style: TextStyle(color: p.textMuted)),
+            ),
+        ],
+      ]),
+    ),
+  );
 }
