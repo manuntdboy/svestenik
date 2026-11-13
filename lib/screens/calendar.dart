@@ -454,15 +454,7 @@ class _DayCell extends StatelessWidget {
                               : duty ?? p.text)),
             ),
           ),
-          // Лента в цвета на дежурния – дежурството се вижда като непрекъсната линия.
-          Container(
-            height: 4,
-            margin: const EdgeInsets.only(top: 2),
-            decoration: BoxDecoration(
-              color: duty?.withValues(alpha: dimmed ? .35 : 1),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          const SizedBox(height: 2),
           // Точки под деня: по една в цвета на всеки свещеник със събитие;
           // плажен чадър в цвета на свещеника, който почива.
           SizedBox(
