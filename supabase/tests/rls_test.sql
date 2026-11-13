@@ -422,6 +422,17 @@ set role authenticated;
 select t.as_user(:'A');
 select public.chat_send(:'cid', null, 'ново') \g /dev/null
 select t.ok((select count(*) from chat_messages where body = 'старо') = 0, 'съобщенията над 6 месеца се трият');
+reset role;
+insert into app_creators (user_id) values (:'A') on conflict do nothing;
+set role authenticated;
+select t.as_user(:'A');
+select (public.creator_chat_stats()) as chs \gset
+select t.ok((:'chs'::jsonb->>'sent_all')::int >= 2 and (:'chs'::jsonb->>'deleted_all')::int = 1
+            and (:'chs'::jsonb->>'expired_all')::int = 1, 'статистика на чата: изпратени, изтрити, изтекли');
+reset role;
+delete from app_creators where user_id = :'A';
+set role authenticated;
+select t.as_user(:'A');
 
 \echo '== Смяна на председателя'
 select t.as_user(:'B');

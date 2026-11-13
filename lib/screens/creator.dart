@@ -38,6 +38,9 @@ class _CreatorScreenState extends State<CreatorScreen> {
       try {
         extra = Map<String, dynamic>.from(await Supabase.instance.client.rpc('creator_extra') as Map);
       } catch (_) {}
+      try {
+        extra['chat'] = Map<String, dynamic>.from(await Supabase.instance.client.rpc('creator_chat_stats') as Map);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _d = {...Map<String, dynamic>.from(r as Map), 'extra': extra};
@@ -380,6 +383,26 @@ class _Overview extends StatelessWidget {
               },
             ),
           ),
+          Builder(builder: (context) {
+            final ch = Map<String, dynamic>.from((ex['chat'] as Map?) ?? const {});
+            final cp = Map<String, dynamic>.from((ch['push_7'] as Map?) ?? const {});
+            if (ch.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _grid([
+                _Stat('${_n(ch, 'sent_24')}', 'Съобщения · 24 ч', Icons.chat_rounded,
+                    sub: '${_n(ch, 'sent_7')} за 7 дни (${_n(ch, 'private_7')} лични) · ${_n(ch, 'sent_all')} общо'),
+                _Stat('${_n(ch, 'stored')}', 'Пазят се сега', Icons.inventory_rounded,
+                    sub: 'изтекли (над 6 месеца): ${_n(ch, 'expired_all')}'),
+                _Stat('${_n(ch, 'deleted_7')}', 'Изтрити · 7 дни', Icons.delete_outline_rounded,
+                    sub: '${_n(ch, 'deleted_all')} общо · заглушени: ${_n(ch, 'mutes')}'),
+                _Stat('${_n(cp, 'delivered')}', 'Известия за чата · 7 дни', Icons.mark_email_read_rounded,
+                    color: _n(cp, 'errors') > 0 ? red : green,
+                    sub: 'грешки: ${_n(cp, 'errors')} · стари телефони: ${_n(cp, 'stale')} · '
+                        'без получател: ${_n(cp, 'no_recipient')}'),
+              ]),
+            );
+          }),
           const _Section('Известия (push)'),
           _grid([
             _Stat('${_n(n1, 'delivered')}', 'Доставени · 24 ч', Icons.mark_email_read_rounded, color: green,
