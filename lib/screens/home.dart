@@ -9,6 +9,7 @@ import 'church_priests.dart';
 import 'my_profile.dart';
 import '../widgets/requests.dart';
 import '../widgets/whats_new.dart';
+import '../widgets/church_banner.dart';
 import 'event_form.dart';
 import 'cash.dart';
 import 'stock.dart';
@@ -17,34 +18,6 @@ import 'stock.dart';
 class HomeScreen extends StatelessWidget {
   final VoidCallback openCalendar;
   const HomeScreen({super.key, required this.openCalendar});
-
-  void _pickChurch(BuildContext context) {
-    final s = AppScope.read(context);
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final c in s.myChurches)
-              ListTile(
-                minTileHeight: 56,
-                title: Text(c.name,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                subtitle: Text(c.place),
-                trailing: c.id == s.currentChurchId ? const Icon(Icons.check_rounded) : null,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  s.selectChurch(c.id);
-                },
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,34 +63,10 @@ class HomeScreen extends StatelessWidget {
                   const WhatsNewBell(),
                   const SizedBox(width: 8),
                 ],
-                Flexible(
-                  child: OutlinedButton(
-                    onPressed: s.myChurches.length > 1 ? () => _pickChurch(context) : null,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(44, 44),
-                      foregroundColor: p.text,
-                      backgroundColor: p.surface,
-                      disabledForegroundColor: p.text,
-                      side: BorderSide(color: p.border),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(s.currentChurch!.name, overflow: TextOverflow.ellipsis),
-                        ),
-                        if (s.myChurches.length > 1) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.expand_more_rounded, size: 20),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
               ],
             ),
+            const SizedBox(height: 12),
+            const ChurchBanner(),
             const SizedBox(height: 12),
             _PriestsStrip(churchId: s.currentChurchId!),
             const SizedBox(height: 12),

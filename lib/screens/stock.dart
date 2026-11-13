@@ -5,6 +5,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/church_banner.dart';
 
 final _stamp = DateFormat('d MMM y, HH:mm', 'bg');
 const _red = Color(0xFFB23A3A);
@@ -51,6 +52,8 @@ class _StockScreenState extends State<StockScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
+              const ChurchBanner(title: 'Склад на храма'),
+              const SizedBox(height: 12),
               if (low.isNotEmpty) ...[
                 LowStockCard(items: low),
                 const SizedBox(height: 12),
@@ -237,6 +240,9 @@ class _ItemCard extends StatelessWidget {
             decoration: InputDecoration(
                 hintText: load ? 'Бележка (по желание), напр. доставка от митрополията' : 'Причина, напр. повредени'),
           ),
+          const SizedBox(height: 4),
+          const ChurchConfirmLine(),
+          const SizedBox(height: 6),
           if (!load)
             Text(
                 s.cashSettings(church).approvalsOff || s.cashierOf(church) == null

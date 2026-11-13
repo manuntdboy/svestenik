@@ -11,6 +11,7 @@ import 'event_form.dart';
 import 'leaves.dart';
 import 'search.dart';
 import '../widgets/requests.dart';
+import '../widgets/church_banner.dart';
 
 enum CalView { day, week, month }
 
@@ -94,6 +95,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
           children: [
+            // В кой храм съм и с каква роля (смяна при повече храмове).
+            const ChurchBanner(),
+            const SizedBox(height: 10),
             // Търсене и почивки – малки, горе вдясно.
             Row(
               mainAxisAlignment: MainAxisAlignment.end,

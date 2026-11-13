@@ -523,6 +523,13 @@ select t.as_user(:'D');
 select public.cash_save_settings(:'cid2', 100, true, false) \g /dev/null
 select id as off3 from public.cash_add(:'cid2','expense',900,'Ремонти',null,null,'cash',null,null,null) \gset
 select t.ok((select status from cash_entries where id = :'off3') = 'pending', 'след включване одобрението пак се иска');
+-- Проведено събитие с приход не се връща като предстоящо
+select t.as_user(:'D');
+insert into events (church_id, kind, starts_at, visibility, for_whom, status) values (:'cid2', 'vodosvet', now(), 'church', 'Прих-ев', 'done');
+select id as pev from events where for_whom = 'Прих-ев' \gset
+select public.cash_add(:'cid2','income',40,'Треби',null,null,'cash',null,:'pev',null) \g /dev/null
+select t.fails(format($$update events set status = 'planned' where id = %L$$, :'pev'), 'събитие с приход не се връща като предстоящо', 'event_has_income');
+select t.fails(format($$delete from events where id = %L$$, :'pev'), 'събитие с приход не се изтрива', 'event_has_income');
 \echo '== Склад'
 select t.as_user(:'B');
 select public.stock_load(:'cid2', 'cert_baptism', 3, 'доставка') \g /dev/null

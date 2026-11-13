@@ -332,7 +332,8 @@ class _StatusButtons extends StatelessWidget {
     if (event.status != EventStatus.planned) {
       final s = AppScope.of(context);
       final inChurch = s.myChurches.any((c) => c.id == event.churchId);
-      final hasIncome = s.cashEntries(event.churchId).any((x) => x.eventId == event.id && !x.isReturned);
+      final hasIncome = s.cashEntries(event.churchId).any((x) =>
+          x.eventId == event.id && !x.isReturned && !x.isReversal && x.reversedBy == null);
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (event.status == EventStatus.done && inChurch && !hasIncome) ...[
           FilledButton.tonalIcon(
@@ -346,11 +347,31 @@ class _StatusButtons extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
-        OutlinedButton.icon(
-          onPressed: () => _set(context, EventStatus.planned),
-          icon: const Icon(Icons.undo_rounded),
-          label: const Text('Върни като предстоящо'),
-        ),
+        if (event.status == EventStatus.done && hasIncome)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Palette.of(context).surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Palette.of(context).border),
+            ),
+            child: Row(children: [
+              Icon(Icons.lock_outline_rounded, color: Palette.of(context).textMuted),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                    'Приходът от събитието е записан в касата, затова то не може да се върне като предстоящо. '
+                    'Ако е грешка, първо сторнирайте прихода.',
+                    style: TextStyle(fontSize: 14.5, color: Palette.of(context).textMuted)),
+              ),
+            ]),
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: () => _set(context, EventStatus.planned),
+            icon: const Icon(Icons.undo_rounded),
+            label: const Text('Върни като предстоящо'),
+          ),
       ]);
     }
     return Row(children: [

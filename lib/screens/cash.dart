@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'cash_more.dart';
+import '../widgets/church_banner.dart';
 
 final _eur = NumberFormat.currency(locale: 'bg', symbol: '€', decimalDigits: 2);
 final _day = DateFormat('d MMMM y', 'bg');
@@ -101,6 +102,8 @@ class _CashScreenState extends State<CashScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
       children: [
+        const ChurchBanner(title: 'Каса на храма'),
+        const SizedBox(height: 12),
         // Баланс
         Container(
           padding: const EdgeInsets.all(20),
@@ -331,6 +334,8 @@ class _CashScreenState extends State<CashScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
       children: [
+        const ChurchBanner(title: 'Каса на храма'),
+        const SizedBox(height: 12),
         SurfaceCard(
           child: Text(
               'Касата на храма водят председателят и касиерът. Тук предавате приход '
@@ -1039,6 +1044,8 @@ class _CashEntryFormState extends State<CashEntryForm> {
                                 : 'Движението с банката чака одобрение от другия от двамата.',
                 style: TextStyle(fontSize: 14.5, color: p.textMuted)),
             const SizedBox(height: 16),
+            const ChurchConfirmLine(),
+            const SizedBox(height: 12),
             FilledButton(
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
               onPressed: _saving ? null : _save,
