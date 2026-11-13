@@ -364,6 +364,22 @@ class _Overview extends StatelessWidget {
                 child: const Text('Без напомняне'),
               ),
           ]),
+          const _Section('Чат'),
+          SurfaceCard(
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Чат за всички', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              subtitle: const Text('Изключено – чатът се вижда само при вас. Включено – раздел „Чат“ за всички.'),
+              value: AppScope.of(context).chatEnabledGlobal,
+              onChanged: (v) async {
+                try {
+                  await AppScope.read(context).creatorSetChat(v);
+                } on AppError catch (e) {
+                  if (context.mounted) showMessage(context, e.message);
+                }
+              },
+            ),
+          ),
           const _Section('Известия (push)'),
           _grid([
             _Stat('${_n(n1, 'delivered')}', 'Доставени · 24 ч', Icons.mark_email_read_rounded, color: green,

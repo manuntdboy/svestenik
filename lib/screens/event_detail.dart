@@ -5,6 +5,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'cash.dart';
+import 'chat.dart' show openChat;
 import 'event_form.dart';
 import 'priest_profile.dart';
 import '../widgets/requests.dart';
@@ -218,6 +219,16 @@ class EventDetailScreen extends StatelessWidget {
                   },
                   child: const Text('Направи го лично'),
                 ),
+              const SizedBox(height: 10),
+            ],
+            if (s.chatOn && e.churchId == s.currentChurchId) ...[
+              OutlinedButton.icon(
+                onPressed: () => openChat(context, 'c',
+                    draft: '📅 ${e.kind.label} · ${fmtDayLong(e.startsAt)}, ${fmtRange(e)}'
+                        '${e.forWhom.isEmpty ? '' : ' · ${e.forWhom}'} · ${s.priestName(e.assigneeId)}'),
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+                label: const Text('Сподели в чата на храма'),
+              ),
               const SizedBox(height: 10),
             ],
             // Копие за друга дата – всеки, който вижда събитието.

@@ -1096,3 +1096,30 @@ class DutySwap {
         createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
       );
 }
+
+/// Съобщение в чата: общ чат на храма (recipientId == null) или лично.
+class ChatMessage {
+  final String id;
+  final String churchId;
+  final String senderId;
+  final String? recipientId;
+  final String body;
+  final DateTime createdAt;
+  ChatMessage({
+    required this.id,
+    required this.churchId,
+    required this.senderId,
+    this.recipientId,
+    required this.body,
+    required this.createdAt,
+  });
+
+  factory ChatMessage.fromRow(Map<String, dynamic> r) => ChatMessage(
+        id: r['id'] as String,
+        churchId: r['church_id'] as String,
+        senderId: (r['sender_id'] as String?) ?? '',
+        recipientId: r['recipient_id'] as String?,
+        body: r['body'] as String,
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+      );
+}

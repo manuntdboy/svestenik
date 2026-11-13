@@ -132,7 +132,27 @@ async function handle(req: Request): Promise<Response> {
   const rangeD = (a: string, b: string) => (a === b ? fmtD(a) : `${fmtD(a)} – ${fmtD(b)}`);
 
   const recent = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-  if (type === "announcement") {
+  if (type === "chat") {
+    // Ново съобщение в чата → до колегите (без заглушилите).
+    const { data: m } = await admin.from("chat_messages").select("*").eq("id", String(body.message_id ?? "")).maybeSingle();
+    if (!m || m.sender_id !== caller.id) return json(404, { error: "not_found" });
+    const thread = m.recipient_id ? caller.id : "c"; // заглушаването е от гледна точка на получателя
+    let ids: string[] = [];
+    if (m.recipient_id) {
+      ids = [m.recipient_id];
+    } else {
+      const { data: ms } = await admin.from("church_members").select("user_id").eq("church_id", m.church_id).eq("status", "active");
+      ids = (ms ?? []).map((x) => x.user_id);
+    }
+    const { data: muted } = await admin.from("chat_mutes").select("user_id").eq("church_id", m.church_id).eq("thread", thread);
+    const mutedSet = new Set((muted ?? []).map((x) => x.user_id));
+    recipients = ids.filter((u) => !mutedSet.has(u));
+    const { data: ch } = await admin.from("churches").select("name").eq("id", m.church_id).maybeSingle();
+    title = m.recipient_id ? callerName : `Чат · ${ch?.name ?? "храм"}`;
+    const t = String(m.body);
+    text = m.recipient_id ? t.slice(0, 180) : `${callerName}: ${t.slice(0, 160)}`;
+    data = { type: "chat", church_id: String(m.church_id), thread: m.recipient_id ? caller.id : "c" };
+  } else if (type === "announcement") {
     // Съобщение от създателя → до всички или до членовете на един храм.
     const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();
     if (!creator) return json(403, { error: "forbidden" });

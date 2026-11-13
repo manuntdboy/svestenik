@@ -399,6 +399,27 @@ select t.ok(:'sws' = 'approved'
 select t.ok(jsonb_array_length(public.duty_delete(:'d1')) = 1, 'председателят трие дежурство');
 delete from duties where church_id = :'cid';
 
+\echo '== Чат'
+select t.as_user(:'B');
+select (public.chat_send(:'cid', null, 'Утре закъснявам')).id as m1 \gset
+select (public.chat_send(:'cid', :'C', 'Лично за теб')).id as m2 \gset
+select t.as_user(:'C');
+select t.ok((select count(*) from chat_messages where id in (:'m1', :'m2')) = 2, 'колегата вижда общия чат и личното си съобщение');
+select public.chat_mute(:'cid', 'c', true) \g /dev/null
+select t.fails(format('select public.chat_delete(%L)', :'m1'), 'свещеник не трие чуждо съобщение', 'not_allowed');
+select t.as_user(:'A');
+select t.ok((select count(*) from chat_messages where id = :'m2') = 0, 'чуждите лични съобщения не се виждат');
+select t.ok((select count(*) from chat_mutes where church_id = :'cid' and user_id = :'C') = 1, 'председателят вижда кой е заглушил');
+select public.chat_delete(:'m1') \g /dev/null
+select t.ok((select count(*) from chat_messages where id = :'m1') = 0, 'председателят трие съобщение в общия чат');
+select t.fails($$select public.chat_send(gen_random_uuid(), null, 'x')$$, 'не се пише в чужд храм', 'not_member');
+reset role;
+insert into chat_messages (church_id, sender_id, body, created_at) values (:'cid', :'A', 'старо', now() - interval '7 months');
+set role authenticated;
+select t.as_user(:'A');
+select public.chat_send(:'cid', null, 'ново') \g /dev/null
+select t.ok((select count(*) from chat_messages where body = 'старо') = 0, 'съобщенията над 6 месеца се трият');
+
 \echo '== Смяна на председателя'
 select t.as_user(:'B');
 select t.fails(format('select public.propose_chair(%L,%L)', :'cid', :'B'), 'свещеник не предлага председател', 'not_manager');

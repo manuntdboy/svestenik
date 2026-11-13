@@ -53,6 +53,11 @@ class AppState extends ChangeNotifier {
   final List<Duty> _duties = [];
   final List<DutySwap> _swaps = [];
   final List<Announcement> _announcements = [];
+  final List<ChatMessage> _chat = [];
+  final Map<String, DateTime> _chatReads = {}; // "church|thread" → прочетено до
+  final List<(String user, String church, String thread)> _chatMutes = [];
+  /// Създателят е включил чата за всички.
+  bool chatEnabledGlobal = false;
   final Set<String> _announcementsSeen = {};
   /// Най-старата версия, която създателят още приема (0 = без напомняне).
   int minBuild = 0;
@@ -148,6 +153,9 @@ class AppState extends ChangeNotifier {
     _audits.clear();
     _duties.clear();
     _announcements.clear();
+    _chat.clear();
+    _chatReads.clear();
+    _chatMutes.clear();
     _announcementsSeen.clear();
     _swaps.clear();
     _stockMin.clear();
@@ -191,6 +199,9 @@ class AppState extends ChangeNotifier {
         _db.from('announcements').select().order('created_at'),
         _db.from('announcement_seen').select('announcement_id').eq('user_id', authUser.id),
         _db.from('app_config').select(),
+        _db.from('chat_messages').select().order('created_at'),
+        _db.from('chat_reads').select(),
+        _db.from('chat_mutes').select(),
       ]);
       _profiles
         ..clear()
@@ -236,6 +247,17 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(results[16].map((r) => r['announcement_id'] as String));
       minBuild = results[17].isEmpty ? 0 : ((results[17].first['min_build'] as num?)?.toInt() ?? 0);
+      chatEnabledGlobal = results[17].isNotEmpty && results[17].first['chat_enabled'] == true;
+      _chat
+        ..clear()
+        ..addAll(results[18].map(ChatMessage.fromRow));
+      _chatReads
+        ..clear()
+        ..addEntries(results[19].map((r) => MapEntry('${r['church_id']}|${r['thread']}',
+            DateTime.parse(r['read_at'] as String).toLocal())));
+      _chatMutes
+        ..clear()
+        ..addAll(results[20].map((r) => (r['user_id'] as String, r['church_id'] as String, r['thread'] as String)));
       _stockPrice.clear();
       for (final r in results[14]) {
         _stockPrice['${r['church_id']}|${r['item']}'] = (r['price'] as num).toDouble();
@@ -367,6 +389,112 @@ class AppState extends ChangeNotifier {
       await _db.rpc('report_version', params: {'p_build': buildNumber});
     } catch (e) {
       debugPrint('Версията не се записа: $e');
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Чат
+  // ------------------------------------------------------------------
+  /// Чатът се вижда, ако създателят го е включил (създателят го вижда винаги).
+  bool get chatOn => chatEnabledGlobal || isCreator;
+
+  /// Съобщенията в разговор: 'c' = общият чат, иначе id на колегата.
+  List<ChatMessage> chatThread(String churchId, String thread) {
+    final me = currentUser?.id;
+    return _chat.where((m) {
+      if (m.churchId != churchId) return false;
+      if (thread == 'c') return m.recipientId == null;
+      return (m.senderId == thread && m.recipientId == me) || (m.senderId == me && m.recipientId == thread);
+    }).toList();
+  }
+
+  int chatUnread(String churchId, String thread) {
+    final me = currentUser?.id;
+    final read = _chatReads['$churchId|$thread'];
+    return chatThread(churchId, thread)
+        .where((m) => m.senderId != me && (read == null || m.createdAt.isAfter(read)))
+        .length;
+  }
+
+  /// Всички непрочетени в храма (общ чат + лични).
+  int chatUnreadTotal(String churchId) {
+    final me = currentUser?.id;
+    final threads = <String>{'c'};
+    for (final m in _chat.where((m) => m.churchId == churchId && m.recipientId != null)) {
+      threads.add(m.senderId == me ? m.recipientId! : m.senderId);
+    }
+    return threads.fold(0, (a, t) => a + chatUnread(churchId, t));
+  }
+
+  bool chatMuted(String churchId, String thread) =>
+      _chatMutes.any((m) => m.$1 == currentUser?.id && m.$2 == churchId && m.$3 == thread);
+
+  /// Кой е заглушил общия чат (вижда председателят).
+  List<String> chatMutedBy(String churchId) =>
+      _chatMutes.where((m) => m.$2 == churchId && m.$3 == 'c').map((m) => m.$1).toList();
+
+  Future<void> sendChat(String churchId, String? recipient, String body) async {
+    try {
+      final r = await _db.rpc('chat_send', params: {'p_church': churchId, 'p_recipient': recipient, 'p_body': body});
+      final m = ChatMessage.fromRow(Map<String, dynamic>.from(r as Map));
+      _chat.add(m);
+      _chatReads['$churchId|${recipient ?? 'c'}'] = DateTime.now();
+      notifyListeners();
+      unawaited(_invokeNotify({'type': 'chat', 'message_id': m.id}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> deleteChat(ChatMessage m) async {
+    try {
+      await _db.rpc('chat_delete', params: {'p_id': m.id});
+      _chat.removeWhere((x) => x.id == m.id);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> markChatRead(String churchId, String thread) async {
+    if (chatUnread(churchId, thread) == 0) return;
+    _chatReads['$churchId|$thread'] = DateTime.now();
+    notifyListeners();
+    try {
+      await _db.rpc('chat_read', params: {'p_church': churchId, 'p_thread': thread});
+    } catch (_) {}
+  }
+
+  Future<void> muteChat(String churchId, String thread, bool mute) async {
+    try {
+      await _db.rpc('chat_mute', params: {'p_church': churchId, 'p_thread': thread, 'p_mute': mute});
+      final me = currentUser!.id;
+      _chatMutes.removeWhere((m) => m.$1 == me && m.$2 == churchId && m.$3 == thread);
+      if (mute) _chatMutes.add((me, churchId, thread));
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Леко опресняване само на чата (докато разговорът е отворен).
+  Future<void> pollChat(String churchId) async {
+    try {
+      final rows = await _db.from('chat_messages').select().eq('church_id', churchId).order('created_at');
+      _chat
+        ..removeWhere((m) => m.churchId == churchId)
+        ..addAll(rows.map(ChatMessage.fromRow));
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> creatorSetChat(bool on) async {
+    try {
+      await _db.rpc('creator_set_chat', params: {'p_on': on});
+      chatEnabledGlobal = on;
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
     }
   }
 

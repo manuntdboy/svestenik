@@ -13,6 +13,7 @@ import 'cash.dart';
 import 'stock.dart';
 import 'event_detail.dart';
 import 'leaves.dart';
+import 'chat.dart';
 import 'duties.dart';
 import 'home.dart';
 import 'profile.dart';
@@ -97,6 +98,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       nav.push(MaterialPageRoute(builder: (_) => const CashScreen()));
     } else if (type == 'stock') {
       nav.push(MaterialPageRoute(builder: (_) => const StockScreen()));
+    } else if (type == 'chat') {
+      final thread = data['thread'] ?? 'c';
+      nav.push(MaterialPageRoute(builder: (_) => ChatScreen(thread: thread)));
     } else if (type.startsWith('duty')) {
       nav.push(MaterialPageRoute(builder: (_) => const DutyScreen()));
     } else if (type.startsWith('leave_')) {
@@ -129,7 +133,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         child: HomeScreen(openCalendar: () => setState(() => _tab = 0)),
       ),
       const ProfileScreen(),
+      RefreshIndicator(onRefresh: s.refresh, child: const ChatListScreen()),
     ];
+    final chat = s.chatOn;
+    if (!chat && _tab == 3) _tab = 1;
+    final unread = chat ? s.chatUnreadTotal(s.currentChurchId!) : 0;
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -174,6 +182,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                 _NavItem(Icons.calendar_month_outlined, 'Календар', _tab == 0,
                     () => setState(() => _tab = 0)),
                 _NavItem(Icons.home_outlined, 'Начало', _tab == 1, () => setState(() => _tab = 1)),
+                if (chat)
+                  _NavItem(Icons.chat_bubble_outline_rounded, 'Чат', _tab == 3, () => setState(() => _tab = 3),
+                      badge: unread),
                 _NavItem(Icons.person_outline_rounded, 'Профил', _tab == 2,
                     () => setState(() => _tab = 2)),
               ],
@@ -190,7 +201,8 @@ class _NavItem extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _NavItem(this.icon, this.label, this.active, this.onTap);
+  final int badge;
+  const _NavItem(this.icon, this.label, this.active, this.onTap, {this.badge = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -205,7 +217,11 @@ class _NavItem extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 26, color: color),
+              Badge(
+                isLabelVisible: badge > 0,
+                label: Text(badge > 99 ? '99+' : '$badge'),
+                child: Icon(icon, size: 26, color: color),
+              ),
               const SizedBox(height: 4),
               Text(label,
                   style: TextStyle(
