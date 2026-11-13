@@ -766,11 +766,14 @@ double cashTotal(Iterable<CashEntry> entries, CashBook book, DateTime from, Date
 class CashSettings {
   final double limitEur;
   final bool hasBank;
-  const CashSettings({this.limitEur = 100, this.hasBank = false});
+  /// Временно изключено второ одобрение (за проба) – всичко влиза веднага.
+  final bool approvalsOff;
+  const CashSettings({this.limitEur = 100, this.hasBank = false, this.approvalsOff = false});
 
   factory CashSettings.fromRow(Map<String, dynamic> r) => CashSettings(
         limitEur: (r['limit_eur'] as num?)?.toDouble() ?? 100,
         hasBank: (r['has_bank'] as bool?) ?? false,
+        approvalsOff: (r['approvals_off'] as bool?) ?? false,
       );
 }
 

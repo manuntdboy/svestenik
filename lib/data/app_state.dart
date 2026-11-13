@@ -656,6 +656,7 @@ class AppState extends ChangeNotifier {
 
   /// Мога ли да поискам приключване (касиерът; без касиер – председателят).
   bool canRequestClose(String churchId) {
+    if (cashSettings(churchId).approvalsOff && canSeeCash(churchId)) return true;
     final cashier = cashierOf(churchId);
     return cashier == null ? isManagerOf(churchId) : cashier == currentUser?.id;
   }
@@ -773,10 +774,10 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> saveCashSettings(String churchId, double limit, bool hasBank) async {
+  Future<void> saveCashSettings(String churchId, double limit, bool hasBank, {bool approvalsOff = false}) async {
     try {
       await _db.rpc('cash_save_settings',
-          params: {'p_church': churchId, 'p_limit': limit, 'p_has_bank': hasBank});
+          params: {'p_church': churchId, 'p_limit': limit, 'p_has_bank': hasBank, 'p_approvals_off': approvalsOff});
       await refresh();
     } catch (err) {
       throw AppError(_friendly(err));

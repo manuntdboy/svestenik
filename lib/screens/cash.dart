@@ -164,6 +164,26 @@ class _CashScreenState extends State<CashScreen> {
               label: const Text('Въведи началното салдо'),
             ),
           ),
+        if (st.approvalsOff)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: .15),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orange.shade700, width: 2),
+              ),
+              child: const Row(children: [
+                Icon(Icons.science_outlined),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text('Второто одобрение е изключено (проба). Всичко влиза веднага.',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ]),
+            ),
+          ),
         const SizedBox(height: 10),
         Text(
             s.cashierOf(church) == null
@@ -320,6 +340,7 @@ class _CashScreenState extends State<CashScreen> {
     final church = s.currentChurchId!;
     final st = s.cashSettings(church);
     var bank = st.hasBank;
+    var off = st.approvalsOff;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -336,6 +357,16 @@ class _CashScreenState extends State<CashScreen> {
               title: const Text('Храмът има банкова сметка'),
               subtitle: const Text('Брой и банка се водят отделно; внасяне и теглене минават през двамата.'),
             ),
+            const Divider(),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: off,
+              onChanged: (v) => set(() => off = v),
+              title: const Text('Изключи второто одобрение (проба)'),
+              subtitle: const Text(
+                  'Всички приходи и разходи, банка, сторно и приключване влизат веднага, без одобрение от другия. '
+                  'Записите са отбелязани „одобрението е изключено“.'),
+            ),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
@@ -346,7 +377,7 @@ class _CashScreenState extends State<CashScreen> {
     );
     if (ok != true || !context.mounted) return;
     try {
-      await s.saveCashSettings(church, 100, bank);
+      await s.saveCashSettings(church, 100, bank, approvalsOff: off);
       if (context.mounted) showMessage(context, 'Настройките на касата са запазени.');
     } on AppError catch (e) {
       if (context.mounted) showMessage(context, e.message);
@@ -426,9 +457,11 @@ class CashRow extends StatelessWidget {
                 ? 'сторниран'
                 : e.autoReason == 'single'
                     ? 'без второ одобрение'
-                    : e.autoReason == 'under_limit'
-                        ? 'под лимита'
-                        : '';
+                    : e.autoReason == 'off'
+                        ? 'одобрението е изключено'
+                        : e.autoReason == 'under_limit'
+                            ? 'под лимита'
+                            : '';
     final status = [if (e.backdated) 'задна дата', if (status0.isNotEmpty) status0].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -531,6 +564,8 @@ Future<void> showCashEntry(BuildContext context, CashEntry e) async {
                         ? 'Върнат${e.returnReason.isEmpty ? '' : ': ${e.returnReason}'}'
                         : e.autoReason == 'holder'
                             ? 'В книгата (въведен от касата)'
+                            : e.autoReason == 'off'
+                                ? 'В книгата – одобрението беше изключено'
                             : e.autoReason == 'single'
                                 ? 'В книгата, без второ одобрение'
                                 : e.autoReason == 'under_limit'
@@ -578,6 +613,8 @@ List<Widget> _history(BuildContext context, AppState s, CashEntry e) {
       (Icons.check_circle_rounded, Colors.green.shade600, 'Влезе в книгата (въведен от касата)', e.decidedAt),
     if (e.isApproved && e.autoReason == 'under_limit')
       (Icons.check_circle_outline_rounded, Colors.green.shade600, 'Влезе в книгата – под лимита', e.decidedAt),
+    if (e.isApproved && e.autoReason == 'off')
+      (Icons.science_outlined, Colors.orange.shade700, 'Влезе веднага – одобрението е изключено', e.decidedAt),
     if (e.isApproved && e.autoReason == 'single')
       (Icons.check_circle_outline_rounded, Colors.orange.shade700, 'Влезе без второ одобрение', e.decidedAt),
     if (e.isReturned)
@@ -973,7 +1010,9 @@ class _CashEntryFormState extends State<CashEntryForm> {
               ),
             ),
             Text(
-                !widget.holder
+                st.approvalsOff
+                    ? 'Второто одобрение е изключено (проба): записът влиза веднага.'
+                    : !widget.holder
                     ? 'Приходът отива при касиера и влиза в Приходната книга, щом го приеме.'
                     : _book == CashBook.income
                         ? 'Приходът влиза направо в Приходната книга.'

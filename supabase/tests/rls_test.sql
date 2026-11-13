@@ -508,6 +508,21 @@ select t.ok((select status = 'pending' and backdated from cash_entries where id 
 select t.as_user(:'B');
 select t.ok((select status from public.cash_decide(:'bd', true, null)) = 'approved', 'касиерът одобрява записа със задна дата');
 select t.fails(format('select public.cash_close_request(%L, %L)', :'cid2', :'prev'), 'месецът не се приключва два пъти', 'already_closed');
+-- Изключено второ одобрение (тестов режим)
+select t.as_user(:'B');
+select t.fails(format('select public.cash_save_settings(%L, 100, true, true)', :'cid2'), 'само председателят изключва одобрението', 'not_manager');
+select t.as_user(:'D');
+select public.cash_save_settings(:'cid2', 100, true, true) \g /dev/null
+select id as off1 from public.cash_add(:'cid2','expense',900,'Ремонти',null,null,'cash',null,null,null) \gset
+select t.ok((select status = 'approved' and auto_reason = 'off' from cash_entries where id = :'off1'),
+            'при изключено одобрение и голям разход влиза веднага');
+select t.as_user(:'C');
+select id as off2 from public.cash_add(:'cid2','income',15,'Свещи',null,null,'cash',null,null,null) \gset
+select t.ok((select status from cash_entries where id = :'off2') = 'approved', 'и приходът от свещеник влиза веднага');
+select t.as_user(:'D');
+select public.cash_save_settings(:'cid2', 100, true, false) \g /dev/null
+select id as off3 from public.cash_add(:'cid2','expense',900,'Ремонти',null,null,'cash',null,null,null) \gset
+select t.ok((select status from cash_entries where id = :'off3') = 'pending', 'след включване одобрението пак се иска');
 select t.as_user(:'A');
 select t.ok((select count(*) from cash_entries where church_id = :'cid2') = 0, 'друг храм не вижда касата');
 
