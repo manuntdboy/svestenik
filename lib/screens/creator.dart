@@ -321,6 +321,8 @@ class _Overview extends StatelessWidget {
                 sub: '${_n(n7, 'errors')} за 7 дни${_n(n7, 'errors') == 0 ? ' · всичко е наред' : ''}'),
             _Stat('${_n(n7, 'no_recipient')}', 'Без получател', Icons.person_search_rounded,
                 sub: 'за 7 дни · само до себе си или човек без телефон – не е грешка'),
+            _Stat('${_n(n7, 'stale')}', 'Стари телефони', Icons.phonelink_erase_rounded,
+                sub: 'за 7 дни · преинсталирано или изтрито приложение; изчистват се сами – не е грешка'),
             _Stat('${_n(n7, 'refused')}', 'Отказани (защита)', Icons.shield_rounded,
                 sub: 'за 7 дни · опит без вход; повечето са проверките на сървъра при всяка версия'),
           ]),

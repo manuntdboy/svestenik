@@ -619,13 +619,16 @@ insert into notify_log (type, status, info) values
   ('smoke', 401, '{"error": "not_authenticated"}'),
   ('event', 401, '{"error": "not_authenticated"}'),
   ('leave_request', 500, '{"error": "fcm_not_configured"}'),
-  ('event', 200, '{"sent": 0, "fcm_errors": [403]}');
+  ('event', 200, '{"sent": 0, "fcm_errors": [403]}'),
+  ('member_approved', 200, '{"sent": 0, "fcm_errors": [404, 404]}'),
+  ('event', 200, '{"sent": 1, "stale": 1, "fcm_errors": []}');
 set role authenticated;
 select t.as_user(:'A');
 select (public.creator_stats()->'notify'->'d1') as nd \gset
-select t.ok((:'nd'::jsonb->>'delivered')::int = 2 and (:'nd'::jsonb->>'no_recipient')::int = 1
+select t.ok((:'nd'::jsonb->>'delivered')::int = 3 and (:'nd'::jsonb->>'no_recipient')::int = 1
+            and (:'nd'::jsonb->>'stale')::int = 3
             and (:'nd'::jsonb->>'refused')::int = 2 and (:'nd'::jsonb->>'errors')::int = 2,
-            'известията се делят на доставени, без получател, отказани и грешки');
+            'известията се делят на доставени, без получател, стари телефони, отказани и грешки');
 select t.ok(jsonb_array_length(public.creator_stats()->'notify_failed') = 2,
             'в „неуспешни“ са само истинските грешки, не проверките');
 select t.as_user(:'B');

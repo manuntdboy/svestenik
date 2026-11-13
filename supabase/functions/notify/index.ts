@@ -408,6 +408,7 @@ async function handle(req: Request): Promise<Response> {
 
   const access = await fcmAccessToken(sa);
   let sent = 0;
+  let stale = 0; // стари/изтрити телефони – чистят се сами, не са грешка
   const fcmErrors: number[] = [];
   for (const { token } of tokens) {
     const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
@@ -429,15 +430,15 @@ async function handle(req: Request): Promise<Response> {
       // Изтрит или сменен токен – махаме го.
       if (res.status === 404 || text.includes("UNREGISTERED") || text.includes("INVALID_ARGUMENT")) {
         await admin.from("device_tokens").delete().eq("token", token);
-        fcmErrors.push(res.status);
+        stale++;
       } else {
         fcmErrors.push(res.status);
         console.error("FCM", res.status, text.slice(0, 300));
       }
     }
   }
-  log({ recipients: recipients.length, devices: tokens.length, sent });
-  return json(200, { sent, recipients: recipients.length, devices: tokens.length, fcm_errors: fcmErrors });
+  log({ recipients: recipients.length, devices: tokens.length, sent, stale });
+  return json(200, { sent, stale, recipients: recipients.length, devices: tokens.length, fcm_errors: fcmErrors });
 }
 
 // Всяко извикване оставя ред в notify_log: вид, код и кратък резултат
