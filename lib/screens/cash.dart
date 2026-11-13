@@ -91,7 +91,8 @@ class _CashScreenState extends State<CashScreen> {
     if (!tabs.contains(_tab)) _tab = CashBook.income;
     final shown = (_tab == null
             ? [...waiting]
-            : all.where((e) => e.isApproved && e.book == _tab).toList())
+            // Върнатите остават в историята на книгата – зачеркнати, без да се броят.
+            : all.where((e) => (e.isApproved || e.isReturned) && e.book == _tab).toList())
         .where(_filter.matches)
         .toList();
     final pendingCount = all.where((e) => e.isPending).length;
@@ -278,7 +279,7 @@ class _CashScreenState extends State<CashScreen> {
                 onPressed: () => setState(() => _filter = const CashFilter()),
               ),
               Chip(
-                  label: Text('Общо: ${fmtEur(shown.fold(0.0, (a, e) => a + e.amount))}'),
+                  label: Text('Общо: ${fmtEur(shown.where((e) => !e.isReturned).fold(0.0, (a, e) => a + e.amount))}'),
                   visualDensity: VisualDensity.compact),
             ]),
           ),
@@ -294,7 +295,7 @@ class _CashScreenState extends State<CashScreen> {
                         : 'Още няма записи в тази книга.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
           ),
-        for (final e in shown) CashRow(entry: e),
+        for (final e in shown) e.isReturned ? Opacity(opacity: .7, child: CashRow(entry: e)) : CashRow(entry: e),
         // Върнатите не влизат в книгите; остават само за историята.
         if (_tab == null && returned.where(_filter.matches).isNotEmpty) ...[
           const SizedBox(height: 18),
@@ -468,7 +469,7 @@ class CashRow extends StatelessWidget {
     final status0 = e.isPending
         ? 'чака одобрение'
         : e.isReturned
-            ? 'върнат'
+            ? 'върнат · не се брои'
             : e.reversedBy != null
                 ? 'сторниран'
                 : e.autoReason == 'single'
