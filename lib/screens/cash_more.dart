@@ -465,21 +465,24 @@ class CashMonthsScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: per?.isClosed == true ? Colors.green.shade600 : p.border),
         ),
-        child: Row(children: [
-          Icon(per?.isClosed == true ? Icons.lock_rounded : Icons.lock_open_rounded,
-              color: per?.isClosed == true ? Colors.green.shade700 : p.textMuted),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(monthLabel(m), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-              Text('приходи ${fmtEur(inc)} · разходи ${fmtEur(exp)}',
-                  style: TextStyle(fontSize: 13.5, color: p.textMuted)),
-              Text(pending > 0 ? '$label · $pending чакащи записа' : label,
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: color)),
-            ]),
-          ),
-          if (per == null && canRequest)
-            FilledButton(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Icon(per?.isClosed == true ? Icons.lock_rounded : Icons.lock_open_rounded,
+                color: per?.isClosed == true ? Colors.green.shade700 : p.textMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(monthLabel(m), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                Text('приходи ${fmtEur(inc)} · разходи ${fmtEur(exp)}',
+                    style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+                Text(pending > 0 ? '$label · $pending чакащи записа' : label,
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: color)),
+              ]),
+            ),
+          ]),
+          if (per == null && canRequest) ...[
+            const SizedBox(height: 10),
+            FilledButton.tonal(
               onPressed: pending > 0
                   ? () => showMessage(context, 'В ${monthLabel(m)} има чакащи записи – първо ги решете.')
                   : () async {
@@ -502,8 +505,9 @@ class CashMonthsScreen extends StatelessWidget {
                         if (context.mounted) showMessage(context, e.message);
                       }
                     },
-              child: const Text('Приключи'),
+              child: Text('Приключи ${monthLabel(m)}'),
             ),
+          ],
         ]),
       ),
     );
