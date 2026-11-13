@@ -49,10 +49,18 @@ class SvestenikApp extends StatelessWidget {
       darkTheme: buildTheme(Palette.darkP),
       builder: (context, child) {
         final mq = MediaQuery.of(context);
+        // Шрифтът се съобразява с ширината на екрана: на тесни телефони
+        // (или при голям системен шрифт) се смалява, за да не се чупят
+        // бутоните на два реда. Основа – 400 логически точки ширина.
+        final widthFactor = (mq.size.width / 400).clamp(0.8, 1.0);
+        // Системният шрифт се приема до 1.0× на тесен екран (320) и до 1.3× на широк (400+);
+        // настройката „Размер на текста“ в Кайрос се прилага отгоре.
+        final systemCap = 1.0 + (widthFactor - 0.8) * 1.5;
+        final scale = mq.textScaler.scale(1).clamp(0.8, systemCap) * s.textScale * widthFactor;
         return MediaQuery(
           data: mq.copyWith(
             alwaysUse24HourFormat: true,
-            textScaler: TextScaler.linear(mq.textScaler.scale(1) * s.textScale),
+            textScaler: TextScaler.linear(scale.toDouble()),
           ),
           child: child!,
         );

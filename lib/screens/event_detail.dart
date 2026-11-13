@@ -379,7 +379,7 @@ class _StatusButtons extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: () => _set(context, EventStatus.done),
           icon: const Icon(Icons.check_circle_outline_rounded),
-          label: const Text('Проведено'),
+          label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Проведено', maxLines: 1)),
         ),
       ),
       const SizedBox(width: 10),
@@ -387,7 +387,7 @@ class _StatusButtons extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: () => _set(context, EventStatus.cancelled),
           icon: const Icon(Icons.event_busy_outlined),
-          label: const Text('Отменено'),
+          label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Отменено', maxLines: 1)),
         ),
       ),
     ]);

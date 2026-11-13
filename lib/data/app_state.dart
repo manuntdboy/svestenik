@@ -307,6 +307,7 @@ class AppState extends ChangeNotifier {
     }
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
+    if (t.contains('amount_check')) return 'Сумата е твърде голяма – най-много 12 цифри.';
     if (t.contains('duty_overlap')) return 'В тези дни вече има дежурен. Изберете други дати.';
     if (t.contains('duty_too_long')) return 'Едно дежурство е най-много 2 месеца.';
     if (t.contains('swap_exists')) return 'За това дежурство вече има молба за размяна.';
@@ -556,9 +557,6 @@ class AppState extends ChangeNotifier {
       unawaited(_invokeNotify({'type': 'duty', 'user_id': e.key, 'log_ids': e.value}));
     }
   }
-
-  String _iso(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> addDuty(String churchId, String userId, DateTime start, DateTime end, String note) async {
     try {

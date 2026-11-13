@@ -653,6 +653,10 @@ select t.ok(:dn = 1
 select t.as_user(:'B');
 select t.as_user(:'C');
 select t.fails(format($$select public.stock_audit(%L, gen_random_uuid(), 'candle_1', 1, null)$$, :'cid2'), 'свещеник не прави ревизия', 'not_cash_holder');
+select t.ok((select amount from public.cash_add(:'cid2','income',999999999999.99,'Дарение',null,null,'cash',null,null,null)) = 999999999999.99,
+            'касата приема 12-цифрени суми');
+select t.fails(format($$select public.cash_add(%L,'income',1000000000000,'Дарение',null,null,'cash',null,null,null)$$, :'cid2'),
+               'над 12 цифри се отказва', 'amount_check');
 select id as don from public.cash_add(:'cid2','income',25,'Дарение',null,null,'cash',null,null,null) \gset
 select public.cash_set_donor(:'don', 'Иван Петров') \g /dev/null
 select t.as_user(:'B');

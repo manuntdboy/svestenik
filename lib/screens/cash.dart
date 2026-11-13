@@ -137,12 +137,17 @@ class _CashScreenState extends State<CashScreen> {
                     color: cash < 0 ? Colors.white : p.heroMuted,
                     fontWeight: cash < 0 ? FontWeight.w800 : FontWeight.w400)),
             const SizedBox(height: 4),
-            Text(fmtEur(cash),
-                style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    fontFeatures: const [FontFeature.tabularFigures()])),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(fmtEur(cash),
+                  maxLines: 1,
+                  style: TextStyle(
+                      fontSize: 38,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+            ),
             if (st.hasBank) ...[
               const SizedBox(height: 6),
               Text('Банка ${fmtEur(bank)}  ·  Общо ${fmtEur(cash + bank)}',
@@ -812,6 +817,10 @@ class _CashEntryFormState extends State<CashEntryForm> {
   Future<void> _save() async {
     final s = AppScope.read(context);
     final amount = parseAmount(_amount.text);
+    if (amount != null && amount > 999999999999.99) {
+      showMessage(context, 'Сумата е твърде голяма – най-много 12 цифри преди десетичната запетая.');
+      return;
+    }
     if (amount == null || amount <= 0) {
       showMessage(context, 'Въведете сума, например 50 или 12,50.');
       return;
