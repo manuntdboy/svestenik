@@ -190,13 +190,10 @@ jobs:
             --release-notes-file "$RUNNER_TEMP/notes.txt"
           rm -f "$RUNNER_TEMP/firebase-sa.json"
 
-      - name: Версия на създателя (само за автора, с „Кайрос в числа“)
-        if: env.HAS_FIREBASE == 'true' && (env.SEND_TO_ME == 'true' || env.SEND_TO_TESTERS == 'true')
+      - name: Изпращане само до автора
+        if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS != 'true' && env.SEND_TO_ME == 'true'
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
-          FIREBASE_ANDROID_API_KEY: ${{ secrets.FIREBASE_ANDROID_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           AUTHOR_EMAIL: ${{ secrets.AUTHOR_EMAIL }}
         run: |
@@ -204,20 +201,11 @@ jobs:
             echo "::error::Липсва секрет AUTHOR_EMAIL (GitHub → Settings → Secrets and variables → Actions)."
             exit 1
           fi
-          # Втора сборка с CREATOR=true – не отива в Releases и при тестерите.
-          flutter build apk --release --build-number=${{ github.run_number }} \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
-            --dart-define=FIREBASE_APP_ID="$FIREBASE_APP_ID" \
-            --dart-define=FIREBASE_ANDROID_API_KEY="$FIREBASE_ANDROID_API_KEY" \
-            --dart-define=BUILD_NUMBER=${{ github.run_number }} \
-            --dart-define=TEST_BUILD=true \
-            --dart-define=CREATOR=true
-          cp build/app/outputs/flutter-apk/app-release.apk "kairos-${{ github.run_number }}-creator.apk"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          # Авторът е създателят – в бележките са и „само за вас“.
           python3 ci/release_notes.py "${{ github.run_number }}" --creator > "$RUNNER_TEMP/notes.txt"
-          npx --yes firebase-tools@latest appdistribution:distribute "kairos-${{ github.run_number }}-creator.apk" \
+          npx --yes firebase-tools@latest appdistribution:distribute "$APK_NAME" \
             --app "$FIREBASE_APP_ID" \
             --testers "$AUTHOR_EMAIL" \
             --release-notes-file "$RUNNER_TEMP/notes.txt"

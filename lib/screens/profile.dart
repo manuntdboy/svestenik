@@ -9,7 +9,7 @@ import 'church_connect.dart';
 import 'church_priests.dart';
 import 'creator.dart';
 import 'my_profile.dart';
-import '../widgets/whats_new.dart' show buildNumber, isCreatorBuild;
+import '../widgets/whats_new.dart' show buildNumber;
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -169,10 +169,10 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        // „За приложението“ – създател и версия. В сборката за създателя
-        // дълго натискане тук отваря „Кайрос в числа“; иначе нищо.
+        // „За приложението“ – създател и версия. За профила на създателя
+        // (решава сървърът) дълго натискане тук отваря „Кайрос в числа“.
         GestureDetector(
-          onLongPress: isCreatorBuild
+          onLongPress: s.isCreator
               ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CreatorScreen()))
               : null,
           child: SurfaceCard(

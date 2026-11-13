@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/app_state.dart';
 import '../theme.dart';
 
 /// Номер на изграждането (подава се от GitHub). 0 = местно изграждане.
@@ -11,11 +12,6 @@ const buildNumber = int.fromEnvironment('BUILD_NUMBER');
 
 /// Камбанката „Какво е новото“ се показва само в тестовите версии.
 const isTestBuild = bool.fromEnvironment('TEST_BUILD', defaultValue: true);
-
-/// Сборка само за създателя (--dart-define=CREATOR=true): има скрития екран
-/// „Кайрос в числа“ и бележки „само за вас“. В версиите за тестерите е false
-/// и този код изобщо не влиза в приложението.
-const isCreatorBuild = bool.fromEnvironment('CREATOR');
 
 const _kSeen = 'whats_new_seen_build';
 
@@ -25,21 +21,17 @@ class WhatsNew {
   final List<String> test;
   WhatsNew(this.date, this.added, this.test);
 
-  static WhatsNew? _cache;
+  static Map<String, dynamic>? _json;
 
-  static Future<WhatsNew> load() async {
-    if (_cache != null) return _cache!;
-    final j = jsonDecode(await rootBundle.loadString('assets/whats_new.json')) as Map<String, dynamic>;
-    return _cache = WhatsNew(
+  /// [creator] – профилът на създателя вижда и бележките „само за вас“.
+  static Future<WhatsNew> load({bool creator = false}) async {
+    final j = _json ??=
+        jsonDecode(await rootBundle.loadString('assets/whats_new.json')) as Map<String, dynamic>;
+    List<String> list(String k) => ((j[k] as List?) ?? const []).cast<String>();
+    return WhatsNew(
       (j['date'] as String?) ?? '',
-      [
-        if (isCreatorBuild) ...((j['creator'] as List?) ?? const []).cast<String>(),
-        ...((j['added'] as List?) ?? const []).cast<String>(),
-      ],
-      [
-        if (isCreatorBuild) ...((j['creator_test'] as List?) ?? const []).cast<String>(),
-        ...((j['test'] as List?) ?? const []).cast<String>(),
-      ],
+      [if (creator) ...list('creator'), ...list('added')],
+      [if (creator) ...list('creator_test'), ...list('test')],
     );
   }
 }
@@ -114,7 +106,7 @@ class _WhatsNewBellState extends State<WhatsNewBell> {
 
 /// Прозорецът „Какво е новото“.
 Future<void> showWhatsNew(BuildContext context) async {
-  final notes = await WhatsNew.load();
+  final notes = await WhatsNew.load(creator: AppScope.read(context).isCreator);
   // Отметнатите проверки се пазят на телефона, отделно за всяка версия.
   final prefs = await SharedPreferences.getInstance();
   final key = 'whats_new_tested_$buildNumber';

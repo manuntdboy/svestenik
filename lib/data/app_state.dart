@@ -78,6 +78,9 @@ class AppState extends ChangeNotifier {
   /// true докато се зареждат данните след вход или стартиране.
   bool loading = false;
 
+  /// Профилът на създателя (решава сървърът) – отключва „Кайрос в числа“.
+  bool isCreator = false;
+
   /// Текст, ако последното обновяване от сървъра не е успяло.
   String? syncError;
 
@@ -123,6 +126,7 @@ class AppState extends ChangeNotifier {
   }
 
   void _clear() {
+    isCreator = false;
     _versionAt = null;
     currentUser = null;
     myDetails = ProfileDetails();
@@ -222,6 +226,7 @@ class AppState extends ChangeNotifier {
       unawaited(rescheduleReminders());
       unawaited(_registerPush());
       unawaited(_reportVersion());
+      unawaited(_checkCreator());
     } catch (e) {
       debugPrint('Обновяването не успя: $e');
       syncError = 'Няма връзка със сървъра. Показват се последните заредени данни.';
@@ -313,6 +318,14 @@ class AppState extends ChangeNotifier {
       await _db.rpc('report_version', params: {'p_build': buildNumber});
     } catch (e) {
       debugPrint('Версията не се записа: $e');
+    }
+  }
+
+  Future<void> _checkCreator() async {
+    try {
+      isCreator = await _db.rpc('is_creator') == true;
+    } catch (_) {
+      isCreator = false;
     }
   }
 
