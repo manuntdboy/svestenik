@@ -328,6 +328,31 @@ select t.ok(t.rows($$delete from leave_requests where note = 'чакаща'$$) =
 select t.as_user(:'A');
 select public.cancel_leave(:'lv1') \g /dev/null
 select t.ok((select count(*) from leave_requests where id = :'lv1') = 0, 'председателят отменя одобрена почивка');
+select t.as_user(:'B');
+insert into leave_requests (church_id, start_date, end_date, note) values
+  (:'cid', current_date + 40, current_date + 41, 'за отказ'),
+  (:'cid', current_date + 50, current_date + 52, 'бъдеща'),
+  (:'cid', current_date - 3, current_date + 3, 'тече');
+select t.as_user(:'A');
+select t.ok((select decision_note from public.decide_leave((select id from leave_requests where note = 'за отказ'), false, '  Има кръщене тогава  '))
+            = 'Има кръщене тогава', 'при отказ се пази коментар на председателя');
+select t.fails(format('select public.decide_leave(%L, true)', (select id from leave_requests where note = 'за отказ')),
+               'решена заявка не се решава втори път', 'not_pending');
+select public.decide_leave(id, true) from leave_requests where note in ('бъдеща', 'тече') \g /dev/null
+select t.as_user(:'B');
+select t.fails(format('select public.end_leave(%L, null)', (select id from leave_requests where note = 'тече')),
+               'свещеник не прекратява почивка', 'not_manager');
+select t.as_user(:'A');
+select t.ok((select status from public.end_leave((select id from leave_requests where note = 'бъдеща'), 'нужен сте'))
+            = 'ended', 'непочнала почивка се отменя цялата');
+select (public.end_leave((select id from leave_requests where note = 'тече'), null)).end_date as le \gset
+select t.ok(:'le'::date = (now() at time zone 'Europe/Sofia')::date - 1
+            and (select planned_end from leave_requests where note = 'тече') = current_date + 3
+            and not public.is_on_leave(:'cid', :'B', (now() at time zone 'Europe/Sofia')::date),
+            'течаща почивка приключва вчера, първоначалният край се пази');
+select t.fails(format('select public.end_leave(%L, null)', (select id from leave_requests where note = 'тече')),
+               'вече прекратена почивка не се прекратява пак', 'leave_over');
+delete from leave_requests where note in ('за отказ', 'бъдеща', 'тече');
 
 \echo '== Смяна на председателя'
 select t.as_user(:'B');

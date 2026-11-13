@@ -186,7 +186,7 @@ async function handle(req: Request): Promise<Response> {
         : `Остава председател на ${church.name} както досега.`;
     }
     data = { type, church_id: churchId };
-  } else if (type === "leave_request" || type === "leave_decided") {
+  } else if (type === "leave_request" || type === "leave_decided" || type === "leave_ended") {
     const requestId = String(body.request_id ?? "");
     const { data: lv } = await admin.from("leave_requests").select("*").eq("id", requestId).maybeSingle();
     if (!lv) return json(404, { error: "not_found" });
@@ -205,8 +205,21 @@ async function handle(req: Request): Promise<Response> {
         .eq("church_id", lv.church_id).eq("user_id", caller.id).maybeSingle();
       if (!me || me.role !== "manager" || me.status !== "active") return json(403, { error: "forbidden" });
       recipients = [lv.user_id];
-      title = lv.status === "approved" ? "Почивката е одобрена" : "Почивката не е одобрена";
-      text = `${period} · ${callerName}`;
+      if (type === "leave_ended") {
+        if (lv.status === "ended") {
+          title = "Почивката е отменена";
+          text = `${period} · ${callerName}`;
+        } else {
+          const planned = lv.planned_end ? `${fmt(lv.start_date)} – ${fmt(lv.planned_end)}` : period;
+          title = "Почивката е прекратена";
+          text = `${planned} · последен ден ${fmt(lv.end_date)} · ${callerName}`;
+        }
+        if (lv.end_note) text += `\n„${lv.end_note}“`;
+      } else {
+        title = lv.status === "approved" ? "Почивката е одобрена" : "Почивката не е одобрена";
+        text = `${period} · ${callerName}`;
+        if (lv.decision_note) text += `\n„${lv.decision_note}“`;
+      }
     }
     data = { type, church_id: lv.church_id, request_id: lv.id };
   } else if (type === "stock_loaded" || type === "stock_pending" || type === "stock_decided") {

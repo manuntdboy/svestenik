@@ -257,7 +257,7 @@ class AppState extends ChangeNotifier {
     final t = text.toLowerCase();
     if (t.contains('invalid_code')) return 'Няма храм с този код.';
     if (t.contains('assignee_on_leave')) return 'Свещеникът е в почивка в този ден.';
-    if (t.contains('not_pending')) return 'Събитието вече не чака потвърждение.';
+    if (t.contains('not_pending')) return 'Това вече е решено от някой друг. Обновете.';
     if (t.contains('not_declined')) return 'Отказът вече е решен.';
     if (t.contains('bad_substitute')) return 'Изберете свещеник от храма.';
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
@@ -295,6 +295,7 @@ class AppState extends ChangeNotifier {
     }
     if (t.contains('not_manager')) return 'Само председателят може да направи това.';
     if (t.contains('cannot_remove_self')) return 'Не можете да премахнете себе си.';
+    if (t.contains('leave_over')) return 'Тази почивка вече е приключила.';
     if (t.contains('last_manager')) return 'Храмът трябва да има поне един председател.';
     if (t.contains('row-level security') || t.contains('permission')) {
       return 'Нямате права за това.';
@@ -1418,14 +1419,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> decideLeave(LeaveRequest l, bool approve) async {
+  Future<void> decideLeave(LeaveRequest l, bool approve, {String note = ''}) async {
     try {
-      await _db.rpc('decide_leave', params: {'p_request': l.id, 'p_approve': approve});
+      await _db.rpc('decide_leave', params: {
+        'p_request': l.id,
+        'p_approve': approve,
+        'p_note': note.trim().isEmpty ? null : note.trim(),
+      });
       await refresh();
     } catch (e) {
       throw AppError(_friendly(e));
     }
     unawaited(_invokeNotify({'type': 'leave_decided', 'request_id': l.id}));
+  }
+
+  /// Председателят прекратява одобрена почивка: непочналата се отменя
+  /// цялата, течащата приключва вчера. Свещеникът получава известие.
+  Future<void> endLeave(LeaveRequest l, String note) async {
+    try {
+      await _db.rpc('end_leave', params: {'p_request': l.id, 'p_note': note.trim().isEmpty ? null : note.trim()});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+    unawaited(_invokeNotify({'type': 'leave_ended', 'request_id': l.id}));
   }
 
   /// Оттегля (своя чакаща) или отменя (председателят – всяка) заявка.

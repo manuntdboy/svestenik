@@ -30,6 +30,38 @@ String fmtLeavePeriod(LeaveRequest l) {
   return '${_fmtDm.format(l.start)} – ${_fmtDm.format(l.end)}';
 }
 
+/// Диалог с поле за коментар (по желание). Връща текста или null при „Отказ“.
+Future<String?> askComment(BuildContext context,
+    {required String title, required String body, required String hint, required String action}) async {
+  final c = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(body, style: const TextStyle(fontSize: 16.5)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: c,
+          maxLength: 300,
+          minLines: 2,
+          maxLines: 4,
+          textCapitalization: TextCapitalization.sentences,
+          style: const TextStyle(fontSize: 17),
+          decoration: InputDecoration(hintText: hint),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+      ],
+    ),
+  );
+  final text = c.text;
+  c.dispose();
+  return ok == true ? text : null;
+}
+
 /// Обща рамка на картите за молби (жълт кант като „Чака одобрение“).
 class _RequestFrame extends StatelessWidget {
   final String tag;
@@ -419,8 +451,18 @@ class _LeaveReviewCardState extends State<LeaveReviewCard> {
     final l = widget.leave;
 
     Future<void> go(bool approve) async {
+      var note = '';
+      if (!approve) {
+        final c = await askComment(context,
+            title: 'Отказ на почивката',
+            body: '${s.priestName(l.userId)} · ${fmtLeavePeriod(l)}\nКоментарът ще получи като известие.',
+            hint: 'Коментар (по желание), напр. „Имаме кръщене тогава“',
+            action: 'Откажи');
+        if (c == null || !mounted) return;
+        note = c;
+      }
       setState(() => _busy = true);
-      await _guard(context, () => s.decideLeave(l, approve),
+      await _guard(context, () => s.decideLeave(l, approve, note: note),
           approve ? 'Почивката е одобрена.' : 'Почивката не е одобрена.');
       if (mounted) setState(() => _busy = false);
     }

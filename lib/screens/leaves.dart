@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
@@ -74,13 +75,15 @@ class LeavesScreen extends StatelessWidget {
     final pending = s.pendingLeaves(church);
     final approved = s.approvedLeaves(church);
 
-    Widget leaveRow(LeaveRequest l, {bool showName = false, bool canCancel = false}) {
+    Widget leaveRow(LeaveRequest l, {bool showName = false, bool canCancel = false, bool canEnd = false}) {
       final st = l.status;
       final (bg, fg) = switch (st) {
         LeaveStatus.approved => (const Color(0xFFDDF0EC), const Color(0xFF14584D)),
         LeaveStatus.rejected => (const Color(0xFFF4E0E4), const Color(0xFF7A2438)),
         LeaveStatus.pending => (Palette.yellow, Palette.onYellow),
+        LeaveStatus.ended => (const Color(0xFFE4E6EA), const Color(0xFF3E4652)),
       };
+      final cut = l.cutShort;
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: SurfaceCard(
@@ -98,23 +101,30 @@ class LeavesScreen extends StatelessWidget {
                 Text('${fmtLeavePeriod(l)} · ${l.days == 1 ? '1 ден' : '${l.days} дни'}',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 if (l.note.isNotEmpty) Text(l.note, style: TextStyle(fontSize: 14, color: p.textMuted)),
+                ...leaveNotes(context, l),
               ]),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-              child: Text(st.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
+              decoration: BoxDecoration(
+                  color: cut ? const Color(0xFFFBE7D3) : bg, borderRadius: BorderRadius.circular(12)),
+              child: Text(l.statusLabel,
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: cut ? const Color(0xFF7A3E0C) : fg)),
             ),
-            if (canCancel)
+            if (canEnd)
+              TextButton(
+                onPressed: () => endLeaveDialog(context, l),
+                child: const Text('Прекрати'),
+              )
+            else if (canCancel)
               IconButton(
-                tooltip: st == LeaveStatus.pending ? 'Оттегли заявката' : 'Отмени почивката',
+                tooltip: 'Оттегли заявката',
                 icon: const Icon(Icons.close_rounded),
                 onPressed: () async {
                   final ok = await confirm(
                       context,
-                      st == LeaveStatus.pending ? 'Оттегли заявката?' : 'Отмени почивката?',
-                      fmtLeavePeriod(l),
-                      st == LeaveStatus.pending ? 'Оттегли' : 'Отмени');
+                      'Оттегли заявката?', fmtLeavePeriod(l), 'Оттегли');
                   if (!ok || !context.mounted) return;
                   try {
                     await s.cancelLeave(l);
@@ -160,11 +170,13 @@ class LeavesScreen extends StatelessWidget {
               if (mine.isEmpty)
                 Text('Нямате заявки.', style: TextStyle(fontSize: 16, color: p.textMuted)),
               for (final l in mine)
-                leaveRow(l, canCancel: l.status == LeaveStatus.pending || (manager && l.status == LeaveStatus.approved)),
+                leaveRow(l,
+                    canCancel: l.status == LeaveStatus.pending,
+                    canEnd: manager && l.status == LeaveStatus.approved && !_isOver(l)),
               heading('Одобрени почивки в храма'),
               if (approved.isEmpty)
                 Text('Няма предстоящи почивки.', style: TextStyle(fontSize: 16, color: p.textMuted)),
-              for (final l in approved) leaveRow(l, showName: true, canCancel: manager),
+              for (final l in approved) leaveRow(l, showName: true, canEnd: manager && !_isOver(l)),
             ],
           ),
         ),
@@ -193,7 +205,7 @@ class LeaveRequestScreen extends StatelessWidget {
       body = LeaveReviewCard(leave: l);
     } else {
       final approved = l.status == LeaveStatus.approved;
-      final rejected = l.status == LeaveStatus.rejected;
+      final rejected = l.status == LeaveStatus.rejected || l.status == LeaveStatus.ended;
       body = SurfaceCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
@@ -227,13 +239,25 @@ class LeaveRequestScreen extends StatelessWidget {
                         : p.textMuted),
             const SizedBox(width: 8),
             Text(
-                approved
-                    ? 'Одобрена'
-                    : rejected
-                        ? 'Не е одобрена'
-                        : 'Чака одобрение от председателя',
+                l.cutShort
+                    ? 'Прекратена'
+                    : approved
+                        ? 'Одобрена'
+                        : l.status == LeaveStatus.ended
+                            ? 'Отменена'
+                            : rejected
+                                ? 'Не е одобрена'
+                                : 'Чака одобрение от председателя',
                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ]),
+          ...leaveNotes(context, l),
+          if (approved && s.isManagerOf(l.churchId) && !_isOver(l)) ...[
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => endLeaveDialog(context, l),
+              child: const Text('Прекрати почивката'),
+            ),
+          ],
         ]),
       );
     }
@@ -258,5 +282,69 @@ class LeaveRequestScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+bool _isOver(LeaveRequest l) {
+  final n = DateTime.now();
+  return l.end.isBefore(DateTime(n.year, n.month, n.day));
+}
+
+/// Коментари към почивката: решение на председателя и прекратяване.
+List<Widget> leaveNotes(BuildContext context, LeaveRequest l) {
+  final p = Palette.of(context);
+  final style = TextStyle(fontSize: 14.5, color: p.text, fontStyle: FontStyle.italic);
+  final dm = DateFormat('d.MM');
+  return [
+    if (l.decisionNote.isNotEmpty)
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('Председателят: „${l.decisionNote}“', style: style),
+      ),
+    if (l.cutShort)
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('Прекратена – по план до ${dm.format(l.plannedEnd!)}, последен ден ${dm.format(l.end)}.',
+            style: TextStyle(fontSize: 14.5, color: p.textMuted)),
+      ),
+    if (l.status == LeaveStatus.ended)
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('Отменена от председателя преди да започне.', style: TextStyle(fontSize: 14.5, color: p.textMuted)),
+      ),
+    if (l.endNote.isNotEmpty)
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text('Председателят: „${l.endNote}“', style: style),
+      ),
+  ];
+}
+
+/// Председателят прекратява одобрена почивка (с коментар по желание).
+Future<void> endLeaveDialog(BuildContext context, LeaveRequest l) async {
+  final s = AppScope.read(context);
+  final n = DateTime.now();
+  final today = DateTime(n.year, n.month, n.day);
+  final started = l.start.isBefore(today);
+  final yesterday = today.subtract(const Duration(days: 1));
+  final body = started
+      ? '${s.priestName(l.userId)} · ${fmtLeavePeriod(l)}\n'
+          'Почивката ще приключи вчера (${DateFormat('d.MM').format(yesterday)}) – от днес свещеникът е на работа. '
+          'Ще получи известие с коментара.'
+      : '${s.priestName(l.userId)} · ${fmtLeavePeriod(l)}\n'
+          'Почивката още не е започнала и ще бъде отменена цялата. Ще получи известие с коментара.';
+  final note = await askComment(context,
+      title: started ? 'Прекратяване на почивката' : 'Отмяна на почивката',
+      body: body,
+      hint: 'Коментар (по желание), напр. „Нужен сте за погребение“',
+      action: started ? 'Прекрати' : 'Отмени почивката');
+  if (note == null || !context.mounted) return;
+  try {
+    await s.endLeave(l, note);
+    if (context.mounted) {
+      showMessage(context, started ? 'Почивката е прекратена.' : 'Почивката е отменена.');
+    }
+  } on AppError catch (e) {
+    if (context.mounted) showMessage(context, e.message);
   }
 }

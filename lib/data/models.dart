@@ -507,7 +507,8 @@ class ProfileDetails {
 enum LeaveStatus {
   pending('Чака одобрение'),
   approved('Одобрена'),
-  rejected('Неодобрена');
+  rejected('Неодобрена'),
+  ended('Отменена');
 
   final String label;
   const LeaveStatus(this.label);
@@ -524,6 +525,10 @@ class LeaveRequest {
   final DateTime end; // само дата, включително
   final String note;
   final LeaveStatus status;
+  final String decisionNote; // коментар на председателя при решението
+  final String endNote; // коментар при прекратяване/отмяна
+  final DateTime? plannedEnd; // първоначален край, ако е прекратена по-рано
+  final DateTime? endedAt;
 
   LeaveRequest({
     required this.id,
@@ -533,7 +538,17 @@ class LeaveRequest {
     required this.end,
     this.note = '',
     this.status = LeaveStatus.pending,
+    this.decisionNote = '',
+    this.endNote = '',
+    this.plannedEnd,
+    this.endedAt,
   });
+
+  /// Одобрена, но председателят я е прекратил преди края.
+  bool get cutShort => status == LeaveStatus.approved && plannedEnd != null;
+
+  /// Текст за значката: „Прекратена“ за съкратена одобрена почивка.
+  String get statusLabel => cutShort ? 'Прекратена' : status.label;
 
   bool covers(DateTime day) {
     final d = DateTime(day.year, day.month, day.day);
@@ -555,6 +570,10 @@ class LeaveRequest {
         end: _d(r['end_date'] as String),
         note: (r['note'] as String?) ?? '',
         status: LeaveStatus.fromName(r['status'] as String?),
+        decisionNote: (r['decision_note'] as String?) ?? '',
+        endNote: (r['end_note'] as String?) ?? '',
+        plannedEnd: r['planned_end'] == null ? null : _d(r['planned_end'] as String),
+        endedAt: r['ended_at'] == null ? null : DateTime.tryParse(r['ended_at'] as String)?.toLocal(),
       );
 }
 

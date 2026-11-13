@@ -129,6 +129,7 @@ const _notifyNames = {
   'chair_responded': 'Отговор за председател',
   'leave_request': 'Заявка за почивка',
   'leave_decided': 'Решение за почивка',
+  'leave_ended': 'Прекратена почивка',
   'cash_pending': 'Каса – чака',
   'cash_decided': 'Каса – решено',
   'cash_close_pending': 'Затваряне – чака',
