@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
@@ -22,7 +23,28 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _selected = _dateOnly(DateTime.now());
-  CalView _view = CalView.day;
+  // По подразбиране – целият месец; изборът се помни на телефона.
+  CalView _view = CalView.month;
+  static const _viewKey = 'calendar_view';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadView();
+  }
+
+  Future<void> _loadView() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = CalView.values.where((x) => x.name == prefs.getString(_viewKey)).firstOrNull;
+      if (v != null && mounted) setState(() => _view = v);
+    } catch (_) {}
+  }
+
+  void _setView(CalView v) {
+    setState(() => _view = v);
+    SharedPreferences.getInstance().then((p) => p.setString(_viewKey, v.name)).catchError((_) => false);
+  }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -37,7 +59,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
           _selected = _dateOnly(_selected.add(Duration(days: 7 * dir)));
         case CalView.month:
           final m = DateTime(_selected.year, _selected.month + dir, 1);
-          _selected = m;
+          final now = DateTime.now();
+          // В текущия месец избираме днес, в другите – първо число.
+          _selected = m.year == now.year && m.month == now.month ? _dateOnly(now) : m;
       }
     });
   }
@@ -60,8 +84,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     List<Color> dotsFor(DateTime d) => [
           for (final id in s.priestsOn(d)) p.priest(s.priestIndex(s.currentChurchId!, id)),
         ];
-    final monthTitle = capitalize(DateFormat('LLLL', 'bg').format(_selected));
-    final showYear = _selected.year != DateTime.now().year;
+    int countFor(DateTime d) => s.eventsOn(d).where((e) => !e.isCancelled).length;
+    bool archiFor(DateTime d) => s.eventsOn(d).any((e) => e.kind.occupiesChurch && !e.isCancelled);
+    final monthTitle = '${capitalize(DateFormat('LLLL', 'bg').format(_selected))} ${_selected.year}';
 
     return Stack(
       children: [
@@ -69,32 +94,48 @@ class _CalendarScreenState extends State<CalendarScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
           children: [
+            // Търсене и почивки – малки, горе вдясно.
             Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: Text(showYear ? '$monthTitle ${_selected.year}' : monthTitle,
-                      style: const TextStyle(
-                          fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-                ),
                 _RoundButton(Icons.search_rounded, 'Търсене',
                     () => Navigator.push(
-                        context, MaterialPageRoute(builder: (_) => const SearchScreen()))),
+                        context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+                    size: 40),
                 const SizedBox(width: 8),
                 _RoundButton(Icons.beach_access_outlined, 'Почивки',
                     () => Navigator.push(
-                        context, MaterialPageRoute(builder: (_) => const LeavesScreen()))),
-                const SizedBox(width: 8),
+                        context, MaterialPageRoute(builder: (_) => const LeavesScreen())),
+                    size: 40),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Месецът с годината – на един ред, със стрелките до него.
+            Row(
+              children: [
                 _RoundButton(Icons.chevron_left_rounded,
                     _view == CalView.month ? 'Предишен месец' : 'Предишна седмица',
                     () => _shift(-1)),
-                const SizedBox(width: 8),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(monthTitle,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                              fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    ),
+                  ),
+                ),
                 _RoundButton(Icons.chevron_right_rounded,
                     _view == CalView.month ? 'Следващ месец' : 'Следваща седмица',
                     () => _shift(1)),
               ],
             ),
             const SizedBox(height: 14),
-            _ViewSwitch(value: _view, onChanged: (v) => setState(() => _view = v)),
+            _ViewSwitch(value: _view, onChanged: _setView),
             const SizedBox(height: 14),
             if (_view != CalView.month)
               _WeekStrip(
@@ -102,6 +143,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 selected: _selected,
                 dots: dotsFor,
                 leaves: leavesFor,
+                count: countFor,
+                archi: archiFor,
                 onSelect: (d) => setState(() => _selected = d),
               )
             else
@@ -110,10 +153,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 selected: _selected,
                 dots: dotsFor,
                 leaves: leavesFor,
-                onSelect: (d) => setState(() {
-                  _selected = d;
-                  _view = CalView.day;
-                }),
+                count: countFor,
+                archi: archiFor,
+                onSelect: (d) => setState(() => _selected = d),
               ),
             const SizedBox(height: 14),
             ...requestCards(s),
@@ -226,7 +268,8 @@ class _RoundButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  const _RoundButton(this.icon, this.tooltip, this.onTap);
+  final double size;
+  const _RoundButton(this.icon, this.tooltip, this.onTap, {this.size = 44});
 
   @override
   Widget build(BuildContext context) {
@@ -234,9 +277,9 @@ class _RoundButton extends StatelessWidget {
     return IconButton(
       tooltip: tooltip,
       onPressed: onTap,
-      icon: Icon(icon, size: 26),
+      icon: Icon(icon, size: size >= 44 ? 26 : 22),
       style: IconButton.styleFrom(
-        fixedSize: const Size(44, 44),
+        fixedSize: Size(size, size),
         backgroundColor: p.surface,
         foregroundColor: p.text,
         side: BorderSide(color: p.border),
@@ -303,6 +346,8 @@ class _DayCell extends StatelessWidget {
   final List<Color> dots;
   final List<Color> leaves;
   final bool dimmed;
+  final int count; // събития в деня (без отменените)
+  final bool archi; // Архиерейска Литургия
   final VoidCallback onTap;
   const _DayCell(
       {required this.day,
@@ -310,7 +355,9 @@ class _DayCell extends StatelessWidget {
       required this.dots,
       this.leaves = const [],
       required this.onTap,
-      this.dimmed = false});
+      this.dimmed = false,
+      this.count = 0,
+      this.archi = false});
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +366,8 @@ class _DayCell extends StatelessWidget {
     final label = DateFormat('EEEE, d MMMM', 'bg').format(day) +
         (today ? ', днес' : '') +
         (selected ? ', избран' : '') +
-        (dots.isNotEmpty ? ', има събития' : '') +
+        (count > 0 ? ', събития: $count' : '') +
+        (archi ? ', Архиерейска Литургия' : '') +
         (leaves.isNotEmpty ? ', почивка' : '');
     return Semantics(
       label: label,
@@ -336,9 +384,20 @@ class _DayCell extends StatelessWidget {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected ? p.primary : Colors.transparent,
-                shape: BoxShape.circle,
-                border: today && !selected ? Border.all(color: p.primary, width: 2) : null,
+                // Избраният – синьо; натоварените дни – по-наситено оцветени.
+                color: selected
+                    ? p.primary
+                    : count > 0 && !dimmed
+                        ? p.primary.withValues(alpha: (0.08 + 0.07 * (count.clamp(1, 5) - 1)).toDouble())
+                        : Colors.transparent,
+                shape: archi ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: archi ? BorderRadius.circular(12) : null,
+                // Днес – жълт кръг; Архиерейска Литургия – златна рамка.
+                border: archi
+                    ? Border.all(color: const Color(0xFFD4A017), width: 3)
+                    : today
+                        ? Border.all(color: Palette.yellow, width: 3)
+                        : null,
               ),
               child: Text('${day.day}',
                   style: TextStyle(
@@ -366,6 +425,9 @@ class _DayCell extends StatelessWidget {
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(shape: BoxShape.circle, color: c),
                   ),
+                if (dots.length > (leaves.isEmpty ? 3 : 2))
+                  Text('+${dots.length - (leaves.isEmpty ? 3 : 2)}',
+                      style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: p.textMuted)),
                 if (leaves.isNotEmpty)
                   Icon(Icons.beach_access_rounded, size: 12, color: leaves.first),
               ],
@@ -382,12 +444,16 @@ class _WeekStrip extends StatelessWidget {
   final DateTime selected;
   final List<Color> Function(DateTime) dots;
   final List<Color> Function(DateTime) leaves;
+  final int Function(DateTime) count;
+  final bool Function(DateTime) archi;
   final ValueChanged<DateTime> onSelect;
   const _WeekStrip(
       {required this.weekStart,
       required this.selected,
       required this.dots,
       required this.leaves,
+      required this.count,
+      required this.archi,
       required this.onSelect});
 
   @override
@@ -416,6 +482,8 @@ class _WeekStrip extends StatelessWidget {
                     selected: sameDay(d, selected),
                     dots: dots(d),
                     leaves: leaves(d),
+                    count: count(d),
+                    archi: archi(d),
                     onTap: () => onSelect(d),
                   ),
                 ],
@@ -432,12 +500,16 @@ class _MonthGrid extends StatelessWidget {
   final DateTime selected;
   final List<Color> Function(DateTime) dots;
   final List<Color> Function(DateTime) leaves;
+  final int Function(DateTime) count;
+  final bool Function(DateTime) archi;
   final ValueChanged<DateTime> onSelect;
   const _MonthGrid(
       {required this.month,
       required this.selected,
       required this.dots,
       required this.leaves,
+      required this.count,
+      required this.archi,
       required this.onSelect});
 
   @override
@@ -480,7 +552,9 @@ class _MonthGrid extends StatelessWidget {
                           day: d,
                           selected: sameDay(d, selected),
                           dots: dots(d),
-                    leaves: leaves(d),
+                          leaves: leaves(d),
+                          count: count(d),
+                          archi: archi(d),
                           dimmed: d.month != month.month,
                           onTap: () => onSelect(d),
                         ),
