@@ -138,6 +138,19 @@ const _notifyNames = {
   'stock_decided': 'Склад – решено',
 };
 
+String _errorText(Map f) {
+  final fcm = f['fcm'];
+  return switch (f['error']) {
+    'fcm_not_configured' => 'липсва ключ на Firebase на сървъра',
+    'server_config' => 'липсва настройка на сървъра',
+    'not_found' => 'записът вече го няма',
+    'bad_request' => 'непълна заявка от приложението',
+    'method_not_allowed' => 'грешен вид заявка',
+    'fcm' => 'Firebase отказа${fcm is List && fcm.isNotEmpty ? ' (код ${fcm.join(', ')})' : ''}',
+    _ => 'код ${f['status']} · ${f['error']}',
+  };
+}
+
 class _Stat extends StatelessWidget {
   final String value;
   final String label;
@@ -253,6 +266,10 @@ class _Overview extends StatelessWidget {
         (_notifyNames[e.key] ?? e.key): (e.value as num).toInt(),
     };
     final failed = (d['notify_failed'] as List).cast<Map>();
+    final nt = Map<String, dynamic>.from((d['notify'] as Map?) ?? const {});
+    final n1 = Map<String, dynamic>.from((nt['d1'] as Map?) ?? const {});
+    final n7 = Map<String, dynamic>.from((nt['d7'] as Map?) ?? const {});
+    final since = _dt(nt['since']);
     final versions = <String, int>{
       for (final e in Map<String, dynamic>.from((d['versions'] as Map?) ?? const {}).entries)
         (e.key == '0' ? 'местна' : 'версия ${e.key}'): (e.value as num).toInt(),
@@ -297,20 +314,30 @@ class _Overview extends StatelessWidget {
           ]),
           const _Section('Известия (push)'),
           _grid([
-            _Stat('${_n(t, 'notify_24')}', 'За 24 часа', Icons.send_rounded,
-                sub: '${_n(t, 'notify_fail_24')} неуспешни',
-                color: _n(t, 'notify_fail_24') > 0 ? red : green),
-            _Stat('${_n(t, 'notify_7')}', 'За 7 дни', Icons.send_rounded,
-                sub: '${_n(t, 'notify_fail_7')} неуспешни', color: _n(t, 'notify_fail_7') > 0 ? red : green),
+            _Stat('${_n(n1, 'delivered')}', 'Доставени · 24 ч', Icons.mark_email_read_rounded, color: green,
+                sub: '${_n(n7, 'delivered')} за 7 дни · до телефони'),
+            _Stat('${_n(n1, 'errors')}', 'Грешки · 24 ч', Icons.error_outline_rounded,
+                color: _n(n1, 'errors') > 0 ? red : green,
+                sub: '${_n(n7, 'errors')} за 7 дни${_n(n7, 'errors') == 0 ? ' · всичко е наред' : ''}'),
+            _Stat('${_n(n7, 'no_recipient')}', 'Без получател', Icons.person_search_rounded,
+                sub: 'за 7 дни · само до себе си или човек без телефон – не е грешка'),
+            _Stat('${_n(n7, 'refused')}', 'Отказани (защита)', Icons.shield_rounded,
+                sub: 'за 7 дни · опит без вход; повечето са проверките на сървъра при всяка версия'),
           ]),
+          if (since != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Дневникът на известията пази данни от ${_date(since)} (до 14 дни назад).',
+                  style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+            ),
           const _Section('Кой коя версия ползва'),
           _Bars(versions),
           const _Section('Събития по вид · 30 дни'),
           _Bars(byKind),
-          const _Section('Известия по вид · 7 дни'),
+          const _Section('Доставени известия по вид · 7 дни'),
           _Bars(byType),
           if (failed.isNotEmpty) ...[
-            const _Section('Последни неуспешни известия'),
+            const _Section('Последни истински грешки'),
             SurfaceCard(
               child: Column(children: [
                 for (final f in failed)
@@ -319,7 +346,7 @@ class _Overview extends StatelessWidget {
                     dense: true,
                     leading: const Icon(Icons.error_outline_rounded, color: red),
                     title: Text(_notifyNames[f['type']] ?? '${f['type']}', style: const TextStyle(fontSize: 15)),
-                    subtitle: Text('${_ago(_dt(f['at']))} · код ${f['status']}'),
+                    subtitle: Text('${_ago(_dt(f['at']))} · ${_errorText(f)}'),
                   ),
               ]),
             ),

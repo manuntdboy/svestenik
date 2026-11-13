@@ -29,7 +29,7 @@ check "вход с непознато име се отказва" 401 "$CODE" "$
 req POST /functions/v1/login '{}'
 check "вход без данни се отказва" 400 "$CODE" "$BODY" bad_request
 
-req POST /functions/v1/notify '{"type":"event","event_id":"x"}'
+req POST /functions/v1/notify '{"type":"smoke","event_id":"x"}'
 check "известия без вход се отказват" 401 "$CODE" "$BODY" not_authenticated
 
 req POST /rest/v1/rpc/username_available '{"p_username":"__kairos_smoke__"}'

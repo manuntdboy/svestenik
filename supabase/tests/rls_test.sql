@@ -611,6 +611,23 @@ select t.ok((:'cs'::jsonb->'totals'->>'users')::int >= 4
             'създателят вижда всички регистрирани, храмове и активни');
 select t.ok((:'cs'::jsonb->'versions'->>'86')::int = 1 and (:'cs'::jsonb->'versions'->'85') is null,
             'версията на всеки се пази една – последната');
+reset role;
+delete from notify_log;
+insert into notify_log (type, status, info) values
+  ('cash_pending', 200, '{"sent": 2, "devices": 2, "fcm_errors": []}'),
+  ('event', 200, '{"sent": 0, "reason": "no_devices"}'),
+  ('smoke', 401, '{"error": "not_authenticated"}'),
+  ('event', 401, '{"error": "not_authenticated"}'),
+  ('leave_request', 500, '{"error": "fcm_not_configured"}'),
+  ('event', 200, '{"sent": 0, "fcm_errors": [403]}');
+set role authenticated;
+select t.as_user(:'A');
+select (public.creator_stats()->'notify'->'d1') as nd \gset
+select t.ok((:'nd'::jsonb->>'delivered')::int = 2 and (:'nd'::jsonb->>'no_recipient')::int = 1
+            and (:'nd'::jsonb->>'refused')::int = 2 and (:'nd'::jsonb->>'errors')::int = 2,
+            'известията се делят на доставени, без получател, отказани и грешки');
+select t.ok(jsonb_array_length(public.creator_stats()->'notify_failed') = 2,
+            'в „неуспешни“ са само истинските грешки, не проверките');
 select t.as_user(:'B');
 select t.ok(not public.is_creator(), 'другите не са създатели');
 select t.fails($$select * from app_versions$$, 'версиите не се четат директно', 'permission denied');
