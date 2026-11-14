@@ -148,7 +148,8 @@ async function handle(req: Request): Promise<Response> {
     const mutedSet = new Set((muted ?? []).map((x) => x.user_id));
     recipients = ids.filter((u) => !mutedSet.has(u));
     const { data: ch } = await admin.from("churches").select("name").eq("id", m.church_id).maybeSingle();
-    title = m.recipient_id ? callerName : `Чат · ${ch?.name ?? "храм"}`;
+    // Храмът стои и в личните съобщения – свещеник може да е в повече от един храм.
+    title = m.recipient_id ? `${callerName} · ${ch?.name ?? "храм"}` : `Чат · ${ch?.name ?? "храм"}`;
     const t = String(m.body);
     text = m.recipient_id ? t.slice(0, 180) : `${callerName}: ${t.slice(0, 160)}`;
     data = { type: "chat", church_id: String(m.church_id), thread: m.recipient_id ? caller.id : "c" };
