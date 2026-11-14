@@ -255,7 +255,7 @@ class AppState extends ChangeNotifier {
       _chat
         ..clear()
         ..addAll(results[18].map(ChatMessage.fromRow));
-      _setChatReads(results[19]);
+      _setChatReads(results[19], authUser.id);
       _chatMutes
         ..clear()
         ..addAll(results[20].map((r) => (r['user_id'] as String, r['church_id'] as String, r['thread'] as String)));
@@ -482,8 +482,10 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void _setChatReads(List<Map<String, dynamic>> rows) {
-    final me = currentUser?.id;
+  // `me` се подава изрично: при отваряне на приложението currentUser още не е
+  // зареден и иначе моите „прочетено“ се губеха → старите съобщения светеха като нови.
+  void _setChatReads(List<Map<String, dynamic>> rows, [String? me]) {
+    me ??= currentUser?.id;
     _chatReads.clear();
     _chatSeen.clear();
     for (final r in rows) {
