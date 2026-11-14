@@ -66,7 +66,14 @@ void pickChurch(BuildContext context) {
                   Text(c.place),
                 ]),
               ),
-              trailing: c.id == s.currentChurchId ? const Icon(Icons.check_circle_rounded) : null,
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (s.chatOn && c.id != s.currentChurchId && s.chatUnreadTotal(c.id) > 0)
+                  Badge(
+                    label: Text('${s.chatUnreadTotal(c.id)}'),
+                    child: const Icon(Icons.chat_bubble_outline_rounded),
+                  ),
+                if (c.id == s.currentChurchId) const Icon(Icons.check_circle_rounded),
+              ]),
               onTap: () {
                 Navigator.pop(ctx);
                 if (c.id != s.currentChurchId) s.selectChurch(c.id);
@@ -130,7 +137,12 @@ class ChurchBanner extends StatelessWidget {
             ),
             if (many)
               Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.unfold_more_rounded),
+                // Червена точка – нови съобщения в друг мой храм.
+                Badge(
+                  isLabelVisible: s.chatOn && s.chatUnreadOther().isNotEmpty,
+                  smallSize: 10,
+                  child: const Icon(Icons.unfold_more_rounded),
+                ),
                 Text('смени', style: TextStyle(fontSize: 11.5, color: p.textMuted)),
               ]),
           ]),

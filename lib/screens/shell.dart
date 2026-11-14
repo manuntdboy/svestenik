@@ -105,6 +105,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       nav.push(MaterialPageRoute(builder: (_) => const StockScreen()));
     } else if (type == 'chat') {
       final thread = data['thread'] ?? 'c';
+      // Съобщение от друг храм – първо минаваме в него.
+      final cid = data['church_id'];
+      if (cid != null && cid.isNotEmpty && cid != s.currentChurchId && s.myChurches.any((c) => c.id == cid)) {
+        await s.selectChurch(cid);
+      }
       nav.push(MaterialPageRoute(builder: (_) => ChatScreen(thread: thread)));
     } else if (type.startsWith('duty')) {
       nav.push(MaterialPageRoute(builder: (_) => const DutyScreen()));
@@ -173,7 +178,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final items = <(String, IconData, String, int)>[
       ('calendar', Icons.calendar_month_outlined, 'Календар', 0),
       ('home', Icons.home_outlined, 'Начало', 0),
-      if (s.chatOn) ('chat', Icons.chat_bubble_outline_rounded, 'Чат', s.chatUnreadTotal(s.currentChurchId!)),
+      if (s.chatOn) ('chat', Icons.chat_bubble_outline_rounded, 'Чат', s.chatUnreadAll()),
       ('leaves', Icons.beach_access_outlined, 'Почивки', 0),
       ('duties', Icons.shield_outlined, 'Дежурства', 0),
       if (church?.cashEnabled != false) ('cash', Icons.payments_outlined, 'Каса', 0),
@@ -345,7 +350,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     ];
     final chat = s.chatOn;
     if (!chat && _tab == 3) _tab = 1;
-    final unread = chat ? s.chatUnreadTotal(s.currentChurchId!) : 0;
+    final unread = chat ? s.chatUnreadAll() : 0;
     return Scaffold(
       body: SafeArea(
         bottom: false,

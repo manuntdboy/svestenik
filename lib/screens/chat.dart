@@ -103,6 +103,32 @@ class ChatListScreen extends StatelessWidget {
       children: [
         const ChurchBanner(title: 'Чат'),
         const SizedBox(height: 14),
+        // Нови съобщения в другите ми храмове – натискане минава в храма.
+        for (final (c, n) in s.chatUnreadOther())
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Palette.yellow,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => s.selectChurch(c.id),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(children: [
+                    const Icon(Icons.mark_chat_unread_rounded, color: Palette.onYellow),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('${c.name} · $n ${n == 1 ? 'ново съобщение' : 'нови съобщения'}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Palette.onYellow)),
+                    ),
+                    const Text('отвори', style: TextStyle(fontWeight: FontWeight.w700, color: Palette.onYellow)),
+                    const Icon(Icons.chevron_right_rounded, color: Palette.onYellow),
+                  ]),
+                ),
+              ),
+            ),
+          ),
         row(
           leading: Container(
             width: 44,

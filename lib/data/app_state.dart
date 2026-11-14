@@ -437,6 +437,16 @@ class AppState extends ChangeNotifier {
     return threads.fold(0, (a, t) => a + chatUnread(churchId, t));
   }
 
+  /// Непрочетени във всички мои храмове – за балончето на „Чат“.
+  int chatUnreadAll() => myChurches.fold(0, (a, c) => a + chatUnreadTotal(c.id));
+
+  /// Другите храмове (не избрания) с непрочетени: (храм, брой).
+  List<(Church, int)> chatUnreadOther() => [
+        for (final c in myChurches)
+          if (c.id != currentChurchId)
+            if (chatUnreadTotal(c.id) case final n when n > 0) (c, n),
+      ];
+
   bool chatMuted(String churchId, String thread) =>
       _chatMutes.any((m) => m.$1 == currentUser?.id && m.$2 == churchId && m.$3 == thread);
 
