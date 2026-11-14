@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../data/app_state.dart';
@@ -8,6 +9,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/church_banner.dart';
 import '../widgets/common.dart';
+import '../widgets/layout.dart';
 
 /// Разделът „Чат“: общият чат на храма и личните разговори с колегите.
 class ChatListScreen extends StatelessWidget {
@@ -348,7 +350,19 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: BoxDecoration(color: p.surface, border: Border(top: BorderSide(color: p.border))),
             child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Expanded(
-                child: TextField(
+                // На компютър: Enter изпраща, Shift + Enter – нов ред.
+                child: Focus(
+                  onKeyEvent: (node, e) {
+                    if (desktopShell.value &&
+                        e is KeyDownEvent &&
+                        (e.logicalKey == LogicalKeyboardKey.enter || e.logicalKey == LogicalKeyboardKey.numpadEnter) &&
+                        !HardwareKeyboard.instance.isShiftPressed) {
+                      _send();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: TextField(
                   controller: _text,
                   minLines: 1,
                   maxLines: 5,
@@ -356,6 +370,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   textCapitalization: TextCapitalization.sentences,
                   style: const TextStyle(fontSize: 17),
                   decoration: const InputDecoration(hintText: 'Съобщение', counterText: ''),
+                ),
                 ),
               ),
               const SizedBox(width: 6),

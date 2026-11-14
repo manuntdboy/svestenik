@@ -199,9 +199,20 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         ]);
       }
       final key = _navKeys.putIfAbsent(d, () => GlobalKey<NavigatorState>());
-      return Navigator(
-        key: key,
-        onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _deskPage(d, s)),
+      // Работните раздели (календар, каса…) са на две колони и заемат ширината;
+      // профилът и всички отворени отгоре екрани (събитие, форми, „Кайрос в числа“)
+      // стоят в по-тясна колона в средата.
+      final t = _DeskTransitions(wideRoot: d != 'profile');
+      return Theme(
+        data: Theme.of(context).copyWith(
+          pageTransitionsTheme: PageTransitionsTheme(builders: {
+            for (final pl in TargetPlatform.values) pl: t,
+          }),
+        ),
+        child: Navigator(
+          key: key,
+          onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _deskPage(d, s)),
+        ),
       );
     }
 
@@ -429,6 +440,25 @@ class _NavItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Преходи в изгледа за компютър: всеки екран, освен първия на работен раздел,
+/// се показва в колона до 760 точки в средата.
+class _DeskTransitions extends PageTransitionsBuilder {
+  final bool wideRoot;
+  const _DeskTransitions({required this.wideRoot});
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context, Animation<double> animation,
+      Animation<double> secondaryAnimation, Widget child) {
+    final inner = const FadeUpwardsPageTransitionsBuilder()
+        .buildTransitions(route, context, animation, secondaryAnimation, child);
+    if (route.isFirst && wideRoot) return inner;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: inner),
     );
   }
 }
