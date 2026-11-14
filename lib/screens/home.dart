@@ -10,6 +10,7 @@ import 'my_profile.dart';
 import '../widgets/requests.dart';
 import '../widgets/whats_new.dart';
 import '../widgets/church_banner.dart';
+import '../widgets/update_banner.dart';
 import 'event_form.dart';
 import 'cash.dart';
 import 'stock.dart';
@@ -69,26 +70,8 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const ChurchBanner(),
             const SizedBox(height: 12),
-            // Стара версия – напомняне от създателя.
-            if (buildNumber > 0 && buildNumber < s.minBuild)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Palette.yellow,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Row(children: [
-                    Icon(Icons.system_update_rounded, color: Palette.onYellow, size: 30),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text('Има нова версия на Кайрос. Отворете App Tester и натиснете „Обнови“.',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Palette.onYellow)),
-                    ),
-                  ]),
-                ),
-              ),
+            // Нова версия – „Обнови“ с едно натискане (или напомняне от създателя).
+            UpdateBanner(required: buildNumber > 0 && buildNumber < s.minBuild),
             // Дежурен тази седмица – видимо за всички в храма.
             const DutyNowCard(compact: true),
             _PriestsStrip(churchId: s.currentChurchId!),

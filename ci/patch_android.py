@@ -27,6 +27,7 @@ permissions = """
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 """
 receivers = """
         <receiver android:exported="false"
@@ -70,7 +71,28 @@ if 'android:scheme="viber"' not in m:
         <package android:name="com.google.android.apps.maps"/>
     </queries>
 </manifest>""", 1)
+# Обновяване от приложението (ota_update): разрешение и FileProvider за .apk.
+if "REQUEST_INSTALL_PACKAGES" not in m:
+    m = re.sub(r"(<manifest[^>]*>)", r"\1\n    <uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\"/>", m, count=1)
+if "OtaUpdateFileProvider" not in m:
+    m = m.replace("</application>", """        <provider
+            android:name="sk.fourq.otaupdate.OtaUpdateFileProvider"
+            android:authorities="${applicationId}.ota_update_provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths"/>
+        </provider>
+    </application>""", 1)
 manifest.write_text(m, encoding="utf-8")
+xml = root / "android/app/src/main/res/xml"
+xml.mkdir(parents=True, exist_ok=True)
+(xml / "filepaths.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="internal_apk_storage" path="ota_update/"/>
+</paths>
+""", encoding="utf-8")
 
 # ---------------------------------------------------------------- икона
 # Иконите (обикновена, адаптивна и едноцветна) са в ci/icons/res и заменят

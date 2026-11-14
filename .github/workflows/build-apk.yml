@@ -169,7 +169,9 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Тестова версия ${{ github.run_number }}
           body: Свалете файла .apk на телефона и го отворете, за да се инсталира.
-          prerelease: true
+          # Версията за всички тестери е „latest“ – по нея приложението предлага „Обнови“.
+          prerelease: ${{ env.SEND_TO_TESTERS != 'true' }}
+          make_latest: ${{ env.SEND_TO_TESTERS == 'true' }}
           files: ${{ env.APK_NAME }}
 
       - name: Изпращане към Firebase App Distribution

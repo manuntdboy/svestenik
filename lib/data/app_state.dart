@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models.dart';
 import 'notifier.dart';
 import 'push.dart';
+import 'updater.dart';
 import '../screens/privacy.dart' show kPrivacyVersion;
 import '../widgets/whats_new.dart' show buildNumber;
 
@@ -288,6 +289,7 @@ class AppState extends ChangeNotifier {
       // трябва да се запише наново, без да чакаме рестарт.
       if (currentUser?.suspended == true) _pushToken = null;
       unawaited(_registerPush());
+      unawaited(Updater.i.check());
       unawaited(_reportVersion());
       unawaited(_checkCreator());
       unawaited(_checkPassword());
