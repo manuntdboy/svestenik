@@ -70,21 +70,27 @@ jobs:
       - name: Копие на базата
         run: |
           mkdir -p out
+          psql "$DB_URL" -tA -c "
+            select table_schema || '.' || table_name from information_schema.tables
+             where table_type = 'BASE TABLE' and table_schema in ('public','auth')
+             order by 1" > out/tables.txt
+          count() {  # брой редове по таблици (без съдържание)
+            : > "$1"
+            while read -r t; do
+              n=$(psql "$DB_URL" -tAc "select count(*) from $t" 2>/dev/null || echo "?")
+              echo "$t $n" >> "$1"
+            done < out/tables.txt
+          }
+          count out/before.txt
           # public – всички данни на Кайрос; auth – профилите и паролите (хеширани);
           # storage – описанието на снимките.
           pg_dump "$DB_URL" --format=custom --no-owner --no-privileges \
             -n public -n auth -n storage -f out/kairos.dump
+          count out/after.txt
+          # Базата е жива: между двете броения може да се появи ред (напр. известие).
+          # Копието е вярно, ако броят във възстановеното е между двете броения.
+          join out/before.txt out/after.txt > out/counts.txt
           ls -lh out/kairos.dump
-          # Броят на редовете по таблици (без съдържание) – за проверката след възстановяване.
-          psql "$DB_URL" -tA -F' ' -c "
-            select table_schema || '.' || table_name from information_schema.tables
-             where table_type = 'BASE TABLE' and table_schema in ('public','auth')
-             order by 1" > out/tables.txt
-          : > out/counts.txt
-          while read -r t; do
-            n=$(psql "$DB_URL" -tAc "select count(*) from $t" 2>/dev/null || echo "?")
-            echo "$t $n" >> out/counts.txt
-          done < out/tables.txt
           echo "Таблици: $(wc -l < out/counts.txt)"
 
       - name: Проверка – възстановяване на празна база
@@ -110,12 +116,15 @@ jobs:
           echo "Предупреждения при възстановяване: $(grep -c 'error' out/restore.log || true)"
           grep -i 'error' out/restore.log | head -20 || true
           bad=0
-          while read -r t n; do
-            [ "$n" = "?" ] && continue
+          while read -r t a b; do
+            { [ "$a" = "?" ] || [ "$b" = "?" ]; } && continue
+            lo=$(( a < b ? a : b )); hi=$(( a > b ? a : b ))
             m=$(sudo -E -u postgres psql -d proba -tAc "select count(*) from $t" 2>/dev/null || echo "липсва")
-            if [ "$m" != "$n" ]; then echo "::warning::$t: в базата $n, във възстановеното $m"; bad=$((bad+1)); fi
+            if ! [[ "$m" =~ ^[0-9]+$ ]] || [ "$m" -lt "$lo" ] || [ "$m" -gt "$hi" ]; then
+              echo "::warning::$t: в базата $a–$b, във възстановеното $m"; bad=$((bad+1))
+            fi
           done < out/counts.txt
-          total=$(awk '$2!="?"{s+=$2} END{print s}' out/counts.txt)
+          total=$(awk '$3!="?"{s+=$3} END{print s}' out/counts.txt)
           echo "Проверени таблици: $(wc -l < out/counts.txt), общо редове: $total, разлики: $bad"
           if [ "$bad" -gt 0 ]; then echo "::error::Копието не съвпада с базата"; exit 1; fi
           echo "✓ Копието се възстановява напълно."
