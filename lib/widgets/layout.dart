@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 final desktopShell = ValueNotifier<bool>(false);
 
 /// Сигнал „към днес“ – календарът се връща на днешния ден (бутонът „Кайрос“).
-final calendarToday = ChangeNotifier();
+final calendarToday = ValueNotifier<int>(0);
 
 /// Маркер в списъка на [SplitList]: оттук нататък – дясната колона.
 class SplitHere extends StatelessWidget {

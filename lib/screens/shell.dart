@@ -222,7 +222,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                     onTap: () {
                       _go('calendar');
                       _navKeys['calendar']?.currentState?.popUntil((r) => r.isFirst);
-                      calendarToday.notifyListeners();
+                      calendarToday.value++;
                       s.refresh();
                     },
                     child: Padding(
