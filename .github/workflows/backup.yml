@@ -1,0 +1,152 @@
+name: Нощно резервно копие
+
+# Всяка нощ (03:00 българско зимно време) пълно копие на базата:
+# профили и пароли (криптирани от Supabase), храмове, събития, каса, склад, чат…
+# плюс снимките (профилни и към отзивите).
+# Копието се КРИПТИРА с паролата от секрета BACKUP_PASSWORD, преди да бъде
+# качено – проектът е публичен, затова без парола копието не може да се отвори.
+# Пазят се последните 30 нощи. Всяко копие веднага се възстановява на празна
+# тестова база и се проверява, че всички таблици и редове са там.
+# Без BACKUP_PASSWORD: прави се само ПРОБА (копие + проверка), нищо не се качва.
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+    steps:
+      - name: Режим
+        run: |
+          if [ -n "$BACKUP_PASSWORD" ]; then
+            echo "MODE=истинско" >> "$GITHUB_ENV"
+          else
+            echo "MODE=проба" >> "$GITHUB_ENV"
+            echo "::warning::Няма секрет BACKUP_PASSWORD – прави се само проба, копието НЕ се пази."
+          fi
+          echo "STAMP=$(TZ=Europe/Sofia date +%Y-%m-%d_%H%M)" >> "$GITHUB_ENV"
+
+      - name: Връзка с базата (IPv4 pooler)
+        run: |
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            url="$SUPABASE_DB_URL"
+          else
+            pw=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"],safe=""))')
+            url=""
+            for host in aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
+              try="postgresql://postgres.${SUPABASE_PROJECT_REF}:${pw}@${host}:5432/postgres?sslmode=require"
+              if psql "$try" -tAc 'select 1' >/dev/null 2>&1; then url="$try"; break; fi
+            done
+          fi
+          [ -n "$url" ] || { echo "::error::Няма връзка с базата"; exit 1; }
+          echo "::add-mask::$url"
+          echo "DB_URL=$url" >> "$GITHUB_ENV"
+          v=$(psql "$url" -tAc 'show server_version_num' | cut -c1-2)
+          echo "Версия на базата: $v"
+          echo "PGV=$v" >> "$GITHUB_ENV"
+
+      - name: pg_dump със същата версия
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-$PGV" "postgresql-$PGV" >/dev/null
+          echo "/usr/lib/postgresql/$PGV/bin" >> "$GITHUB_PATH"
+
+      - name: Копие на базата
+        run: |
+          mkdir -p out
+          # public – всички данни на Кайрос; auth – профилите и паролите (хеширани);
+          # storage – описанието на снимките.
+          pg_dump "$DB_URL" --format=custom --no-owner --no-privileges \
+            -n public -n auth -n storage -f out/kairos.dump
+          ls -lh out/kairos.dump
+          # Броят на редовете по таблици (без съдържание) – за проверката след възстановяване.
+          psql "$DB_URL" -tA -F' ' -c "
+            select table_schema || '.' || table_name from information_schema.tables
+             where table_type = 'BASE TABLE' and table_schema in ('public','auth')
+             order by 1" > out/tables.txt
+          : > out/counts.txt
+          while read -r t; do
+            n=$(psql "$DB_URL" -tAc "select count(*) from $t" 2>/dev/null || echo "?")
+            echo "$t $n" >> out/counts.txt
+          done < out/tables.txt
+          echo "Таблици: $(wc -l < out/counts.txt)"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Снимките
+        continue-on-error: true
+        run: |
+          mkdir -p out/storage
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" >/dev/null
+          for b in avatars feedback; do
+            supabase storage cp -r "ss:///$b" "out/storage/$b" --experimental >/dev/null \
+              || echo "::warning::Снимките от $b не се изтеглиха"
+          done
+          echo "Снимки: $(find out/storage -type f | wc -l) файла"
+
+      - name: Проверка – възстановяване на празна база
+        run: |
+          sudo pg_ctlcluster "$PGV" main start 2>/dev/null || true
+          export PGPORT=$(pg_lsclusters -h | awk -v v="$PGV" '$1==v{print $3; exit}')
+          echo "Тестова база на порт $PGPORT"
+          chmod -R a+r out; chmod a+x out
+          sudo -E -u postgres psql -qc "create database proba"
+          # Ролите и разширенията, които Supabase има, а празната база – не.
+          sudo -E -u postgres psql -q -d proba <<'SQL'
+          do $$ declare r text; begin
+            foreach r in array array['anon','authenticated','service_role','supabase_auth_admin',
+                                     'supabase_storage_admin','authenticator','supabase_admin','dashboard_user'] loop
+              if not exists (select 1 from pg_roles where rolname = r) then execute format('create role %I', r); end if;
+            end loop; end $$;
+          create schema if not exists extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          SQL
+          sudo -E -u postgres pg_restore --no-owner --no-privileges -d proba "$PWD/out/kairos.dump" 2> out/restore.log || true
+          echo "Предупреждения при възстановяване: $(grep -c 'error' out/restore.log || true)"
+          grep -i 'error' out/restore.log | head -20 || true
+          bad=0
+          while read -r t n; do
+            [ "$n" = "?" ] && continue
+            m=$(sudo -E -u postgres psql -d proba -tAc "select count(*) from $t" 2>/dev/null || echo "липсва")
+            if [ "$m" != "$n" ]; then echo "::warning::$t: в базата $n, във възстановеното $m"; bad=$((bad+1)); fi
+          done < out/counts.txt
+          total=$(awk '$2!="?"{s+=$2} END{print s}' out/counts.txt)
+          echo "Проверени таблици: $(wc -l < out/counts.txt), общо редове: $total, разлики: $bad"
+          if [ "$bad" -gt 0 ]; then echo "::error::Копието не съвпада с базата"; exit 1; fi
+          echo "✓ Копието се възстановява напълно."
+
+      - name: Криптиране
+        if: env.MODE == 'истинско'
+        run: |
+          tar -C out -czf "kairos-$STAMP.tar.gz" kairos.dump counts.txt storage
+          gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 \
+            -o "kairos-$STAMP.tar.gz.gpg" "kairos-$STAMP.tar.gz" <<< "$BACKUP_PASSWORD"
+          rm -f "kairos-$STAMP.tar.gz"
+          ls -lh "kairos-$STAMP.tar.gz.gpg"
+
+      - name: Запазване (30 дни)
+        if: env.MODE == 'истинско'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-backup-${{ env.STAMP }}
+          path: kairos-${{ env.STAMP }}.tar.gz.gpg
+          retention-days: 30
+          if-no-files-found: error
