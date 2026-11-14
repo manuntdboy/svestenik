@@ -327,6 +327,7 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('need_chair')) return 'Първо изберете друг председател на храма.';
+    if (t.contains('name_mismatch')) return 'Името не съвпада – храмът не е изтрит.';
     if (t.contains('member_pending')) return 'Човекът още чака одобрение за влизане в храма.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
     if (t.contains('month_not_over')) return 'Приключва се само изминал месец.';
@@ -739,6 +740,17 @@ class AppState extends ChangeNotifier {
 
   Future<void> creatorCashReopen(String churchId, String month) async {
     final r = await _creatorRpc<dynamic>('creator_cash_reopen', {'p_church': churchId, 'p_month': month});
+    _notifyAnnouncements(r);
+    await refresh();
+  }
+
+  /// Какво има в храма (преди изтриване).
+  Future<Map<String, dynamic>> creatorChurchSummary(String churchId) async =>
+      Map<String, dynamic>.from(await _creatorRpc<Map>('creator_church_summary', {'p_church': churchId}));
+
+  /// Създателят изтрива храм; членовете получават съобщение.
+  Future<void> creatorDeleteChurch(String churchId, String name) async {
+    final r = await _creatorRpc<dynamic>('creator_delete_church', {'p_church': churchId, 'p_name': name});
     _notifyAnnouncements(r);
     await refresh();
   }

@@ -853,6 +853,16 @@ select public.creator_view_as(:'C') as va \gset
 select t.ok(jsonb_array_length(:'va'::jsonb->'churches') >= 1 and (:'va'::jsonb ? 'cards'), '„какво вижда“ връща храмове и карти');
 select t.ok(public.creator_cash_overview(:'cid') ? 'pending', 'създателят вижда чакащите в касата');
 select t.fails(format('select public.creator_cash_reopen(%L, %L)', :'cid', '1990-01-01'), 'неприключен месец не се отключва', 'not_found');
+\echo '== Създателят изтрива храм'
+select t.as_user(:'C');
+select t.fails(format('select public.creator_delete_church(%L, %L)', :'rcid', 'Роли'), 'само създателят трие храмове', 'forbidden');
+select t.as_user(:'A');
+select t.fails(format('select public.creator_delete_church(%L, %L)', :'rcid', 'Друго'), 'грешно име – храмът не се трие', 'name_mismatch');
+select t.ok((public.creator_church_summary(:'rcid')->>'members')::int >= 1, 'създателят вижда какво ще се изтрие');
+select cardinality(public.creator_delete_church(:'rcid', ' роли ')) as dn \gset
+select t.ok(:dn >= 1 and public.creator_church_summary(:'rcid')->>'name' is null, 'храмът е изтрит, членовете получават съобщение');
+select t.as_user(:'C');
+select t.ok((select count(*) from announcements where recipient_id = :'C' and title like 'Храмът%изтрит') = 1, 'бившият член вижда съобщението');
 select t.as_user(:'A');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');

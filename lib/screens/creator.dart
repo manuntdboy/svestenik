@@ -1129,6 +1129,63 @@ class _CashSheetState extends State<_CashSheet> {
   }
 }
 
+/// Изтриване на храм: показва какво ще изчезне и иска името за потвърждение.
+Future<bool> _deleteChurch(BuildContext context, String id, String name) async {
+  final s = AppScope.read(context);
+  Map<String, dynamic> sum;
+  try {
+    sum = await s.creatorChurchSummary(id);
+  } on AppError catch (e) {
+    if (context.mounted) showMessage(context, e.message);
+    return false;
+  }
+  if (!context.mounted) return false;
+  final ctl = TextEditingController();
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, set) {
+      final match = ctl.text.trim().toLowerCase() == name.trim().toLowerCase();
+      return AlertDialog(
+        title: const Text('Изтриване на храм'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('„$name“ ще бъде изтрит окончателно заедно с всичко в него:'),
+            const SizedBox(height: 8),
+            Text('• членове: ${sum['members']}\n• събития: ${sum['events']}\n• записи в касата: ${sum['cash']}\n'
+                '• движения в склада: ${sum['stock']}\n• съобщения в чата: ${sum['chat']}'),
+            const SizedBox(height: 8),
+            const Text('Профилите на хората остават. Всеки член получава съобщение. Това не може да се върне.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctl,
+              autofocus: true,
+              decoration: InputDecoration(labelText: 'Напишете името: $name'),
+              onChanged: (_) => set(() {}),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: match ? () => Navigator.pop(ctx, true) : null,
+            child: const Text('Изтрий'),
+          ),
+        ],
+      );
+    }),
+  );
+  if (go != true || !context.mounted) return false;
+  try {
+    await s.creatorDeleteChurch(id, ctl.text);
+    if (context.mounted) showMessage(context, 'Храмът „$name“ е изтрит.');
+    return true;
+  } on AppError catch (e) {
+    if (context.mounted) showMessage(context, e.message);
+    return false;
+  }
+}
+
 // ------------------------------------------------------------ роли
 
 /// Създателят сменя ролята на човек във всеки негов храм или го изважда от храма.
@@ -1364,6 +1421,15 @@ class _Churches extends StatelessWidget {
                     label: const Text('Дневник'),
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => _ActivityScreen(title: '${c['name']}', churchId: c['id'] as String))),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                    label: const Text('Изтрий храма'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                    onPressed: () async {
+                      final ok = await _deleteChurch(context, c['id'] as String, '${c['name']}');
+                      if (ok) await onRefresh();
+                    },
                   ),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.payments_rounded, size: 18),
