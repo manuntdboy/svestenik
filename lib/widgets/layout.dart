@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 /// Всички останали екрани на широк екран стоят в колона в средата.
 final desktopShell = ValueNotifier<bool>(false);
 
+/// Сигнал „към днес“ – календарът се връща на днешния ден (бутонът „Кайрос“).
+final calendarToday = ChangeNotifier();
+
 /// Маркер в списъка на [SplitList]: оттук нататък – дясната колона.
 class SplitHere extends StatelessWidget {
   const SplitHere({super.key});

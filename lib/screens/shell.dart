@@ -212,10 +212,26 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
           decoration: BoxDecoration(color: p.surface, border: Border(right: BorderSide(color: p.border))),
           child: SafeArea(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              // „Кайрос“ – като „Начало“: календарът на днешния ден + обновяване.
               Padding(
-                padding: const EdgeInsets.fromLTRB(22, 22, 16, 4),
-                child: Text('Кайрос',
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Palette.yellow)),
+                padding: const EdgeInsets.fromLTRB(10, 12, 10, 0),
+                child: Tooltip(
+                  message: 'Към календара (днес) и обновяване',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      _go('calendar');
+                      _navKeys['calendar']?.currentState?.popUntil((r) => r.isFirst);
+                      calendarToday.notifyListeners();
+                      s.refresh();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                      child: Text('Кайрос',
+                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Palette.yellow)),
+                    ),
+                  ),
+                ),
               ),
               if (church != null)
                 Padding(

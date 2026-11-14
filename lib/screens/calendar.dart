@@ -13,6 +13,7 @@ import 'duties.dart';
 import 'search.dart';
 import '../widgets/requests.dart';
 import '../widgets/church_banner.dart';
+import '../widgets/layout.dart';
 
 enum CalView { day, week, month }
 
@@ -33,6 +34,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void initState() {
     super.initState();
     _loadView();
+    calendarToday.addListener(_today);
+  }
+
+  @override
+  void dispose() {
+    calendarToday.removeListener(_today);
+    super.dispose();
+  }
+
+  void _today() {
+    if (mounted) setState(() => _selected = _dateOnly(DateTime.now()));
   }
 
   Future<void> _loadView() async {
