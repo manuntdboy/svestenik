@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -125,9 +127,39 @@ class _NotConfiguredApp extends StatelessWidget {
       );
 }
 
-/// Профилът е временно спрян от създателя.
-class _SuspendedScreen extends StatelessWidget {
+/// Профилът е временно спрян от създателя. Проверява сам на 20 секунди,
+/// така че след „Пусни профила“ приложението продължава без рестарт.
+class _SuspendedScreen extends StatefulWidget {
   const _SuspendedScreen();
+
+  @override
+  State<_SuspendedScreen> createState() => _SuspendedScreenState();
+}
+
+class _SuspendedScreenState extends State<_SuspendedScreen> {
+  Timer? _t;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(seconds: 20), (_) => _check());
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _check() async {
+    if (_busy || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await AppScope.read(context).refresh();
+    } catch (_) {}
+    if (mounted) setState(() => _busy = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,13 +172,23 @@ class _SuspendedScreen extends StatelessWidget {
             const SizedBox(height: 16),
             const Text('Профилът е временно спрян', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
-            const Text('Свържете се с председателя на храма или със създателя на Кайрос.', style: TextStyle(fontSize: 17)),
+            const Text('Свържете се с председателя на храма или със създателя на Кайрос. '
+                'Щом профилът бъде пуснат, приложението продължава само.', style: TextStyle(fontSize: 17)),
             const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () => AppScope.read(context).logout(),
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Изход'),
-            ),
+            Wrap(spacing: 12, runSpacing: 8, children: [
+              FilledButton.icon(
+                onPressed: _busy ? null : _check,
+                icon: _busy
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh_rounded),
+                label: const Text('Провери отново'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => AppScope.read(context).logout(),
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Изход'),
+              ),
+            ]),
           ]),
         ),
       ),
