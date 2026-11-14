@@ -203,7 +203,7 @@ class AppState extends ChangeNotifier {
         _db.from('announcements').select().order('created_at'),
         _db.from('announcement_seen').select('announcement_id').eq('user_id', authUser.id),
         _db.from('app_config').select(),
-        _db.from('chat_messages').select().order('created_at'),
+        _db.from('chat_messages').select().order('created_at', ascending: true),
         _db.from('chat_reads').select(),
         _db.from('chat_mutes').select(),
       ]);
@@ -408,7 +408,9 @@ class AppState extends ChangeNotifier {
       if (m.churchId != churchId) return false;
       if (thread == 'c') return m.recipientId == null;
       return (m.senderId == thread && m.recipientId == me) || (m.senderId == me && m.recipientId == thread);
-    }).toList();
+    }).toList()
+      // Най-старото горе, най-новото долу (както във Viber).
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   }
 
   int chatUnread(String churchId, String thread) {
@@ -515,7 +517,7 @@ class AppState extends ChangeNotifier {
   /// Леко опресняване само на чата (докато разговорът е отворен).
   Future<void> pollChat(String churchId) async {
     try {
-      final rows = await _db.from('chat_messages').select().eq('church_id', churchId).order('created_at');
+      final rows = await _db.from('chat_messages').select().eq('church_id', churchId).order('created_at', ascending: true);
       final reads = await _db.from('chat_reads').select();
       _chat
         ..removeWhere((m) => m.churchId == churchId)
