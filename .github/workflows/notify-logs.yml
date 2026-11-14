@@ -49,3 +49,49 @@ jobs:
               from public.leave_requests
              where created_at > now() - interval '$h hours'
              order by created_at desc limit 20;"
+          echo "== Чат: записани съобщения (без текст и имена) =="
+          psql "$url" -P pager=off -c "
+            with u as (select id, chr(64 + row_number() over (order by created_at)::int) as who from public.profiles),
+                 c as (select id, row_number() over (order by created_at) as n from public.churches)
+            select 'храм ' || c.n as храм, u.who as от,
+                   case when m.recipient_id is null then 'общ' else 'личен → ' || coalesce(r.who, '?') end as разговор,
+                   count(*) as съобщения,
+                   to_char(min(m.created_at) at time zone 'Europe/Sofia', 'HH24:MI:SS') as първо,
+                   to_char(max(m.created_at) at time zone 'Europe/Sofia', 'HH24:MI:SS') as последно
+              from public.chat_messages m join c on c.id = m.church_id
+              left join u on u.id = m.sender_id left join u r on r.id = m.recipient_id
+             where m.created_at > now() - interval '$h hours'
+             group by 1, 2, 3 order by 1, 2, 3;"
+          echo "== Чат: изпратени срещу изтрити (броячът на сървъра) =="
+          psql "$url" -P pager=off -c "
+            select kind as събитие, case when private then 'личен' else 'общ' end as разговор, sum(n) as брой
+              from public.chat_events where at > now() - interval '$h hours' group by 1, 2 order by 1, 2;"
+          echo "== Чат: известия (едно извикване на съобщение) =="
+          psql "$url" -P pager=off -c "
+            select status as код, count(*) as извиквания,
+                   sum((info->>'recipients')::int) as получатели, sum((info->>'devices')::int) as телефони,
+                   sum((info->>'sent')::int) as приети_от_google, sum((info->>'stale')::int) as стари_телефони
+              from public.notify_log where type = 'chat' and at > now() - interval '$h hours' group by 1 order by 1;"
+          echo "== Чат: неуспешни известия (ако има) =="
+          psql "$url" -P pager=off -c "
+            select to_char(at at time zone 'Europe/Sofia', 'HH24:MI:SS') as час, status as код, info as резултат
+              from public.notify_log
+             where type = 'chat' and at > now() - interval '$h hours'
+               and (status <> 200 or coalesce((info->>'sent')::int, 0) < coalesce((info->>'devices')::int, 0))
+             order by at desc limit 50;"
+          echo "== Чат: кой докъде е прочел общия чат =="
+          psql "$url" -P pager=off -c "
+            with u as (select id, chr(64 + row_number() over (order by created_at)::int) as who from public.profiles),
+                 c as (select id, row_number() over (order by created_at) as n from public.churches),
+                 last as (select church_id, max(created_at) as t from public.chat_messages where recipient_id is null group by 1)
+            select 'храм ' || c.n as храм, u.who as човек,
+                   case when r.read_at is null then 'не е отварял'
+                        when r.read_at >= l.t then 'прочел всичко'
+                        else 'непрочетени: ' || (select count(*) from public.chat_messages x
+                              where x.church_id = m.church_id and x.recipient_id is null and x.created_at > r.read_at
+                                and x.sender_id is distinct from m.user_id) end as състояние,
+                   (select count(*) from public.device_tokens t where t.user_id = m.user_id) as телефони
+              from public.church_members m join c on c.id = m.church_id join u on u.id = m.user_id
+              join last l on l.church_id = m.church_id
+              left join public.chat_reads r on r.user_id = m.user_id and r.church_id = m.church_id and r.thread = 'c'
+             where m.status = 'active' order by 1, 2;"
