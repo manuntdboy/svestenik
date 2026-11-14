@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -21,8 +22,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('bg');
   Intl.defaultLocale = 'bg';
-  await Notifier.init();
-  await Push.init();
+  // В браузъра няма будилник и известия на телефона – само на Android.
+  if (!kIsWeb) {
+    await Notifier.init();
+    await Push.init();
+  }
   if (!supabaseConfigured) {
     runApp(const _NotConfiguredApp());
     return;
@@ -63,12 +67,26 @@ class SvestenikApp extends StatelessWidget {
         // настройката „Размер на текста“ в Кайрос се прилага отгоре.
         final systemCap = 1.0 + (widthFactor - 0.8) * 1.5;
         final scale = mq.textScaler.scale(1).clamp(0.8, systemCap) * s.textScale * widthFactor;
-        return MediaQuery(
+        final body = MediaQuery(
           data: mq.copyWith(
             alwaysUse24HourFormat: true,
             textScaler: TextScaler.linear(scale.toDouble()),
           ),
           child: child!,
+        );
+        // На компютър (широк екран) – приложението в колона в средата.
+        if (mq.size.width <= 700) return body;
+        return ColoredBox(
+          color: const Color(0xFF0B0E13),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: MediaQuery(
+                data: mq.copyWith(size: Size(520, mq.size.height)),
+                child: body,
+              ),
+            ),
+          ),
         );
       },
       home: const RootGate(),

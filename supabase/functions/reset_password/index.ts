@@ -3,6 +3,23 @@
 // Всяко нулиране се записва в password_resets (кой, на кого, кога).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// Уеб версията (браузър) праща заявки от друг адрес – разрешаваме ги (CORS).
+const CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+function serveCors(h: (req: Request) => Promise<Response> | Response) {
+  Deno.serve(async (req) => {
+    if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+    const r = await h(req);
+    const hd = new Headers(r.headers);
+    for (const [k, v] of Object.entries(CORS)) hd.set(k, v);
+    return new Response(r.body, { status: r.status, headers: hd });
+  });
+}
+
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
@@ -21,7 +38,7 @@ function tempPassword(): string {
   return s;
 }
 
-Deno.serve(async (req) => {
+serveCors(async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
   const url = Deno.env.get("SUPABASE_URL")!;
   let secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";

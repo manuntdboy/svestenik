@@ -7,6 +7,23 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "npm:jose@5";
 
+// Уеб версията (браузър) праща заявки от друг адрес – разрешаваме ги (CORS).
+const CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+function serveCors(h: (req: Request) => Promise<Response> | Response) {
+  Deno.serve(async (req) => {
+    if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+    const r = await h(req);
+    const hd = new Headers(r.headers);
+    for (const [k, v] of Object.entries(CORS)) hd.set(k, v);
+    return new Response(r.body, { status: r.status, headers: hd });
+  });
+}
+
+
 // Сан пред името – същото правило като в приложението (models.dart withRank).
 const RANKS: Record<string, string> = {
   deacon: "Дякон", hierodeacon: "Йеродякон", protodeacon: "Протодякон", archdeacon: "Архидякон",
@@ -605,7 +622,7 @@ async function handle(req: Request): Promise<Response> {
 // Всяко извикване оставя ред в notify_log: вид, код и кратък резултат
 // (брой получатели/устройства/изпратени или грешка) – без лични данни.
 // Чете се само от сървъра (Actions → „Дневник на известията“).
-Deno.serve(async (req) => {
+serveCors(async (req) => {
   let type = "?";
   try {
     type = String((await req.clone().json()).type ?? "event");

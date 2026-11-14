@@ -220,3 +220,52 @@ jobs:
       - name: Напомняне за Firebase
         if: env.HAS_FIREBASE != 'true'
         run: echo "::notice::Firebase App Distribution не е настроен (липсват FIREBASE_APP_ID и FIREBASE_SERVICE_ACCOUNT). APK е само в GitHub Releases."
+
+  # Уеб версия (браузър на компютър) – качва се в GitHub Pages
+  # при версия за всички („[тестери]“), при „[уеб]“ или при ръчно пускане.
+  web:
+    needs: server
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[тестери]') || contains(github.event.head_commit.message, '[уеб]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Създаване на уеб частта
+        run: |
+          flutter create . --platforms=web --org bg.kairos --project-name kairos
+          rm -f test/widget_test.dart
+          sed -i 's#<title>[^<]*</title>#<title>Кайрос</title>#' web/index.html
+          python3 - <<'PY'
+          import json
+          p = 'web/manifest.json'
+          m = json.load(open(p))
+          m.update(name='Кайрос', short_name='Кайрос', description='Кайрос – приложение за свещеници',
+                   background_color='#12161C', theme_color='#12161C')
+          json.dump(m, open(p, 'w'), ensure_ascii=False, indent=2)
+          PY
+      - run: flutter pub get
+      - name: Изграждане за браузър
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          flutter build web --release --base-href /svestenik/ \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
+            --dart-define=BUILD_NUMBER=${{ github.run_number }} \
+            --dart-define=TEST_BUILD=true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+      - id: deploy
+        uses: actions/deploy-pages@v4

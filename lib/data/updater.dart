@@ -28,7 +28,7 @@ class Updater extends ChangeNotifier {
 
   /// Проверка най-много веднъж на 30 минути (или винаги с force).
   Future<void> check({bool force = false}) async {
-    if (!Platform.isAndroid || buildNumber == 0) return;
+    if (kIsWeb || !Platform.isAndroid || buildNumber == 0) return;
     if (!force && _checked != null && DateTime.now().difference(_checked!) < const Duration(minutes: 30)) return;
     _checked = DateTime.now();
     try {
