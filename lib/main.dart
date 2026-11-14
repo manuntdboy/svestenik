@@ -74,20 +74,22 @@ class SvestenikApp extends StatelessWidget {
           ),
           child: child!,
         );
-        // Таблет/тесен прозорец – приложението в колона в средата;
-        // при 1000+ точки се показва изгледът за компютър (меню отстрани).
-        if (mq.size.width <= 700 || mq.size.width >= 1000) return body;
-        return ColoredBox(
-          color: const Color(0xFF0B0E13),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: MediaQuery(
-                data: mq.copyWith(size: Size(520, mq.size.height)),
-                child: body,
-              ),
-            ),
-          ),
+        // Широк екран: изгледът за компютър (меню отстрани) заема целия прозорец,
+        // а всичко останало (вход, регистрация, тесен прозорец) стои в колона в средата.
+        if (mq.size.width <= 700) return body;
+        return ValueListenableBuilder<bool>(
+          valueListenable: desktopShell,
+          builder: (context, desk, _) => desk
+              ? body
+              : ColoredBox(
+                  color: const Color(0xFF0B0E13),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: body,
+                    ),
+                  ),
+                ),
         );
       },
       home: const RootGate(),

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../data/app_state.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
+import '../widgets/layout.dart';
 import 'alarm_ring.dart';
 import 'calendar.dart';
 import 'cash.dart';
@@ -79,6 +80,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => desktopShell.value = false);
     Notifier.opened.removeListener(_openFromNotification);
     _ringing?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -298,7 +300,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final s = AppScope.of(context);
-    if (MediaQuery.sizeOf(context).width >= 1000) return _desktop(context, s);
+    // Истинската ширина на прозореца (не на колоната в средата).
+    final view = View.of(context);
+    final wide = view.physicalSize.width / view.devicePixelRatio >= 1000;
+    if (desktopShell.value != wide) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => desktopShell.value = wide);
+    }
+    if (wide) return _desktop(context, s);
     final pages = [
       RefreshIndicator(onRefresh: s.refresh, child: const CalendarScreen()),
       RefreshIndicator(
