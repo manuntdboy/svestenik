@@ -96,15 +96,16 @@ jobs:
           mkdir -p out/storage
           supabase link --project-ref "$SUPABASE_PROJECT_REF" >/dev/null
           for b in avatars feedback; do
-            supabase storage cp -r "ss:///$b" "out/storage/$b" --experimental >/dev/null \
+            supabase storage cp -r "ss:///$b" "out/storage/$b" --experimental --linked >/dev/null 2>&1 \
+              || supabase storage cp -r "ss:///$b" "out/storage/$b" --experimental --remote >/dev/null 2>&1 \
               || echo "::warning::Снимките от $b не се изтеглиха"
           done
           echo "Снимки: $(find out/storage -type f | wc -l) файла"
 
       - name: Проверка – възстановяване на празна база
         run: |
-          sudo pg_ctlcluster "$PGV" main start 2>/dev/null || true
-          export PGPORT=$(pg_lsclusters -h | awk -v v="$PGV" '$1==v{print $3; exit}')
+          sudo pg_createcluster "$PGV" proba -p 5499 --start >/dev/null
+          export PGPORT=5499
           echo "Тестова база на порт $PGPORT"
           chmod -R a+r out; chmod a+x out
           sudo -E -u postgres psql -qc "create database proba"
