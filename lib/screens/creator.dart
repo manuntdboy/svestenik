@@ -552,7 +552,15 @@ class _PersonCard extends StatelessWidget {
               tooltip: 'Действия',
               onSelected: (v) async {
                 final s = AppScope.read(context);
-                if (v == 'pass') {
+                if (v == 'roles') {
+                  await showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    showDragHandle: true,
+                    builder: (_) => _RolesSheet(userId: u['id'] as String, name: name),
+                  );
+                  await onRefresh?.call();
+                } else if (v == 'pass') {
                   await showTempPassword(context, '', u['id'] as String, name, username: u['username'] as String?);
                 } else if (v == 'delete') {
                   final ok = await confirm(
@@ -572,6 +580,7 @@ class _PersonCard extends StatelessWidget {
                 }
               },
               itemBuilder: (_) => const [
+                PopupMenuItem(value: 'roles', child: Text('Роли в храмовете')),
                 PopupMenuItem(value: 'pass', child: Text('Временна парола')),
                 PopupMenuItem(value: 'delete', child: Text('Изтрий профила')),
               ],
@@ -608,6 +617,195 @@ class _PersonCard extends StatelessWidget {
                 ]),
             ]),
           ),
+      ]),
+    );
+  }
+}
+
+// ------------------------------------------------------------ роли
+
+/// Създателят сменя ролята на човек във всеки негов храм или го изважда от храма.
+class _RolesSheet extends StatefulWidget {
+  final String userId;
+  final String name;
+  const _RolesSheet({required this.userId, required this.name});
+
+  @override
+  State<_RolesSheet> createState() => _RolesSheetState();
+}
+
+class _RolesSheetState extends State<_RolesSheet> {
+  List<Map<String, dynamic>>? _list;
+  String? _error;
+  String? _busy; // church_id, по който се работи
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final l = await AppScope.read(context).creatorUserChurches(widget.userId);
+      if (mounted) setState(() => _list = l);
+    } on AppError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  Future<void> _run(String church, Future<void> Function() f, String done) async {
+    setState(() => _busy = church);
+    try {
+      await f();
+      if (mounted) showMessage(context, done);
+      await _load();
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  Future<void> _setChair(Map<String, dynamic> c) async {
+    final other = c['chair_name'] as String?;
+    final ok = await confirm(
+        context,
+        'Нов председател',
+        '${widget.name} става председател на „${c['name']}“.'
+            '${other != null ? ' $other остава свещеник.' : ''}'
+            '${c['cashier'] == true ? ' Председателят не е касиер – правото на касиер се маха.' : ''}'
+            ' И двамата получават известие.',
+        'Направи председател');
+    if (!ok || !mounted) return;
+    await _run(c['church_id'] as String,
+        () => AppScope.read(context).creatorSetRole(c['church_id'] as String, widget.userId, chair: true, cashier: false),
+        'Готово – ${widget.name} е председател.');
+  }
+
+  Future<void> _setCashier(Map<String, dynamic> c, bool on) async {
+    final other = c['cashier_name'] as String?;
+    final ok = await confirm(
+        context,
+        on ? 'Касиер' : 'Без право на касиер',
+        on
+            ? '${widget.name} става касиер на „${c['name']}“.${other != null ? ' $other вече няма да е касиер.' : ''}'
+                ' Човекът и председателят получават известие.'
+            : '${widget.name} вече няма да е касиер на „${c['name']}“. Човекът и председателят получават известие.',
+        on ? 'Направи касиер' : 'Махни');
+    if (!ok || !mounted) return;
+    await _run(
+        c['church_id'] as String,
+        () => AppScope.read(context).creatorSetRole(c['church_id'] as String, widget.userId, chair: false, cashier: on),
+        on ? 'Готово – ${widget.name} е касиер.' : 'Готово – правото на касиер е махнато.');
+  }
+
+  Future<void> _remove(Map<String, dynamic> c) async {
+    final ok = await confirm(
+        context,
+        'Изваждане от храма',
+        '${widget.name} ще бъде изваден от „${c['name']}“. Вече няма да вижда храма. '
+            'Записите му в календара и касата остават. Той и председателят получават известие.',
+        'Извади');
+    if (!ok || !mounted) return;
+    await _run(c['church_id'] as String,
+        () => AppScope.read(context).creatorRemoveMember(c['church_id'] as String, widget.userId),
+        '${widget.name} е изваден от храма.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final muted = TextStyle(fontSize: 14, color: p.textMuted);
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 24), children: [
+          Text('Роли – ${widget.name}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('Един председател и един касиер на храм. При промяна човекът и председателят получават известие и карта с „ОК“.',
+              style: muted),
+          const SizedBox(height: 14),
+          if (_error != null)
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
+          else if (_list == null)
+            const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+          else if (_list!.isEmpty)
+            Text('Не е в храм.', style: muted)
+          else
+            for (final c in _list!) ...[
+              _churchBox(c, p, muted),
+              const SizedBox(height: 12),
+            ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _churchBox(Map<String, dynamic> c, Palette p, TextStyle muted) {
+    final id = c['church_id'] as String;
+    final busy = _busy == id;
+    final pending = c['status'] != 'active';
+    final chair = c['chair'] == true;
+    final cashier = c['cashier'] == true;
+    final members = (c['members'] as num?)?.toInt() ?? 0;
+    final canRemove = !chair || members <= 1;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(border: Border.all(color: p.border), borderRadius: BorderRadius.circular(18)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text('${c['name']}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+          ),
+          if (busy) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+        ]),
+        Text(
+            [
+              if ((c['settlement'] as String?)?.isNotEmpty == true) '${c['settlement']}',
+              if (!chair && c['chair_name'] != null) 'председател: ${c['chair_name']}',
+              if (!cashier && c['cashier_name'] != null) 'касиер: ${c['cashier_name']}',
+            ].join(' · '),
+            style: muted),
+        const SizedBox(height: 10),
+        if (pending)
+          Text('Чака одобрение за влизане – ролята се сменя след това.', style: muted)
+        else ...[
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Свещеник')),
+              ButtonSegment(value: true, label: Text('Председател')),
+            ],
+            selected: {chair},
+            showSelectedIcon: false,
+            onSelectionChanged: busy
+                ? null
+                : (v) {
+                    if (v.first && !chair) {
+                      _setChair(c);
+                    } else if (!v.first && chair) {
+                      showMessage(context, 'Изберете друг човек за председател – тогава този става свещеник.');
+                    }
+                  },
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Касиер'),
+            subtitle: Text(chair ? 'Председателят не може да е касиер.' : 'Един касиер на храм.', style: muted),
+            value: cashier,
+            onChanged: chair || busy ? null : (v) => _setCashier(c, v),
+          ),
+        ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: busy || !canRemove ? null : () => _remove(c),
+            icon: const Icon(Icons.person_remove_rounded),
+            label: Text(canRemove ? 'Извади от храма' : 'Извади от храма (първо друг председател)'),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+          ),
+        ),
       ]),
     );
   }

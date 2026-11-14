@@ -158,7 +158,10 @@ async function handle(req: Request): Promise<Response> {
     if (!creator) return json(403, { error: "forbidden" });
     const { data: a } = await admin.from("announcements").select("*").eq("id", String(body.announcement_id ?? "")).maybeSingle();
     if (!a) return json(404, { error: "not_found" });
-    if (a.church_id) {
+    if (a.recipient_id) {
+      // Лично съобщение (нова роля, изваждане от храм) – само до този човек.
+      recipients = [a.recipient_id];
+    } else if (a.church_id) {
       const { data: ms } = await admin.from("church_members").select("user_id").eq("church_id", a.church_id).eq("status", "active");
       recipients = (ms ?? []).map((m) => m.user_id);
     } else {
@@ -167,7 +170,7 @@ async function handle(req: Request): Promise<Response> {
     }
     title = a.title;
     text = a.body ?? "";
-    data = { type: "announcement", church_id: String(a.church_id ?? "") };
+    data = { type: "announcement", church_id: a.recipient_id ? "" : String(a.church_id ?? "") };
   } else if (type === "creator_event") {
     // Важно за създателя: нов потребител, нов храм, грешка, обратна връзка.
     const kind = String(body.kind ?? "");

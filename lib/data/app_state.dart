@@ -321,6 +321,8 @@ class AppState extends ChangeNotifier {
     if (t.contains('bad_substitute')) return 'Изберете свещеник от храма.';
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
+    if (t.contains('need_chair')) return 'Първо изберете друг председател на храма.';
+    if (t.contains('member_pending')) return 'Човекът още чака одобрение за влизане в храма.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
     if (t.contains('month_not_over')) return 'Приключва се само изминал месец.';
     if (t.contains('pending_in_month')) return 'В този месец има чакащи записи – първо ги решете.';
@@ -536,7 +538,9 @@ class AppState extends ChangeNotifier {
   // ------------------------------------------------------------------
   /// Съобщения от създателя, които още не съм потвърдил с „ОК“.
   List<Announcement> announcementsToAck(String churchId) => _announcements
-      .where((a) => !_announcementsSeen.contains(a.id) && (a.churchId == null || a.churchId == churchId))
+      .where((a) =>
+          !_announcementsSeen.contains(a.id) &&
+          (a.recipientId != null || a.churchId == null || a.churchId == churchId))
       .toList();
 
   Future<void> ackAnnouncement(Announcement a) async {
@@ -623,6 +627,45 @@ class AppState extends ChangeNotifier {
       await refresh();
     } catch (e) {
       throw AppError(_friendly(e));
+    }
+  }
+
+  /// Храмовете на човек с ролите му (само създателят).
+  Future<List<Map<String, dynamic>>> creatorUserChurches(String userId) async {
+    try {
+      final r = await _db.rpc('creator_user_churches', params: {'p_user': userId});
+      return ((r as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Създателят сменя ролята в храм; човекът и председателят получават карта и известие.
+  Future<void> creatorSetRole(String churchId, String userId, {required bool chair, required bool cashier}) async {
+    try {
+      final r = await _db.rpc('creator_set_role',
+          params: {'p_church': churchId, 'p_user': userId, 'p_chair': chair, 'p_cashier': cashier});
+      _notifyAnnouncements(r);
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Създателят изважда човек от храм.
+  Future<void> creatorRemoveMember(String churchId, String userId) async {
+    try {
+      final r = await _db.rpc('creator_remove_member', params: {'p_church': churchId, 'p_user': userId});
+      _notifyAnnouncements(r);
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  void _notifyAnnouncements(dynamic ids) {
+    for (final id in ((ids as List?) ?? const [])) {
+      unawaited(_invokeNotify({'type': 'announcement', 'announcement_id': '$id'}));
     }
   }
 

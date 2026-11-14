@@ -802,6 +802,42 @@ select t.as_user(:'C');
 select t.ok((select count(*) from announcements where id = :'ann') = 1, 'съобщението до всички се вижда');
 select public.announcement_ack(:'ann') \g /dev/null
 select t.ok((select count(*) from announcement_seen where announcement_id = :'ann' and user_id = :'C') = 1, '„ОК“ на съобщението се пази');
+\echo '== Създателят сменя роли и изважда от храм'
+select t.as_user(:'B');
+select id as rcid, join_code as rcode from public.create_church('Роли', 'Казанлък', 'Казанлък') \gset
+select t.as_user(:'C');
+select 1 from public.join_church(:'rcode') \g /dev/null
+select t.as_user(:'D');
+select 1 from public.join_church(:'rcode') \g /dev/null
+select t.as_user(:'B');
+select public.approve_member(:'rcid', :'C') \g /dev/null
+select public.approve_member(:'rcid', :'D') \g /dev/null
+select t.fails(format('select public.creator_set_role(%L,%L,false,true)', :'rcid', :'C'), 'само създателят сменя роли', 'forbidden');
+select t.fails(format('select public.creator_remove_member(%L,%L)', :'rcid', :'C'), 'само създателят изважда', 'forbidden');
+select t.as_user(:'A');
+select t.ok(jsonb_array_length(public.creator_user_churches(:'C')) >= 1, 'създателят вижда храмовете на човека');
+select cardinality(public.creator_set_role(:'rcid', :'C', false, true)) as n1 \gset
+select t.ok(:n1 = 2 and (select (x->>'cashier')::boolean from jsonb_array_elements(public.creator_user_churches(:'C')) x where x->>'church_id' = :'rcid'),
+            'касиер + известие до него и до председателя');
+select cardinality(public.creator_set_role(:'rcid', :'D', false, true)) as n2 \gset
+select t.ok(:n2 = 3 and not ((select (x->>'cashier')::boolean from jsonb_array_elements(public.creator_user_churches(:'C')) x where x->>'church_id' = :'rcid')),
+            'нов касиер – старият губи правото и също разбира');
+select cardinality(public.creator_set_role(:'rcid', :'D', true, false)) as n3 \gset
+select t.ok(:n3 = 2 and (select (x->>'chair')::boolean from jsonb_array_elements(public.creator_user_churches(:'D')) x where x->>'church_id' = :'rcid')
+            and not (select (x->>'chair')::boolean from jsonb_array_elements(public.creator_user_churches(:'B')) x where x->>'church_id' = :'rcid')
+            and not ((select (x->>'cashier')::boolean from jsonb_array_elements(public.creator_user_churches(:'D')) x where x->>'church_id' = :'rcid')),
+            'нов председател – старият става свещеник, председателят не е касиер');
+select t.fails(format('select public.creator_set_role(%L,%L,false,false)', :'rcid', :'D'), 'председателят не се сваля без заместник', 'need_chair');
+select t.fails(format('select public.creator_remove_member(%L,%L)', :'rcid', :'D'), 'председателят не се изважда, докато има други', 'need_chair');
+select cardinality(public.creator_remove_member(:'rcid', :'B')) as n4 \gset
+select t.ok(:n4 = 2 and not exists (select 1 from jsonb_array_elements(public.creator_user_churches(:'B')) x where x->>'church_id' = :'rcid'), 'изваждане от храма');
+select t.as_user(:'B');
+select t.ok((select count(*) from announcements where recipient_id = :'B' and title like 'Извадени%') = 1,
+            'изваденият вижда съобщението, макар да не е в храма');
+select t.as_user(:'C');
+select t.ok((select count(*) from announcements where recipient_id is not null and recipient_id <> :'C') = 0,
+            'чуждите лични съобщения не се виждат');
+select t.ok((select count(*) from announcements where recipient_id = :'C') = 2, 'своите лични съобщения се виждат');
 select t.as_user(:'A');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');

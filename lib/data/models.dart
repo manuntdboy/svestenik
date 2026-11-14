@@ -135,14 +135,17 @@ class Church {
 class Announcement {
   final String id;
   final String? churchId;
+  final String? recipientId; // лично съобщение (нова роля, изваждане от храм)
   final String title;
   final String body;
   final DateTime createdAt;
-  Announcement({required this.id, this.churchId, required this.title, this.body = '', required this.createdAt});
+  Announcement(
+      {required this.id, this.churchId, this.recipientId, required this.title, this.body = '', required this.createdAt});
 
   factory Announcement.fromRow(Map<String, dynamic> r) => Announcement(
         id: r['id'] as String,
         churchId: r['church_id'] as String?,
+        recipientId: r['recipient_id'] as String?,
         title: r['title'] as String,
         body: (r['body'] as String?) ?? '',
         createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
