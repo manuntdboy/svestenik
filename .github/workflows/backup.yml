@@ -2,7 +2,8 @@ name: Нощно резервно копие
 
 # Всяка нощ (03:00 българско зимно време) пълно копие на базата:
 # профили и пароли (криптирани от Supabase), храмове, събития, каса, склад, чат…
-# плюс снимките (профилни и към отзивите).
+# (Снимките – профилни и към отзивите – са във файловото хранилище на Supabase
+# и не влизат; не са съществени и могат да се качат наново.)
 # Копието се КРИПТИРА с паролата от секрета BACKUP_PASSWORD, преди да бъде
 # качено – проектът е публичен, затова без парола копието не може да се отвори.
 # Пазят се последните 30 нощи. Всяко копие веднага се възстановява на празна
@@ -86,28 +87,12 @@ jobs:
           done < out/tables.txt
           echo "Таблици: $(wc -l < out/counts.txt)"
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Снимките
-        continue-on-error: true
-        run: |
-          mkdir -p out/storage
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" >/dev/null
-          for b in avatars feedback; do
-            supabase storage cp -r "ss:///$b" "out/storage/$b" --experimental --linked >/dev/null 2>&1 \
-              || supabase storage cp -r "ss:///$b" "out/storage/$b" --experimental --remote >/dev/null 2>&1 \
-              || echo "::warning::Снимките от $b не се изтеглиха"
-          done
-          echo "Снимки: $(find out/storage -type f | wc -l) файла"
-
       - name: Проверка – възстановяване на празна база
         run: |
           sudo pg_createcluster "$PGV" proba -p 5499 --start >/dev/null
           export PGPORT=5499
           echo "Тестова база на порт $PGPORT"
-          chmod -R a+r out; chmod a+x out
+          cp out/kairos.dump /tmp/kairos.dump && chmod a+r /tmp/kairos.dump
           sudo -E -u postgres psql -qc "create database proba"
           # Ролите и разширенията, които Supabase има, а празната база – не.
           sudo -E -u postgres psql -q -d proba <<'SQL'
@@ -120,7 +105,7 @@ jobs:
           create extension if not exists pgcrypto with schema extensions;
           create extension if not exists "uuid-ossp" with schema extensions;
           SQL
-          sudo -E -u postgres pg_restore --no-owner --no-privileges -d proba "$PWD/out/kairos.dump" 2> out/restore.log || true
+          sudo -E -u postgres pg_restore --no-owner --no-privileges -d proba /tmp/kairos.dump 2> out/restore.log || true
           echo "Предупреждения при възстановяване: $(grep -c 'error' out/restore.log || true)"
           grep -i 'error' out/restore.log | head -20 || true
           bad=0
@@ -137,7 +122,7 @@ jobs:
       - name: Криптиране
         if: env.MODE == 'истинско'
         run: |
-          tar -C out -czf "kairos-$STAMP.tar.gz" kairos.dump counts.txt storage
+          tar -C out -czf "kairos-$STAMP.tar.gz" kairos.dump counts.txt
           gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 \
             -o "kairos-$STAMP.tar.gz.gpg" "kairos-$STAMP.tar.gz" <<< "$BACKUP_PASSWORD"
           rm -f "kairos-$STAMP.tar.gz"
