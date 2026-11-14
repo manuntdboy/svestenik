@@ -602,6 +602,31 @@ class _PersonCard extends StatelessWidget {
                   } on AppError catch (e) {
                     if (context.mounted) showMessage(context, e.message);
                   }
+                } else if (v == 'email') {
+                  final c = TextEditingController();
+                  final email = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text('Нов имейл – $name'),
+                      content: TextField(
+                        controller: c,
+                        autofocus: true,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Верният имейл'),
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отказ')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Смени')),
+                      ],
+                    ),
+                  );
+                  if (email == null || email.trim().isEmpty || !context.mounted) return;
+                  try {
+                    await s.creatorChangeEmail(u['id'] as String, email);
+                    if (context.mounted) showMessage(context, 'Имейлът е сменен. Потребителското име и паролата остават същите.');
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
                 } else if (v == 'roles') {
                   await showModalBottomSheet<void>(
                     context: context,
@@ -634,6 +659,7 @@ class _PersonCard extends StatelessWidget {
                 const PopupMenuItem(value: 'test', child: Text('Пробно известие')),
                 const PopupMenuItem(value: 'log', child: Text('Дневник на действията')),
                 const PopupMenuItem(value: 'roles', child: Text('Роли в храмовете')),
+                const PopupMenuItem(value: 'email', child: Text('Смени имейла')),
                 const PopupMenuItem(value: 'pass', child: Text('Временна парола')),
                 PopupMenuItem(
                     value: u['suspended'] == true ? 'unsuspend' : 'suspend',

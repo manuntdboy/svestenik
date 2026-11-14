@@ -729,6 +729,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Създателят сменя имейла на човек (без писмо за потвърждение).
+  Future<void> creatorChangeEmail(String userId, String email) async {
+    try {
+      await _db.functions.invoke('change_email', body: {'user_id': userId, 'email': email.trim()});
+    } on FunctionException catch (e) {
+      final d = '${e.details}';
+      if (d.contains('bad_email')) throw AppError('Имейлът не изглежда правилен.');
+      if (d.contains('email_taken')) throw AppError('Този имейл вече е на друг профил.');
+      if (e.status == 403) throw AppError('Само създателят може да сменя имейли.');
+      throw AppError('Не стана. Опитайте пак.');
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Каса на храм за създателя: чакащи записи и приключени месеци.
   Future<Map<String, dynamic>> creatorCashOverview(String churchId) async =>
       Map<String, dynamic>.from(await _creatorRpc<Map>('creator_cash_overview', {'p_church': churchId}));

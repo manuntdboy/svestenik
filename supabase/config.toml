@@ -19,3 +19,6 @@ verify_jwt = false
 
 [functions.suspend_user]
 verify_jwt = false
+
+[functions.change_email]
+verify_jwt = false
