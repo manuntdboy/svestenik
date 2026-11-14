@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/requests.dart';
+import '../widgets/layout.dart';
 
 /// Почивки: заявка (само дати), моите заявки, а председателят – одобрение
 /// и всички одобрени. Одобрените виждат всички в храма и в календара.
@@ -148,9 +149,8 @@ class LeavesScreen extends StatelessWidget {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: s.refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: SplitList(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             children: [
               Text('Почивката е за цели дни. Одобрените виждат всички в храма в календара, '
                   'а в тези дни свещеникът не излиза за избор при записване на събитие.',
@@ -166,6 +166,7 @@ class LeavesScreen extends StatelessWidget {
                 for (final l in pending)
                   Padding(padding: const EdgeInsets.only(bottom: 12), child: LeaveReviewCard(leave: l)),
               ],
+              const SplitHere(),
               heading('Моите заявки'),
               if (mine.isEmpty)
                 Text('Нямате заявки.', style: TextStyle(fontSize: 16, color: p.textMuted)),

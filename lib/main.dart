@@ -11,6 +11,7 @@ import 'data/app_state.dart';
 import 'data/error_report.dart';
 import 'data/notifier.dart';
 import 'data/push.dart';
+import 'widgets/layout.dart';
 import 'screens/change_password.dart';
 import 'screens/church_connect.dart';
 import 'screens/login.dart';

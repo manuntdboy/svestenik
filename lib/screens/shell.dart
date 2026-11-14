@@ -282,7 +282,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                             ? pane(id)
                             : Center(
                                 child: ConstrainedBox(
-                                  constraints: BoxConstraints(maxWidth: id == 'calendar' ? 980 : 860),
+                                  constraints: const BoxConstraints(maxWidth: 1240),
                                   child: pane(id),
                                 ),
                               ))

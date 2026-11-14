@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/church_banner.dart';
 import 'cash.dart' show fmtEur, parseAmount;
+import '../widgets/layout.dart';
 
 final _stamp = DateFormat('d MMM y, HH:mm', 'bg');
 const _red = Color(0xFFB23A3A);
@@ -60,9 +61,8 @@ class _StockScreenState extends State<StockScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: s.refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          child: SplitList(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
               const ChurchBanner(title: 'Склад на храма'),
               const SizedBox(height: 12),
@@ -100,6 +100,7 @@ class _StockScreenState extends State<StockScreen> {
                   ),
                 ),
               ]),
+              const SplitHere(),
               const SizedBox(height: 14),
               Row(children: [
                 for (final sec in StockSection.values) ...[

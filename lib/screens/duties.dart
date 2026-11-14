@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/church_banner.dart';
 import '../widgets/common.dart';
 import '../widgets/requests.dart';
+import '../widgets/layout.dart';
 
 final _dm = DateFormat('d MMM', 'bg');
 final _dmy = DateFormat('d MMMM y', 'bg');
@@ -128,9 +129,8 @@ class _DutyScreenState extends State<DutyScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: s.refresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          child: SplitList(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
               const ChurchBanner(title: 'Дежурства'),
               const SizedBox(height: 12),
@@ -141,6 +141,7 @@ class _DutyScreenState extends State<DutyScreen> {
                 onShift: (d) => setState(() => _shown = DateTime(_shown.year, _shown.month + d, 1)),
               ),
               const SizedBox(height: 12),
+              const SplitHere(),
               for (final w in s.swapsForMe(church))
                 Padding(padding: const EdgeInsets.only(bottom: 12), child: DutySwapCard(swap: w)),
               for (final w in s.swapsForChair(church))

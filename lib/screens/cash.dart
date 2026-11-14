@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'cash_more.dart';
 import '../widgets/church_banner.dart';
+import '../widgets/layout.dart';
 
 final _eur = NumberFormat.currency(locale: 'bg', symbol: '€', decimalDigits: 2);
 final _day = DateFormat('d MMMM y', 'bg');
@@ -111,9 +112,8 @@ class _CashScreenState extends State<CashScreen> {
     final monthIn = _sumMonth(all, CashBook.income);
     final monthOut = _sumMonth(all, CashBook.expense);
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+    return SplitList(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
       children: [
         const ChurchBanner(title: 'Каса на храма'),
         const SizedBox(height: 12),
@@ -281,6 +281,7 @@ class _CashScreenState extends State<CashScreen> {
             ),
           ]);
         }),
+        const SplitHere(),
         const SizedBox(height: 16),
         Row(children: [
           Expanded(

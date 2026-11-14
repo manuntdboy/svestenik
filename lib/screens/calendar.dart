@@ -95,12 +95,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     bool archiFor(DateTime d) => s.eventsOn(d).any((e) => e.kind.occupiesChurch && !e.isCancelled);
     final monthTitle = '${capitalize(DateFormat('LLLL', 'bg').format(_selected))} ${_selected.year}';
 
-    return Stack(
-      children: [
-        ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
-          children: [
+    final top = <Widget>[
             // В кой храм съм и с каква роля (смяна при повече храмове).
             const ChurchBanner(),
             const SizedBox(height: 10),
@@ -174,15 +169,45 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 duty: dutyFor,
                 onSelect: (d) => setState(() => _selected = d),
               ),
-            const SizedBox(height: 14),
+    ];
+    final days = <Widget>[
             ...requestCards(s),
             if (_view == CalView.day || _view == CalView.month)
               ..._dayList(context, s, p, _selected)
             else
               for (var i = 0; i < 7; i++)
                 ..._dayList(context, s, p, _weekStart.add(Duration(days: i)), compact: true),
-          ],
-        ),
+    ];
+
+    return Stack(
+      children: [
+        LayoutBuilder(builder: (context, c) {
+          // Компютър: месецът отляво, денят отдясно.
+          if (c.maxWidth >= 860) {
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(
+                width: 500,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 12, 40),
+                  children: top,
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(12, 32, 24, 110),
+                  children: days,
+                ),
+              ),
+            ]);
+          }
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 110),
+            children: [...top, const SizedBox(height: 14), ...days],
+          );
+        }),
         Positioned(
           right: 20,
           bottom: 16,

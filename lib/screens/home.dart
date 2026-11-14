@@ -15,6 +15,7 @@ import 'event_form.dart';
 import 'cash.dart';
 import 'stock.dart';
 import 'duties.dart';
+import '../widgets/layout.dart';
 
 /// Начален екран – табло, вариант Б.
 class HomeScreen extends StatelessWidget {
@@ -31,9 +32,8 @@ class HomeScreen extends StatelessWidget {
 
     return Stack(
       children: [
-        ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+        SplitList(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -76,6 +76,7 @@ class HomeScreen extends StatelessWidget {
             const DutyNowCard(compact: true),
             _PriestsStrip(churchId: s.currentChurchId!),
             const SizedBox(height: 12),
+            const SplitHere(),
             // Моля, потвърдете · отказани събития · заявки за почивка
             ...requestCards(s),
             if (s.isManagerOf(s.currentChurchId!))
