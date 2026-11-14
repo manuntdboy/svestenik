@@ -35,8 +35,12 @@ class UpdateBanner extends StatelessWidget {
                 ),
                 if (u.available)
                   FilledButton(
+                    // Нормален размер (темата прави бутоните широки колкото екрана).
                     style: FilledButton.styleFrom(
-                        backgroundColor: Palette.onYellow, foregroundColor: Palette.yellow),
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        backgroundColor: Palette.onYellow,
+                        foregroundColor: Palette.yellow),
                     onPressed: busy ? null : u.install,
                     child: Text(busy ? '${u.progress}%' : 'Обнови'),
                   ),
