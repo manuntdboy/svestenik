@@ -631,6 +631,10 @@ Future<void> showCashEntry(BuildContext context, CashEntry e) async {
                 'Състояние',
                 e.isPending
                     ? 'Чака одобрение'
+                    : e.byCreator
+                        ? (e.isReturned
+                            ? 'Върнат от създателя на Кайрос${e.returnReason.isEmpty ? '' : ': ${e.returnReason}'}'
+                            : 'Одобрен от създателя на Кайрос')
                     : e.isReturned
                         ? 'Върнат${e.returnReason.isEmpty ? '' : ': ${e.returnReason}'}'
                         : e.autoReason == 'holder'

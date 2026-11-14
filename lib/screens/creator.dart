@@ -41,9 +41,18 @@ class _CreatorScreenState extends State<CreatorScreen> {
       try {
         extra['chat'] = Map<String, dynamic>.from(await Supabase.instance.client.rpc('creator_chat_stats') as Map);
       } catch (_) {}
+      Map<String, dynamic> flags = {};
+      try {
+        flags = Map<String, dynamic>.from(await Supabase.instance.client.rpc('creator_people_flags') as Map);
+      } catch (_) {}
+      final base = Map<String, dynamic>.from(r as Map);
+      base['users'] = [
+        for (final u in (base['users'] as List? ?? const []))
+          {...Map<String, dynamic>.from(u as Map), 'suspended': flags.containsKey('${(u as Map)['id']}')},
+      ];
       if (!mounted) return;
       setState(() {
-        _d = {...Map<String, dynamic>.from(r as Map), 'extra': extra};
+        _d = {...base, 'extra': extra};
         _error = null;
         _loading = false;
       });
@@ -545,6 +554,16 @@ class _PersonCard extends StatelessWidget {
           Expanded(
             child: Text(name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           ),
+          if (u['suspended'] == true)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.error, borderRadius: BorderRadius.circular(20)),
+              child: Text('СПРЯН',
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onError)),
+            ),
           Icon(u['push'] == true ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
               size: 20, color: u['push'] == true ? p.primary : p.textMuted),
           if (u['id'] != AppScope.of(context).currentUser?.id)
@@ -552,7 +571,38 @@ class _PersonCard extends StatelessWidget {
               tooltip: 'Действия',
               onSelected: (v) async {
                 final s = AppScope.read(context);
-                if (v == 'roles') {
+                if (v == 'view') {
+                  await Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => _ViewAsScreen(userId: u['id'] as String, name: name)));
+                } else if (v == 'log') {
+                  await Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => _ActivityScreen(title: name, userId: u['id'] as String)));
+                } else if (v == 'test') {
+                  try {
+                    final m = await s.creatorTestPush(u['id'] as String);
+                    if (context.mounted) await info(context, 'Пробно известие', m);
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
+                } else if (v == 'suspend' || v == 'unsuspend') {
+                  final on = v == 'suspend';
+                  final ok = await confirm(
+                      context,
+                      on ? 'Временно спиране' : 'Пускане на профила',
+                      on
+                          ? '$name няма да може да влиза и няма да получава известия, докато не го пуснете. '
+                              'Нищо не се трие – данните и записите му остават.'
+                          : '$name отново ще може да влиза в Кайрос.',
+                      on ? 'Спри' : 'Пусни');
+                  if (!ok || !context.mounted) return;
+                  try {
+                    await s.creatorSuspend(u['id'] as String, on);
+                    if (context.mounted) showMessage(context, on ? 'Профилът е спрян.' : 'Профилът е пуснат.');
+                    await onRefresh?.call();
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
+                } else if (v == 'roles') {
                   await showModalBottomSheet<void>(
                     context: context,
                     isScrollControlled: true,
@@ -579,10 +629,16 @@ class _PersonCard extends StatelessWidget {
                   }
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'roles', child: Text('Роли в храмовете')),
-                PopupMenuItem(value: 'pass', child: Text('Временна парола')),
-                PopupMenuItem(value: 'delete', child: Text('Изтрий профила')),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'view', child: Text('Какво вижда')),
+                const PopupMenuItem(value: 'test', child: Text('Пробно известие')),
+                const PopupMenuItem(value: 'log', child: Text('Дневник на действията')),
+                const PopupMenuItem(value: 'roles', child: Text('Роли в храмовете')),
+                const PopupMenuItem(value: 'pass', child: Text('Временна парола')),
+                PopupMenuItem(
+                    value: u['suspended'] == true ? 'unsuspend' : 'suspend',
+                    child: Text(u['suspended'] == true ? 'Пусни профила' : 'Спри временно')),
+                const PopupMenuItem(value: 'delete', child: Text('Изтрий профила')),
               ],
             ),
         ]),
@@ -618,6 +674,457 @@ class _PersonCard extends StatelessWidget {
             ]),
           ),
       ]),
+    );
+  }
+}
+
+Future<void> info(BuildContext context, String title, String body) => showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Добре'))],
+      ),
+    );
+
+final _when = DateFormat('dd.MM HH:mm');
+final _day = DateFormat('EEE dd.MM', 'bg');
+
+// ------------------------------------------------------------ „Какво вижда“
+
+class _ViewAsScreen extends StatefulWidget {
+  final String userId;
+  final String name;
+  const _ViewAsScreen({required this.userId, required this.name});
+
+  @override
+  State<_ViewAsScreen> createState() => _ViewAsScreenState();
+}
+
+class _ViewAsScreenState extends State<_ViewAsScreen> {
+  Map<String, dynamic>? _d;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final d = await AppScope.read(context).creatorViewAs(widget.userId);
+      if (mounted) setState(() => _d = d);
+    } on AppError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final d = _d;
+    final muted = TextStyle(fontSize: 14, color: p.textMuted);
+    Widget head(String t) => Padding(
+          padding: const EdgeInsets.fromLTRB(2, 18, 2, 6),
+          child: Text(t.toUpperCase(),
+              style: TextStyle(fontSize: 13, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: p.textMuted)),
+        );
+    Widget row(IconData i, String t, {String? sub, Color? color}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(i, size: 20, color: color ?? p.textMuted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: color)),
+                if (sub != null && sub.isNotEmpty) Text(sub, style: muted),
+              ]),
+            ),
+          ]),
+        );
+    final warn = Theme.of(context).colorScheme.error;
+    return Scaffold(
+      appBar: AppBar(title: Text('Какво вижда ${widget.name}')),
+      body: _error != null
+          ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
+          : d == null
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: [
+                    Text('Само за гледане – нищо не се променя от негово име.', style: muted),
+                    head('Телефон и профил'),
+                    SurfaceCard(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (d['suspended_at'] != null) row(Icons.pause_circle_rounded, 'Профилът е спрян', color: warn),
+                        row(Icons.phone_android_rounded,
+                            d['build'] == null ? 'Версия: още няма данни' : 'Версия ${d['build']} (последна: $buildNumber)',
+                            sub: d['seen_at'] == null ? null : 'Последно отваряне: ${_ago(_dt(d['seen_at']))}',
+                            color: d['build'] != null && (d['build'] as num) < buildNumber ? warn : null),
+                        row(
+                            (d['tokens'] as num) > 0 ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+                            (d['tokens'] as num) > 0
+                                ? 'Известия: записан${(d['tokens'] as num) > 1 ? 'и ${d['tokens']} телефона' : ' телефон'}'
+                                : 'Известия: няма записан телефон',
+                            color: (d['tokens'] as num) > 0 ? null : warn),
+                        if (d['must_change_password'] == true)
+                          row(Icons.key_rounded, 'Чака да смени временната парола', color: warn),
+                        if (d['privacy_ok'] != true)
+                          row(Icons.privacy_tip_rounded, 'Още не е приел текста за личните данни', color: warn),
+                      ]),
+                    ),
+                    head('Храмове'),
+                    for (final c in (d['churches'] as List).cast<Map>())
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: SurfaceCard(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('${c['name']}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                            Text(c['status'] == 'active' ? '${c['role']}' : 'чака одобрение за влизане', style: muted),
+                            if ((c['chat_unread'] as num? ?? 0) > 0)
+                              row(Icons.chat_rounded, 'Непрочетени в чата: ${c['chat_unread']}'),
+                            if ((c['join_pending'] as num? ?? 0) > 0)
+                              row(Icons.person_add_rounded, 'Чакат го за влизане в храма: ${c['join_pending']}', color: warn),
+                            if ((c['leaves_pending'] as num? ?? 0) > 0)
+                              row(Icons.beach_access_rounded, 'Почивки за решаване: ${c['leaves_pending']}', color: warn),
+                            if ((c['swaps_pending'] as num? ?? 0) > 0)
+                              row(Icons.swap_horiz_rounded, 'Размени за одобрение: ${c['swaps_pending']}', color: warn),
+                            if ((c['cash_pending'] as num? ?? 0) > 0)
+                              row(Icons.payments_rounded, 'Записи в касата за одобрение: ${c['cash_pending']}', color: warn),
+                          ]),
+                        ),
+                      ),
+                    if ((d['churches'] as List).isEmpty) Text('Не е в храм.', style: muted),
+                    head('Карти на началния екран'),
+                    SurfaceCard(
+                      child: Builder(builder: (_) {
+                        final cards = Map<String, dynamic>.from(d['cards'] as Map);
+                        final ann = (cards['announcements'] as List).cast<String>();
+                        final items = <Widget>[
+                          for (final t in ann) row(Icons.campaign_rounded, t, sub: 'съобщение – чака „ОК“'),
+                          for (final l in (d['leaves'] as List).cast<Map>().where((l) => l['unseen'] == true))
+                            row(Icons.beach_access_rounded, 'Решение за почивка ${_range(l)}', sub: 'чака „ОК“'),
+                          if ((cards['cash_returned'] as num) > 0)
+                            row(Icons.undo_rounded, 'Върнати записи в касата: ${cards['cash_returned']}', sub: 'чакат „ОК“'),
+                          if ((cards['to_confirm'] as num) > 0)
+                            row(Icons.event_available_rounded, 'Събития за потвърждаване: ${cards['to_confirm']}',
+                                color: warn),
+                        ];
+                        return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: items.isEmpty ? [Text('Няма карти – началният екран е чист.', style: muted)] : items);
+                      }),
+                    ),
+                    head('Събития – следващите 14 дни'),
+                    SurfaceCard(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        for (final e in (d['events'] as List).cast<Map>())
+                          row(Icons.event_rounded, '${_day.format(_dt(e['at'])!)} ${DateFormat('HH:mm').format(_dt(e['at'])!)} · ${e['kind']}',
+                              sub: [
+                                if ((e['for_whom'] as String?)?.isNotEmpty == true) '${e['for_whom']}',
+                                '${e['church']}',
+                                if (e['mine'] == true) 'записал за колега',
+                                if (e['assignment'] == 'pending') 'чака потвърждение',
+                                if (e['assignment'] == 'declined') 'отказано',
+                              ].join(' · ')),
+                        if ((d['events'] as List).isEmpty) Text('Няма предстоящи събития.', style: muted),
+                      ]),
+                    ),
+                    head('Почивки и дежурства'),
+                    SurfaceCard(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        for (final l in (d['leaves'] as List).cast<Map>())
+                          row(Icons.beach_access_rounded, 'Почивка ${_range(l)}', sub: switch (l['status']) {
+                            'pending' => 'чака решение',
+                            'approved' => 'одобрена',
+                            'rejected' => 'отказана',
+                            'ended' => 'прекратена',
+                            _ => '${l['status']}',
+                          }),
+                        for (final x in (d['duties'] as List).cast<Map>())
+                          row(Icons.shield_rounded, 'Дежурство ${_range(x)}', sub: '${x['church']}'),
+                        if ((d['leaves'] as List).isEmpty && (d['duties'] as List).isEmpty)
+                          Text('Няма почивки и предстоящи дежурства.', style: muted),
+                      ]),
+                    ),
+                  ]),
+                ),
+    );
+  }
+
+  String _range(Map l) {
+    final a = DateTime.parse('${l['from']}');
+    final b = DateTime.parse('${l['to']}');
+    final f = DateFormat('dd.MM');
+    return a == b ? f.format(a) : '${f.format(a)} – ${f.format(b)}';
+  }
+}
+
+// ------------------------------------------------------------ дневник
+
+class _ActivityScreen extends StatefulWidget {
+  final String title;
+  final String? userId;
+  final String? churchId;
+  const _ActivityScreen({required this.title, this.userId, this.churchId});
+
+  @override
+  State<_ActivityScreen> createState() => _ActivityScreenState();
+}
+
+class _ActivityScreenState extends State<_ActivityScreen> {
+  List<Map<String, dynamic>>? _list;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final l = await AppScope.read(context).creatorActivity(userId: widget.userId, churchId: widget.churchId);
+      if (mounted) setState(() => _list = l);
+    } on AppError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final muted = TextStyle(fontSize: 13.5, color: p.textMuted);
+    final l = _list;
+    String? lastDay;
+    return Scaffold(
+      appBar: AppBar(title: Text('Дневник · ${widget.title}')),
+      body: _error != null
+          ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
+          : l == null
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+                    Text('Пазят се последните 180 дни. Съдържанието на чата не се записва.', style: muted),
+                    if (l.isEmpty)
+                      const Padding(padding: EdgeInsets.only(top: 24), child: Text('Още няма записани действия.')),
+                    for (final a in l) ...(() {
+                      final t = _dt(a['at'])!;
+                      final day = DateFormat('EEEE, d MMMM', 'bg').format(t);
+                      final out = <Widget>[];
+                      if (day != lastDay) {
+                        lastDay = day;
+                        out.add(Padding(
+                          padding: const EdgeInsets.fromLTRB(2, 18, 2, 6),
+                          child: Text(day, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                        ));
+                      }
+                      out.add(Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          SizedBox(width: 48, child: Text(DateFormat('HH:mm').format(t), style: muted)),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text.rich(TextSpan(children: [
+                                TextSpan(
+                                    text: a['by_creator'] == true ? 'Вие' : '${a['actor']}',
+                                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                                TextSpan(text: ' · ${a['action']}'),
+                                if (a['target'] != null) TextSpan(text: ' → ${a['target']}'),
+                              ]), style: const TextStyle(fontSize: 15)),
+                              Text(
+                                  [
+                                    if ((a['details'] as String?)?.isNotEmpty == true) '${a['details']}',
+                                    if (widget.churchId == null && a['church'] != null) '${a['church']}',
+                                  ].join(' · '),
+                                  style: muted),
+                            ]),
+                          ),
+                        ]),
+                      ));
+                      return out;
+                    })(),
+                  ]),
+                ),
+    );
+  }
+}
+
+// ------------------------------------------------------------ каса
+
+class _CashSheet extends StatefulWidget {
+  final String churchId;
+  final String name;
+  const _CashSheet({required this.churchId, required this.name});
+
+  @override
+  State<_CashSheet> createState() => _CashSheetState();
+}
+
+class _CashSheetState extends State<_CashSheet> {
+  Map<String, dynamic>? _d;
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final d = await AppScope.read(context).creatorCashOverview(widget.churchId);
+      if (mounted) setState(() => _d = d);
+    } on AppError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  Future<void> _do(Future<void> Function() f, String done) async {
+    setState(() => _busy = true);
+    try {
+      await f();
+      if (mounted) showMessage(context, done);
+      await _load();
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<String?> _reason() async {
+    final c = TextEditingController();
+    final r = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Връщане на записа'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          maxLength: 300,
+          decoration: const InputDecoration(labelText: 'Причина (по желание)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отказ')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Върни')),
+        ],
+      ),
+    );
+    return r;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final muted = TextStyle(fontSize: 14, color: p.textMuted);
+    final d = _d;
+    final money = NumberFormat.currency(locale: 'bg', symbol: '€', decimalDigits: 2);
+    final monthF = DateFormat('LLLL yyyy', 'bg');
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 24), children: [
+          Row(children: [
+            Expanded(
+              child: Text('Каса – ${widget.name}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            ),
+            if (_busy) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Всяко ваше решение остава в историята с бележка „от създателя на Кайрос“. '
+              'Председателят и касиерът получават известие.', style: muted),
+          const SizedBox(height: 12),
+          if (_error != null)
+            Text(_error!)
+          else if (d == null)
+            const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+          else ...[
+            const Text('Чакащи записи', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            if ((d['pending'] as List).isEmpty) Text('Няма чакащи записи.', style: muted),
+            for (final e in (d['pending'] as List).cast<Map>())
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(border: Border.all(color: p.border), borderRadius: BorderRadius.circular(16)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(
+                      '${switch (e['book']) { 'income' => 'Приход', 'expense' => 'Разход', _ => 'Движение' }}'
+                      '${e['reverses'] == true ? ' (сторно)' : ''} · ${money.format((e['amount'] as num).abs())}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  Text(
+                      [
+                        '${e['category']}',
+                        if ((e['note'] as String?)?.isNotEmpty == true) '${e['note']}',
+                        '${e['by'] ?? '—'} · ${_when.format(_dt(e['at'])!)}',
+                      ].join(' · '),
+                      style: muted),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                final r = await _reason();
+                                if (r == null || !mounted) return;
+                                final st = AppScope.read(context);
+                                await _do(() => st.creatorCashDecide(e['id'] as String, false, r), 'Записът е върнат.');
+                              },
+                        child: const Text('Върни'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                final ok = await confirm(context, 'Одобряване',
+                                    'Записът влиза в книгата с бележка „одобрен от създателя на Кайрос“.', 'Одобри');
+                                if (!ok || !mounted) return;
+                                final st = AppScope.read(context);
+                                await _do(() => st.creatorCashDecide(e['id'] as String, true, null), 'Записът е одобрен.');
+                              },
+                        child: const Text('Одобри'),
+                      ),
+                    ),
+                  ]),
+                ]),
+              ),
+            const SizedBox(height: 14),
+            const Text('Приключени месеци', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            if ((d['periods'] as List).isEmpty) Text('Няма приключени месеци.', style: muted),
+            for (final m in (d['periods'] as List).cast<Map>())
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(monthF.format(DateTime.parse('${m['month']}'))),
+                subtitle: Text(m['status'] == 'closed' ? 'приключен' : 'чака одобрение за приключване', style: muted),
+                trailing: TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          final ok = await confirm(
+                              context,
+                              'Отключване на месеца',
+                              'Месецът ще може да се поправя. Председателят и касиерът получават известие; '
+                                  'след това го приключват отново.',
+                              'Отключи');
+                          if (!ok || !mounted) return;
+                          final st = AppScope.read(context);
+                          await _do(() => st.creatorCashReopen(widget.churchId, '${m['month']}'), 'Месецът е отключен.');
+                        },
+                  child: Text(m['status'] == 'closed' ? 'Отключи' : 'Върни'),
+                ),
+              ),
+          ],
+        ]),
+      ),
     );
   }
 }
@@ -850,6 +1357,28 @@ class _Churches extends StatelessWidget {
                 line(ChurchRole.cashier.icon, 'Касиер: ${c['cashier'] ?? 'няма'}'),
                 line(Icons.event_rounded, 'Събития: ${c['events']} (+${c['events_30']} за 30 дни)'),
                 line(Icons.payments_rounded, 'Каса: ${c['cash']} записа · Склад: ${c['stock']} движения'),
+                const SizedBox(height: 6),
+                Wrap(spacing: 8, runSpacing: 4, children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.history_rounded, size: 18),
+                    label: const Text('Дневник'),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => _ActivityScreen(title: '${c['name']}', churchId: c['id'] as String))),
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.payments_rounded, size: 18),
+                    label: const Text('Каса – решения'),
+                    onPressed: () async {
+                      await showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        showDragHandle: true,
+                        builder: (_) => _CashSheet(churchId: c['id'] as String, name: '${c['name']}'),
+                      );
+                      await onRefresh();
+                    },
+                  ),
+                ]),
                 _ChurchControls(church: c, settings: Map<String, dynamic>.from(
                     ((d['extra'] as Map?)?['church_settings'] as Map?)?[c['id']] as Map? ?? const {}),
                     onRefresh: onRefresh),

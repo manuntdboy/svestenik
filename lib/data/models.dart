@@ -65,6 +65,8 @@ class AppUser {
   final String email;
   /// Коя версия на текста за личните данни е приел (0 = още не).
   final int privacyVersion;
+  /// Временно спрян от създателя.
+  final bool suspended;
 
   AppUser({
     required this.id,
@@ -74,6 +76,7 @@ class AppUser {
     this.phone = '',
     this.email = '',
     this.privacyVersion = 0,
+    this.suspended = false,
   }) : name = fullName;
 
   /// Името за показване – със сана отпред, ако е избран.
@@ -87,6 +90,7 @@ class AppUser {
         phone: (r['phone'] as String?) ?? '',
         email: email,
         privacyVersion: (r['privacy_version'] as num?)?.toInt() ?? 0,
+        suspended: r['suspended_at'] != null,
       );
 }
 
@@ -691,6 +695,7 @@ class CashEntry {
   final String? reversedBy;
   final bool backdated; // със задна дата в приключен месец
   final String donor; // дарител (по желание) при „Дарение“
+  final bool byCreator; // решено от създателя на Кайрос
 
   CashEntry({
     required this.id,
@@ -714,6 +719,7 @@ class CashEntry {
     this.reverses,
     this.reversedBy,
     this.backdated = false,
+    this.byCreator = false,
     this.decidedAt,
     this.donor = '',
     this.returnSeen = true,
@@ -776,6 +782,7 @@ class CashEntry {
         reverses: r['reverses'] as String?,
         reversedBy: r['reversed_by'] as String?,
         backdated: (r['backdated'] as bool?) ?? false,
+        byCreator: (r['by_creator'] as bool?) ?? false,
         donor: (r['donor'] as String?) ?? '',
         decidedAt: r['decided_at'] == null ? null : DateTime.parse(r['decided_at'] as String).toLocal(),
         returnSeen: r['return_seen_at'] != null,

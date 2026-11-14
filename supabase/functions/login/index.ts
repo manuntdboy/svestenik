@@ -56,6 +56,9 @@ Deno.serve(async (req) => {
     if (error?.message?.toLowerCase().includes("not confirmed")) {
       return json(401, { error: "email_not_confirmed" });
     }
+    if (error?.message?.toLowerCase().includes("banned")) {
+      return json(401, { error: "suspended" });
+    }
     return json(401, WRONG);
   }
 

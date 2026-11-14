@@ -838,6 +838,21 @@ select t.as_user(:'C');
 select t.ok((select count(*) from announcements where recipient_id is not null and recipient_id <> :'C') = 0,
             'чуждите лични съобщения не се виждат');
 select t.ok((select count(*) from announcements where recipient_id = :'C') = 2, 'своите лични съобщения се виждат');
+\echo '== Контрол на създателя: дневник, „какво вижда“, каса'
+select t.as_user(:'C');
+select t.fails(format('select public.creator_activity(%L, null, 10)', :'B'), 'дневникът е само за създателя', 'forbidden');
+select t.fails(format('select public.creator_view_as(%L)', :'B'), '„какво вижда“ е само за създателя', 'forbidden');
+select t.fails(format('select public.creator_cash_overview(%L)', :'cid'), 'касата на създателя е само за него', 'forbidden');
+select t.fails($$select * from activity_log$$, 'дневникът не се чете директно', 'permission denied');
+select t.as_user(:'A');
+select t.ok(jsonb_array_length(public.creator_activity(null, :'cid', 500)) > 5, 'действията в храма се записват в дневника');
+select t.ok(jsonb_array_length(public.creator_activity(:'B', null, 50)) > 0, 'дневник по човек');
+select t.ok(exists (select 1 from jsonb_array_elements(public.creator_activity(null, :'rcid', 50)) x
+                     where x->>'action' = 'Извади от храма'), 'изваждането от създателя е в дневника');
+select public.creator_view_as(:'C') as va \gset
+select t.ok(jsonb_array_length(:'va'::jsonb->'churches') >= 1 and (:'va'::jsonb ? 'cards'), '„какво вижда“ връща храмове и карти');
+select t.ok(public.creator_cash_overview(:'cid') ? 'pending', 'създателят вижда чакащите в касата');
+select t.fails(format('select public.creator_cash_reopen(%L, %L)', :'cid', '1990-01-01'), 'неприключен месец не се отключва', 'not_found');
 select t.as_user(:'A');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');

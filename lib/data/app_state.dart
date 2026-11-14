@@ -19,6 +19,8 @@ const supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'
 bool get supabaseConfigured => supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty;
 
 /// Грешка с текст за потребителя.
+const kSuspendedText = 'Профилът е временно спрян. Свържете се с председателя на храма.';
+
 class AppError implements Exception {
   final String message;
   AppError(this.message);
@@ -663,6 +665,77 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<T> _creatorRpc<T>(String fn, [Map<String, dynamic>? params]) async {
+    try {
+      return await _db.rpc(fn, params: params) as T;
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// „Какво вижда“ – картината на приложението през очите на човек.
+  Future<Map<String, dynamic>> creatorViewAs(String userId) async =>
+      Map<String, dynamic>.from(await _creatorRpc<Map>('creator_view_as', {'p_user': userId}));
+
+  /// Дневник на действията – за човек или за храм.
+  Future<List<Map<String, dynamic>>> creatorActivity({String? userId, String? churchId}) async {
+    final r = await _creatorRpc<List>('creator_activity', {'p_user': userId, 'p_church': churchId, 'p_limit': 200});
+    return r.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Кои профили са спрени: id → дата.
+  Future<Map<String, dynamic>> creatorPeopleFlags() async =>
+      Map<String, dynamic>.from(await _creatorRpc<Map>('creator_people_flags'));
+
+  /// Пробно известие до един човек. Връща текст за резултата.
+  Future<String> creatorTestPush(String userId) async {
+    try {
+      final res = await _db.functions.invoke('notify', body: {'type': 'creator_test', 'user_id': userId});
+      final d = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
+      final sent = (d['sent'] as num?)?.toInt() ?? 0;
+      final stale = (d['stale'] as num?)?.toInt() ?? 0;
+      if (d['reason'] == 'no_devices') {
+        return 'Няма записан телефон – известия не могат да стигнат. Нека отвори приложението и разреши известията.';
+      }
+      if (sent > 0) {
+        return 'Изпратено до $sent ${sent == 1 ? 'телефон' : 'телефона'}. Попитайте дали е излязло.'
+            '${stale > 0 ? ' ($stale стар телефон е изчистен.)' : ''}';
+      }
+      if (stale > 0) return 'Записаният телефон е стар (приложението е преинсталирано). Нека отвори Кайрос отново.';
+      return 'Известието не тръгна (грешка при Google). Опитайте след малко.';
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Временно спиране / пускане на профил.
+  Future<void> creatorSuspend(String userId, bool on) async {
+    try {
+      await _db.functions.invoke('suspend_user', body: {'user_id': userId, 'suspend': on});
+    } on FunctionException catch (e) {
+      throw AppError(e.status == 403 ? 'Само създателят може да спира профили.' : 'Не стана. Опитайте пак.');
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Каса на храм за създателя: чакащи записи и приключени месеци.
+  Future<Map<String, dynamic>> creatorCashOverview(String churchId) async =>
+      Map<String, dynamic>.from(await _creatorRpc<Map>('creator_cash_overview', {'p_church': churchId}));
+
+  Future<void> creatorCashDecide(String entryId, bool approve, String? reason) async {
+    final r = await _creatorRpc<dynamic>(
+        'creator_cash_decide', {'p_entry': entryId, 'p_approve': approve, 'p_reason': reason});
+    _notifyAnnouncements(r);
+    await refresh();
+  }
+
+  Future<void> creatorCashReopen(String churchId, String month) async {
+    final r = await _creatorRpc<dynamic>('creator_cash_reopen', {'p_church': churchId, 'p_month': month});
+    _notifyAnnouncements(r);
+    await refresh();
+  }
+
   void _notifyAnnouncements(dynamic ids) {
     for (final id in ((ids as List?) ?? const [])) {
       unawaited(_invokeNotify({'type': 'announcement', 'announcement_id': '$id'}));
@@ -879,9 +952,11 @@ class AppState extends ChangeNotifier {
       if (d.contains('email_not_confirmed')) {
         return 'Имейлът още не е потвърден. Отворете писмото от Кайрос.';
       }
+      if (d.contains('suspended')) return kSuspendedText;
       if (e.status == 401 || e.status == 400) return 'Грешно потребителско име или парола.';
       return _friendly(e);
     } on AuthException catch (e) {
+      if (e.message.toLowerCase().contains('banned')) return kSuspendedText;
       if (e.message.toLowerCase().contains('invalid')) {
         return 'Грешен имейл или парола.';
       }

@@ -93,6 +93,7 @@ class RootGate extends StatelessWidget {
       );
     }
     if (!s.isLoggedIn) return const LoginScreen();
+    if (s.currentUser?.suspended == true) return const _SuspendedScreen();
     if (s.mustChangePassword) return const ChangePasswordScreen(forced: true);
     if (s.needsPrivacy) return const PrivacyConsentScreen();
     if (s.currentChurch == null) return const ChurchConnectScreen();
@@ -122,4 +123,33 @@ class _NotConfiguredApp extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// Профилът е временно спрян от създателя.
+class _SuspendedScreen extends StatelessWidget {
+  const _SuspendedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.pause_circle_rounded, size: 56),
+            const SizedBox(height: 16),
+            const Text('Профилът е временно спрян', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            const Text('Свържете се с председателя на храма или със създателя на Кайрос.', style: TextStyle(fontSize: 17)),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: () => AppScope.read(context).logout(),
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Изход'),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
 }

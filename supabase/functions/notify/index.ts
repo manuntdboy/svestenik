@@ -203,6 +203,16 @@ async function handle(req: Request): Promise<Response> {
     const { data: cs } = await admin.from("app_creators").select("user_id");
     recipients = (cs ?? []).map((c) => c.user_id);
     data = { type: "creator", kind };
+  } else if (type === "creator_test") {
+    // Пробно известие от създателя до един човек – проверка дали телефонът получава.
+    const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();
+    if (!creator) return json(403, { error: "forbidden" });
+    const userId = String(body.user_id ?? "");
+    if (!userId) return json(400, { error: "bad_request" });
+    recipients = [userId];
+    title = "Пробно известие от Кайрос";
+    text = "Ако виждате това, известията на телефона ви работят. Не е нужно да правите нищо.";
+    data = { type: "creator_test" };
   } else if (type === "duty") {
     // Промени в графика на дежурствата → до засегнатия свещеник (един ред на човек).
     const userId = String(body.user_id ?? "");

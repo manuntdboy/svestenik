@@ -16,3 +16,6 @@ verify_jwt = false
 [functions.delete_user]
 # Проверява токена сама и че викащият е създателят.
 verify_jwt = false
+
+[functions.suspend_user]
+verify_jwt = false
