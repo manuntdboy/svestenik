@@ -284,6 +284,9 @@ class AppState extends ChangeNotifier {
       syncError = null;
       unawaited(_loadDetails());
       unawaited(rescheduleReminders());
+      // Докато профилът е спрян, сървърът е изтрил телефона – след пускане
+      // трябва да се запише наново, без да чакаме рестарт.
+      if (currentUser?.suspended == true) _pushToken = null;
       unawaited(_registerPush());
       unawaited(_reportVersion());
       unawaited(_checkCreator());
@@ -842,7 +845,7 @@ class AppState extends ChangeNotifier {
 
   /// Записва това устройство на сървъра, за да идват push известия.
   Future<void> _registerPush() async {
-    if (!Push.ready || currentUser == null) return;
+    if (!Push.ready || currentUser == null || currentUser!.suspended) return;
     Push.onEvent ??= () => unawaited(refresh());
     final token = await Push.token();
     if (token == null) return;
