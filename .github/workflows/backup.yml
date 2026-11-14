@@ -104,6 +104,7 @@ jobs:
           create schema if not exists extensions;
           create extension if not exists pgcrypto with schema extensions;
           create extension if not exists "uuid-ossp" with schema extensions;
+          create extension if not exists citext with schema public;
           SQL
           sudo -E -u postgres pg_restore --no-owner --no-privileges -d proba /tmp/kairos.dump 2> out/restore.log || true
           echo "Предупреждения при възстановяване: $(grep -c 'error' out/restore.log || true)"
