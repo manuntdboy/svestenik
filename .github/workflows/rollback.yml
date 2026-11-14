@@ -29,16 +29,19 @@ jobs:
       - name: Кодът на приложението от стабилната версия
         run: |
           git fetch --tags -q
-          git rev-parse -q --verify stable >/dev/null || { echo "::error::Още няма отбелязана стабилна версия."; exit 1; }
-          tag=$(git tag --points-at stable | grep '^build-' | head -1)
+          # Последната версия с отметка „стабилна“ (в името на изданието в GitHub).
+          tag=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+                -q '[.[] | select(.name | test("стабилна"))] | sort_by(.tag_name | ltrimstr("build-") | tonumber) | last | .tag_name')
+          [ -n "$tag" ] && [ "$tag" != "null" ] || { echo "::error::Още няма отбелязана стабилна версия."; exit 1; }
+          echo "Стабилна: $tag"
           git config user.name "Кайрос"
           git config user.email "kairos@users.noreply.github.com"
           # Само приложението (екрани, данни, ресурси, настройки за Android).
-          git checkout stable -- lib assets pubspec.yaml ci/patch_android.py
+          git checkout "$tag" -- lib assets pubspec.yaml ci/patch_android.py
           if git diff --cached --quiet; then echo "Приложението вече е като стабилната ($tag)."; exit 0; fi
-          git commit -q -m "Връщане на приложението към стабилната версия ${tag:-stable}"
+          git commit -q -m "Връщане на приложението към стабилната версия $tag"
           git push -q origin HEAD:main
-          echo "TAG=${tag:-stable}" >> "$GITHUB_ENV"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
           echo "PUSHED=true" >> "$GITHUB_ENV"
       - name: Изграждане и изпращане до всички
         if: env.PUSHED == 'true'

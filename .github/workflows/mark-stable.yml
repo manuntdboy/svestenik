@@ -20,19 +20,13 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Отбелязване
         env:
           BUILD: ${{ inputs.build }}
         run: |
           if [ -n "$BUILD" ]; then tag="build-$BUILD"; else tag=$(gh api "repos/$REPO/releases/latest" -q .tag_name); fi
-          git fetch --tags -q
-          sha=$(git rev-list -n1 "$tag") || { echo "::error::Няма версия $tag"; exit 1; }
-          git tag -f stable "$sha"
-          git push -f origin stable
-          rid=$(gh api "repos/$REPO/releases/tags/$tag" -q .id)
+          # Отметката е в името на изданието в GitHub („build-N · стабилна“).
+          rid=$(gh api "repos/$REPO/releases/tags/$tag" -q .id) || { echo "::error::Няма версия $tag"; exit 1; }
           gh api -X PATCH "repos/$REPO/releases/$rid" -f name="$tag · стабилна" >/dev/null
           echo "### ✓ $tag е отбелязана като стабилна" >> "$GITHUB_STEP_SUMMARY"
-          echo "$tag → стабилна ($sha)"
+          echo "$tag → стабилна"
