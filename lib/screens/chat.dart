@@ -11,7 +11,9 @@ import '../widgets/common.dart';
 
 /// Разделът „Чат“: общият чат на храма и личните разговори с колегите.
 class ChatListScreen extends StatelessWidget {
-  const ChatListScreen({super.key});
+  /// На компютър разговорът се отваря вдясно, вместо на нов екран.
+  final ValueChanged<String>? onOpen;
+  const ChatListScreen({super.key, this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +115,7 @@ class ChatListScreen extends StatelessWidget {
           unread: s.chatUnread(church.id, 'c'),
           muted: s.chatMuted(church.id, 'c'),
           at: general.isEmpty ? null : general.last.createdAt,
-          onTap: () => openChat(context, 'c'),
+          onTap: () => onOpen != null ? onOpen!('c') : openChat(context, 'c'),
         ),
         const SizedBox(height: 10),
         Text('Лични съобщения', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: p.textMuted)),
@@ -131,7 +133,7 @@ class ChatListScreen extends StatelessWidget {
               unread: s.chatUnread(church.id, u.id),
               muted: s.chatMuted(church.id, u.id),
               at: th.isEmpty ? null : th.last.createdAt,
-              onTap: () => openChat(context, u.id),
+              onTap: () => onOpen != null ? onOpen!(u.id) : openChat(context, u.id),
             );
           }),
         const SizedBox(height: 8),

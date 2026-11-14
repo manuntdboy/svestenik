@@ -74,8 +74,9 @@ class SvestenikApp extends StatelessWidget {
           ),
           child: child!,
         );
-        // На компютър (широк екран) – приложението в колона в средата.
-        if (mq.size.width <= 700) return body;
+        // Таблет/тесен прозорец – приложението в колона в средата;
+        // при 1000+ точки се показва изгледът за компютър (меню отстрани).
+        if (mq.size.width <= 700 || mq.size.width >= 1000) return body;
         return ColoredBox(
           color: const Color(0xFF0B0E13),
           child: Center(

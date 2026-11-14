@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:alarm/alarm.dart';
 import 'package:alarm/utils/alarm_set.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
@@ -42,12 +43,14 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     });
     // При първото отваряне Android пита дали да се показват известия.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Notifier.requestPermissions();
-      _openFromNotification();
-    });
-    Notifier.opened.addListener(_openFromNotification);
-    _ringing = Alarm.ringing.listen(_onRinging);
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Notifier.requestPermissions();
+        _openFromNotification();
+      });
+      Notifier.opened.addListener(_openFromNotification);
+      _ringing = Alarm.ringing.listen(_onRinging);
+    }
   }
 
   /// Звъни аларма → отваряме екрана с „Спри“; спряна от известието →
@@ -122,10 +125,180 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) AppScope.read(context).refresh();
   }
 
+  // ---------------------------------------------------------- компютър
+  // Широк екран: меню отстрани, а всеки раздел има своя навигация, така че
+  // отворените екрани остават в дясната част и менюто винаги се вижда.
+  String _dest = 'calendar';
+  final _visited = <String>{'calendar'};
+  final _navKeys = <String, GlobalKey<NavigatorState>>{};
+  String? _chatThread;
+
+  void _go(String d) {
+    if (d == _dest) {
+      _navKeys[d]?.currentState?.popUntil((r) => r.isFirst);
+      return;
+    }
+    setState(() {
+      _dest = d;
+      _visited.add(d);
+    });
+  }
+
+  Widget _deskPage(String d, AppState s) {
+    switch (d) {
+      case 'calendar':
+        return const CalendarScreen();
+      case 'home':
+        return HomeScreen(openCalendar: () => _go('calendar'));
+      case 'chat':
+        return const SizedBox.shrink(); // чатът е на две колони, без вътрешна навигация
+      case 'leaves':
+        return const LeavesScreen();
+      case 'duties':
+        return const DutyScreen();
+      case 'cash':
+        return const CashScreen();
+      case 'stock':
+        return const StockScreen();
+      default:
+        return const ProfileScreen();
+    }
+  }
+
+  Widget _desktop(BuildContext context, AppState s) {
+    final p = Palette.of(context);
+    final church = s.currentChurch;
+    final items = <(String, IconData, String, int)>[
+      ('calendar', Icons.calendar_month_outlined, 'Календар', 0),
+      ('home', Icons.home_outlined, 'Начало', 0),
+      if (s.chatOn) ('chat', Icons.chat_bubble_outline_rounded, 'Чат', s.chatUnreadTotal(s.currentChurchId!)),
+      ('leaves', Icons.beach_access_outlined, 'Почивки', 0),
+      ('duties', Icons.shield_outlined, 'Дежурства', 0),
+      if (church?.cashEnabled != false) ('cash', Icons.payments_outlined, 'Каса', 0),
+      if (church?.stockEnabled != false) ('stock', Icons.inventory_2_outlined, 'Склад', 0),
+      ('profile', Icons.person_outline_rounded, 'Профил', 0),
+    ];
+    if (!items.any((i) => i.$1 == _dest)) _dest = 'home';
+    Widget pane(String d) {
+      if (d == 'chat') {
+        return Row(children: [
+          SizedBox(
+            width: 380,
+            child: ChatListScreen(onOpen: (t) => setState(() => _chatThread = t)),
+          ),
+          VerticalDivider(width: 1, color: p.border),
+          Expanded(
+            child: _chatThread == null
+                ? Center(
+                    child: Text('Изберете разговор отляво.',
+                        style: TextStyle(fontSize: 17, color: p.textMuted)))
+                : ChatScreen(key: ValueKey(_chatThread), thread: _chatThread!),
+          ),
+        ]);
+      }
+      final key = _navKeys.putIfAbsent(d, () => GlobalKey<NavigatorState>());
+      return Navigator(
+        key: key,
+        onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _deskPage(d, s)),
+      );
+    }
+
+    return Scaffold(
+      body: Row(children: [
+        Container(
+          width: 236,
+          decoration: BoxDecoration(color: p.surface, border: Border(right: BorderSide(color: p.border))),
+          child: SafeArea(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 22, 16, 4),
+                child: Text('Кайрос',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Palette.yellow)),
+              ),
+              if (church != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 16, 18),
+                  child: Text(church.name, style: TextStyle(fontSize: 14, color: p.textMuted)),
+                ),
+              for (final (id, icon, label, badge) in items)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  child: Material(
+                    color: _dest == id ? p.primary.withValues(alpha: .16) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _go(id),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(children: [
+                          Badge(
+                            isLabelVisible: badge > 0,
+                            label: Text(badge > 99 ? '99+' : '$badge'),
+                            child: Icon(icon, color: _dest == id ? p.primary : p.textMuted),
+                          ),
+                          const SizedBox(width: 14),
+                          Text(label,
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: _dest == id ? FontWeight.w700 : FontWeight.w500,
+                                  color: _dest == id ? p.primary : null)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Кайрос за компютър · проба', style: TextStyle(fontSize: 12, color: p.textMuted)),
+              ),
+            ]),
+          ),
+        ),
+        Expanded(
+          child: Column(children: [
+            if (s.syncError != null)
+              Material(
+                color: Palette.yellow,
+                child: InkWell(
+                  onTap: s.refresh,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Text('${s.syncError} Натиснете, за да опитате пак.',
+                        style: const TextStyle(color: Palette.onYellow, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: IndexedStack(
+                index: items.indexWhere((i) => i.$1 == _dest),
+                children: [
+                  for (final (id, _, _, _) in items)
+                    _visited.contains(id)
+                        ? (id == 'chat'
+                            ? pane(id)
+                            : Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: id == 'calendar' ? 980 : 860),
+                                  child: pane(id),
+                                ),
+                              ))
+                        : const SizedBox.shrink(),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final s = AppScope.of(context);
+    if (MediaQuery.sizeOf(context).width >= 1000) return _desktop(context, s);
     final pages = [
       RefreshIndicator(onRefresh: s.refresh, child: const CalendarScreen()),
       RefreshIndicator(
