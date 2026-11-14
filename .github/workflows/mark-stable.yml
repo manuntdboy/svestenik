@@ -1,0 +1,38 @@
+name: Отбележи стабилна версия
+
+# Ръчно (и от телефона: GitHub → Actions → „Отбележи стабилна версия“ → Run workflow).
+# Отбелязва изпитана версия като „стабилна“ – към нея се връща
+# „Върни последната стабилна“. Без номер – последната пусната на всички.
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Номер на версията (напр. 164). Празно – последната за всички."
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Отбелязване
+        env:
+          BUILD: ${{ inputs.build }}
+        run: |
+          if [ -n "$BUILD" ]; then tag="build-$BUILD"; else tag=$(gh api "repos/$REPO/releases/latest" -q .tag_name); fi
+          git fetch --tags -q
+          sha=$(git rev-list -n1 "$tag") || { echo "::error::Няма версия $tag"; exit 1; }
+          git tag -f stable "$sha"
+          git push -f origin stable
+          rid=$(gh api "repos/$REPO/releases/tags/$tag" -q .id)
+          gh api -X PATCH "repos/$REPO/releases/$rid" -f name="$tag · стабилна" >/dev/null
+          echo "### ✓ $tag е отбелязана като стабилна" >> "$GITHUB_STEP_SUMMARY"
+          echo "$tag → стабилна ($sha)"

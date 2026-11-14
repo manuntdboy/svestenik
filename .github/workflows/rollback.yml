@@ -1,0 +1,47 @@
+name: Върни последната стабилна
+
+# Ако нова версия се счупи: приложението се връща към кода на последната
+# стабилна версия и тръгва до всички с НОВ номер (телефоните го приемат като
+# обикновено обновяване – с бутона „Обнови“, без да губят нищо).
+# Базата и сървърните функции НЕ се връщат – те остават най-новите.
+# Пуска се ръчно (и от телефона: GitHub → Actions → „Върни последната стабилна“ → Run workflow).
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Напишете ВРЪЩАНЕ за потвърждение"
+        required: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'ВРЪЩАНЕ'
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Кодът на приложението от стабилната версия
+        run: |
+          git fetch --tags -q
+          git rev-parse -q --verify stable >/dev/null || { echo "::error::Още няма отбелязана стабилна версия."; exit 1; }
+          tag=$(git tag --points-at stable | grep '^build-' | head -1)
+          git config user.name "Кайрос"
+          git config user.email "kairos@users.noreply.github.com"
+          # Само приложението (екрани, данни, ресурси, настройки за Android).
+          git checkout stable -- lib assets pubspec.yaml ci/patch_android.py
+          if git diff --cached --quiet; then echo "Приложението вече е като стабилната ($tag)."; exit 0; fi
+          git commit -q -m "Връщане на приложението към стабилната версия ${tag:-stable}"
+          git push -q origin HEAD:main
+          echo "TAG=${tag:-stable}" >> "$GITHUB_ENV"
+          echo "PUSHED=true" >> "$GITHUB_ENV"
+      - name: Изграждане и изпращане до всички
+        if: env.PUSHED == 'true'
+        run: |
+          gh workflow run build-apk.yml --ref main
+          echo "### ✓ Приложението е върнато към $TAG – новата версия тръгва до всички (~10 мин.)" >> "$GITHUB_STEP_SUMMARY"

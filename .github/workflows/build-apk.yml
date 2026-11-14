@@ -73,6 +73,37 @@ jobs:
           echo "::add-mask::$url"
           echo "DB_URL=$url" >> "$GITHUB_ENV"
 
+      # Резервно копие точно преди промяна в базата (само ако има нови миграции).
+      - name: Резервно копие преди промяната на базата
+        id: prebackup
+        env:
+          BACKUP_PASSWORD: ${{ secrets.BACKUP_PASSWORD }}
+        run: |
+          local_n=$(ls supabase/migrations/*.sql | wc -l)
+          remote_n=$(psql "$DB_URL" -tAc "select count(*) from supabase_migrations.schema_migrations" 2>/dev/null || echo 0)
+          echo "Миграции: тук $local_n, на сървъра $remote_n"
+          if [ "$local_n" -le "$remote_n" ]; then echo "Няма промени в базата – копие не е нужно."; exit 0; fi
+          if [ -z "$BACKUP_PASSWORD" ]; then echo "::warning::Няма BACKUP_PASSWORD – без копие преди промяната."; exit 0; fi
+          v=$(psql "$DB_URL" -tAc 'show server_version_num' | cut -c1-2)
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq "postgresql-client-$v" >/dev/null
+          "/usr/lib/postgresql/$v/bin/pg_dump" "$DB_URL" --format=custom --no-owner --no-privileges \
+            -n public -n auth -n storage -f predi.dump
+          gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 -o predi.dump.gpg predi.dump <<< "$BACKUP_PASSWORD"
+          rm -f predi.dump
+          ls -lh predi.dump.gpg
+          echo "made=true" >> "$GITHUB_OUTPUT"
+
+      - name: Запазване на копието (30 дни)
+        if: steps.prebackup.outputs.made == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-predi-promyana-${{ github.run_number }}
+          path: predi.dump.gpg
+          retention-days: 30
+
       - name: Прилагане на промените по базата
         run: supabase db push --remote="$DB_URL" --yes
 
