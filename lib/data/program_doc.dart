@@ -3,14 +3,30 @@
 /// Засега само проба: нищо не се записва в базата.
 library;
 
+/// Сановете в падащото меню („“ – без сан).
+const programRanks = [
+  'Митрополит', 'Епископ', 'Архимандрит', 'Иеромонах', 'Протосингел', 'Протойерей', 'Иконом',
+  'Свещеноиконом', 'Свещеник', 'Протодякон', 'Дякон', 'Иподякон', '',
+];
+
+/// Готовите роли (може и своя).
+const programRoles = ['шофьор', 'видеооператор', 'фотограф', 'певец', 'хор – квартет', 'поканен'];
+
 class ProgramPerson {
-  String name;
+  String rank; // „Иконом“ („“ – без сан)
+  String name; // „Иван Иванов“
   String role; // „шофьор“, „видеооператор“… (по желание)
-  ProgramPerson(this.name, [this.role = '']);
+  int rev = 0; // смяна отвън (подсказване) – полетата се създават наново
+  ProgramPerson(this.name, {this.rank = '', this.role = ''});
+
+  /// „Иконом Иван Иванов“.
+  String get fullName => rank.trim().isEmpty ? name.trim() : '${rank.trim()} ${name.trim()}';
+  bool get clergy => rank.trim().isNotEmpty;
 }
 
 class ProgramGroup {
-  String time; // „08:30“
+  String time; // „08:30“ (важи, ако е първата група или часът е сменян ръчно)
+  bool timeManual; // false – взема часа на предишната група
   bool withBishop; // владиката пътува в тази група
   String vehicle; // „лек автомобил“, „микробус“…
   String brand; // „Мерцедес“
@@ -21,6 +37,7 @@ class ProgramGroup {
   List<ProgramPerson> people;
   ProgramGroup({
     this.time = '',
+    this.timeManual = false,
     this.withBishop = false,
     this.vehicle = 'лек автомобил',
     this.brand = '',
@@ -67,6 +84,16 @@ class ProgramDoc {
 
   int get total => groups.fold(0, (a, g) => a + g.count);
 
+  /// Часът на всяка група: своя, ако е първата или е сменян ръчно, иначе на предишната.
+  List<String> get times {
+    final out = <String>[];
+    for (var i = 0; i < groups.length; i++) {
+      final g = groups[i];
+      out.add(i == 0 || g.timeManual ? g.time : out[i - 1]);
+    }
+    return out;
+  }
+
   /// Примерна програма с измислени имена – за да има какво да се види веднага.
   factory ProgramDoc.sample() => ProgramDoc(
         bishopTitle: 'Старозагорски Митрополит',
@@ -84,34 +111,35 @@ class ProgramDoc {
             from: 'Старозагорска митрополия',
             to: 'храм „Св. Петка“ – с. Черганово, Казанлъшка духовна околия',
             people: [
-              ProgramPerson('Протодякон Петър Петров'),
-              ProgramPerson('Иподякон Георги Георгиев'),
-              ProgramPerson('Иван Иванов', 'шофьор'),
+              ProgramPerson('Петър Петров', rank: 'Протодякон'),
+              ProgramPerson('Георги Георгиев', rank: 'Иподякон'),
+              ProgramPerson('Иван Иванов', role: 'шофьор'),
             ],
           ),
           ProgramGroup(
             time: '08:00',
+            timeManual: true,
             vehicle: 'микробус',
             brand: 'Мерцедес',
             reg: 'СТ1111ББ',
             from: 'Старозагорската митрополия',
             to: 'храм „Св. Петка“ – с. Черганово, Казанлъшка духовна околия',
             people: [
-              ProgramPerson('Архимандрит Николай Николов'),
-              ProgramPerson('Иконом Стефан Стефанов'),
-              ProgramPerson('Свещеник Тодор Тодоров'),
-              ProgramPerson('Дякон Христо Христов'),
-              ProgramPerson('Димитър Димитров', 'шофьор'),
-              ProgramPerson('Атанас Атанасов', 'видеооператор'),
+              ProgramPerson('Николай Николов', rank: 'Архимандрит'),
+              ProgramPerson('Стефан Стефанов', rank: 'Иконом'),
+              ProgramPerson('Тодор Тодоров', rank: 'Свещеник'),
+              ProgramPerson('Христо Христов', rank: 'Дякон'),
+              ProgramPerson('Димитър Димитров', rank: 'Иподякон', role: 'шофьор'),
+              ProgramPerson('Атанас Атанасов', role: 'видеооператор'),
             ],
           ),
         ],
         lists: [
           ProgramList('Списък на служещите Водосвета от 11:00 часа.', [
-            ProgramPerson('Митрополит КИПРИАН'),
-            ProgramPerson('Архимандрит Николай Николов'),
-            ProgramPerson('Иконом Стефан Стефанов'),
-            ProgramPerson('Свещеник Тодор Тодоров'),
+            ProgramPerson('КИПРИАН', rank: 'Митрополит'),
+            ProgramPerson('Николай Николов', rank: 'Архимандрит'),
+            ProgramPerson('Стефан Стефанов', rank: 'Иконом'),
+            ProgramPerson('Тодор Тодоров', rank: 'Свещеник'),
           ]),
         ],
         notes: ['Водосветът ще започне в 11:00 часа.'],
@@ -156,7 +184,7 @@ String _peopleList(List<ProgramPerson> people) {
   for (var i = 0; i < ps.length; i++) {
     final p = ps[i];
     final role = p.role.trim().isEmpty ? '' : ' – ${_esc(p.role.trim())}';
-    items.add('<li>${_esc(p.name.trim())}$role${i == ps.length - 1 ? '.' : ','}</li>');
+    items.add('<li>${_esc(p.fullName)}$role${i == ps.length - 1 ? '.' : ','}</li>');
   }
   return '<ol>${items.join()}</ol>';
 }
@@ -206,6 +234,7 @@ ol { margin: 0; padding-left: 1.25cm; }
 <p class="date"><u>${_esc(date)}</u><br>${weekdayBg(d.date)}</p>
 ''');
   final bishop = 'Митрополит ${_titleCase(d.bishopName)}';
+  final times = d.times;
   for (var i = 0; i < d.groups.length; i++) {
     final g = d.groups[i];
     final car = [
@@ -215,7 +244,7 @@ ol { margin: 0; padding-left: 1.25cm; }
     ].join(' ');
     final from = g.from.trim().isEmpty ? '' : ' от ${_esc(g.from.trim())}';
     final to = g.to.trim().isEmpty ? '' : ' за ${_esc(g.to.trim())}';
-    final time = g.time.trim().isEmpty ? '' : '<b>${_esc(g.time.trim())} часа</b> – ';
+    final time = times[i].trim().isEmpty ? '' : '<b>${_esc(times[i].trim())} часа</b> – ';
     b.write('<h4>${groupOrdinal(i)} група</h4>');
     if (g.withBishop) {
       b.write('<p class="lead">$time${_esc(bishop)} отпътува с <i>${_esc(car)}</i>$from$to.</p>');

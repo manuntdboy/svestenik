@@ -21,6 +21,17 @@ void main() {
     expect(h, contains('(Общо пътуващи ${d.total} човека)'));
     expect(h, contains('Иван Иванов – шофьор.'));
     expect(h, contains('К И П Р И А Н'));
+    expect(h, contains('Иподякон Димитър Димитров – шофьор,'));
     expect(h, isNot(contains('<script')));
+  });
+
+  test('часът се наследява от предишната група', () {
+    final d = ProgramDoc(date: DateTime(2026, 1, 1), groups: [
+      ProgramGroup(time: '08:30', withBishop: true),
+      ProgramGroup(time: '08:00', timeManual: true),
+      ProgramGroup(),
+      ProgramGroup(time: '07:00'), // не е сменян ръчно – наследява
+    ]);
+    expect(d.times, ['08:30', '08:00', '08:00', '08:00']);
   });
 }
