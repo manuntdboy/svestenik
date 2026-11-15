@@ -141,6 +141,7 @@ async function handle(req: Request): Promise<Response> {
   // Кому и какво пращаме.
   let recipients: string[] = [];
   let title = "";
+  let negative = false; // отказ / върнато – свой звук и цвят
   let text = "";
   let data: Record<string, string> = {};
 
@@ -284,6 +285,7 @@ async function handle(req: Request): Promise<Response> {
     } else if (w.status === "rejected") {
       recipients = [w.from_user, w.to_user];
       title = "Размяната на дежурства не е приета";
+      negative = true;
       text = `${ra} ⇄ ${rb} · ${callerName}${w.reason ? "\n„" + w.reason + "“" : ""}`;
     } else {
       recipients = [w.to_user];
@@ -345,6 +347,7 @@ async function handle(req: Request): Promise<Response> {
       if (!prop) return json(403, { error: "forbidden" });
       recipients = [proposer];
       title = accepted ? `${callerName} е новият председател` : `${callerName} отказа председателството`;
+      negative = !accepted;
       text = accepted
         ? `Вие вече сте редови свещеник в ${church.name}.`
         : `Остава председател на ${church.name} както досега.`;
@@ -381,6 +384,7 @@ async function handle(req: Request): Promise<Response> {
         if (lv.end_note) text += `\n„${lv.end_note}“`;
       } else {
         title = lv.status === "approved" ? "Почивката е одобрена" : "Почивката не е одобрена";
+        negative = lv.status !== "approved";
         text = `${period} · ${callerName}`;
         if (lv.decision_note) text += `\n„${lv.decision_note}“`;
       }
@@ -417,6 +421,7 @@ async function handle(req: Request): Promise<Response> {
       if (mv.decided_by !== caller.id) return json(403, { error: "forbidden" });
       recipients = [mv.created_by];
       title = mv.status === "approved" ? "Склад: изписването е одобрено" : "Склад: изписването е върнато";
+      negative = mv.status !== "approved";
       text = `${q}${mv.return_reason ? " · " + mv.return_reason : ""} · ${callerName}`;
     }
     data = { type: "stock", church_id: mv.church_id };
@@ -440,6 +445,7 @@ async function handle(req: Request): Promise<Response> {
       const cashier = (members ?? []).find((m) => m.role !== "manager" && (m.permissions ?? []).includes("cash"));
       recipients = cashier ? [cashier.user_id] : [];
       title = body.approved ? `Каса: ${label} е приключен` : `Каса: приключването на ${label} е върнато`;
+      negative = !body.approved;
       text = callerName;
     }
     data = { type: "cash", church_id: churchId };
@@ -470,6 +476,7 @@ async function handle(req: Request): Promise<Response> {
       if (ce.decided_by !== caller.id) return json(403, { error: "forbidden" });
       recipients = [ce.created_by];
       const ok = ce.status === "approved";
+      negative = !ok;
       title = ok ? `Каса: ${what.toLowerCase()} е ${ce.book === "income" && !ce.reverses ? "приет" : "одобрен"}`
         : `Каса: ${what.toLowerCase()} е върнат`;
       text = `${eur} · ${cat}${ok ? "" : ce.return_reason ? " · " + ce.return_reason : ""} · ${callerName}`;
@@ -524,6 +531,7 @@ async function handle(req: Request): Promise<Response> {
         if (sp?.full_name) sub = ` · предлага ${withRank(sp.rank, sp.full_name)}`;
       }
       title = `${callerName} отказа: ${kind}`;
+      negative = true;
       text = [when, ev.decline_reason].filter(Boolean).join(" · ") + sub;
     } else {
       // председателят остави събитието на отказалия
@@ -588,8 +596,11 @@ async function handle(req: Request): Promise<Response> {
   // златист цвят, за да не се бави колегата, който чака.
   const approval = type === "cash_pending" || type === "cash_close_pending" || type === "stock_pending";
   if (approval) data = { ...data, approval: "1" };
+  else if (negative) data = { ...data, negative: "1" };
   const androidNote = approval
     ? { channel_id: "approvals", sound: "approval", color: "#E0AD2C" }
+    : negative
+    ? { channel_id: "declined", sound: "declined", color: "#A33A3A" }
     : { channel_id: "events", sound: "default" };
 
   const access = await fcmAccessToken(sa);

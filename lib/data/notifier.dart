@@ -74,6 +74,19 @@ class Notifier {
         enableLights: true,
         ledColor: approvalColor,
       ));
+      // Отказ / върнато: две ниски нотки надолу и една по-дълга вибрация.
+      await _android?.createNotificationChannel(AndroidNotificationChannel(
+        declinedChannel,
+        'Отказано или върнато',
+        description: 'Върнат запис или изписване, отказана почивка, назначение, размяна или председателство',
+        importance: Importance.high,
+        sound: const RawResourceAndroidNotificationSound('declined'),
+        playSound: true,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 450]),
+        enableLights: true,
+        ledColor: declinedColor,
+      ));
       _ready = true;
     } catch (e) {
       debugPrint('Известията не тръгнаха: $e');
@@ -279,6 +292,18 @@ class Notifier {
                 color: approvalColor,
                 vibrationPattern: Int64List.fromList([0, 180, 120, 180]),
               )
+            : data?['negative'] == '1'
+            ? AndroidNotificationDetails(
+                declinedChannel,
+                'Отказано или върнато',
+                channelDescription:
+                    'Върнат запис или изписване, отказана почивка, назначение, размяна или председателство',
+                importance: Importance.high,
+                priority: Priority.high,
+                sound: const RawResourceAndroidNotificationSound('declined'),
+                color: declinedColor,
+                vibrationPattern: Int64List.fromList([0, 450]),
+              )
             : const AndroidNotificationDetails(
                 'events',
                 'Събития от колеги',
@@ -293,4 +318,8 @@ class Notifier {
   /// Канал и цвят за известията „чака одобрение“.
   static const approvalChannel = 'approvals';
   static const approvalColor = Color(0xFFE0AD2C);
+
+  /// Канал и цвят за „отказано или върнато“.
+  static const declinedChannel = 'declined';
+  static const declinedColor = Color(0xFFA33A3A);
 }
