@@ -853,6 +853,20 @@ select public.creator_view_as(:'C') as va \gset
 select t.ok(jsonb_array_length(:'va'::jsonb->'churches') >= 1 and (:'va'::jsonb ? 'cards'), '„какво вижда“ връща храмове и карти');
 select t.ok(public.creator_cash_overview(:'cid') ? 'pending', 'създателят вижда чакащите в касата');
 select t.fails(format('select public.creator_cash_reopen(%L, %L)', :'cid', '1990-01-01'), 'неприключен месец не се отключва', 'not_found');
+\echo '== Адрес и Булстат на храма'
+select t.as_user(:'B');
+select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '123456789'), 'свещеникът не сменя адреса', 'not_manager');
+select t.as_user(:'A');
+select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '12345'), 'Булстатът е 9 или 13 цифри', 'bad_bulstat');
+select public.church_set_info(:'cid', '  ул. „Цар Симеон Велики“   112 ', '176 543 210') \g /dev/null
+select t.as_user(:'B');
+select t.ok((select address = 'ул. „Цар Симеон Велики“ 112' and bulstat = '176543210' from churches where id = :'cid'),
+            'председателят записва, членът вижда адреса и Булстата');
+select t.as_user(:'A');
+select public.church_set_info(:'cid', '', null) \g /dev/null
+select t.ok((select address is null and bulstat is null from churches where id = :'cid'), 'полетата се изчистват');
+select t.ok(exists (select 1 from jsonb_array_elements(public.creator_activity(null, :'cid', 50)) x
+                     where x->>'action' = 'Адрес и Булстат на храма'), 'промяната е в дневника');
 \echo '== Създателят изтрива храм'
 select t.as_user(:'C');
 select t.fails(format('select public.creator_delete_church(%L, %L)', :'rcid', 'Роли'), 'само създателят трие храмове', 'forbidden');

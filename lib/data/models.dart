@@ -105,6 +105,8 @@ class Church {
   final bool cashEnabled; // касата е включена за храма (решава създателят)
   final bool stockEnabled;
   final bool approvalsToggleAllowed; // създателят разрешава тестовия режим без второ одобрение
+  String? address; // точен адрес (улица, №) – за навигацията до храма
+  String? bulstat;
 
   Church({
     required this.id,
@@ -117,9 +119,19 @@ class Church {
     this.cashEnabled = true,
     this.stockEnabled = true,
     this.approvalsToggleAllowed = false,
+    this.address,
+    this.bulstat,
   });
 
   String get place => '$settlement, общ. $municipality';
+
+  /// Текст за търсене в Google Maps / Waze: адрес, населено място, община.
+  String get mapsQuery => [
+        (address ?? '').trim(),
+        settlement.trim(),
+        'общ. ${municipality.trim()}',
+        'България',
+      ].where((x) => x.isNotEmpty).join(', ');
 
   factory Church.fromRow(Map<String, dynamic> r) => Church(
         id: r['id'] as String,
@@ -132,6 +144,8 @@ class Church {
         cashEnabled: (r['cash_enabled'] as bool?) ?? true,
         stockEnabled: (r['stock_enabled'] as bool?) ?? true,
         approvalsToggleAllowed: (r['approvals_toggle_allowed'] as bool?) ?? false,
+        address: r['address'] as String?,
+        bulstat: r['bulstat'] as String?,
       );
 }
 

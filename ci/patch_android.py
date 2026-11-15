@@ -69,6 +69,7 @@ if 'android:scheme="viber"' not in m:
         <package android:name="com.viber.voip"/>
         <package android:name="com.whatsapp"/>
         <package android:name="com.google.android.apps.maps"/>
+        <package android:name="com.waze"/>
     </queries>
 </manifest>""", 1)
 # Обновяване от приложението (ota_update): разрешение и FileProvider за .apk.

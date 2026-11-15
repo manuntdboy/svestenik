@@ -329,6 +329,8 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('need_chair')) return 'Първо изберете друг председател на храма.';
+    if (t.contains('bad_bulstat')) return 'Булстатът трябва да е 9 или 13 цифри.';
+    if (t.contains('address_too_long')) return 'Адресът е твърде дълъг (до 200 знака).';
     if (t.contains('name_mismatch')) return 'Името не съвпада – храмът не е изтрит.';
     if (t.contains('member_pending')) return 'Човекът още чака одобрение за влизане в храма.';
     if (t.contains('not_assignee')) return 'Само свещеникът, за когото е събитието, може да отговори.';
@@ -1829,6 +1831,24 @@ class AppState extends ChangeNotifier {
       _churches.firstWhere((c) => c.id == churchId).joinCode = code as String;
       notifyListeners();
       return code;
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Адрес и Булстат на храма (председателят или създателят).
+  Future<void> setChurchInfo(String churchId, String address, String bulstat) async {
+    try {
+      await _db.rpc('church_set_info',
+          params: {'p_church': churchId, 'p_address': address, 'p_bulstat': bulstat});
+      final c = _churches.where((c) => c.id == churchId).firstOrNull;
+      if (c != null) {
+        final a = address.trim().replaceAll(RegExp(r'\s+'), ' ');
+        final b = bulstat.replaceAll(RegExp(r'[^0-9]'), '');
+        c.address = a.isEmpty ? null : a;
+        c.bulstat = b.isEmpty ? null : b;
+      }
+      notifyListeners();
     } catch (e) {
       throw AppError(_friendly(e));
     }

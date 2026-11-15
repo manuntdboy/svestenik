@@ -6,6 +6,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/church_banner.dart';
+import '../widgets/church_address.dart';
 import '../widgets/common.dart';
 import '../widgets/whats_new.dart' show buildNumber;
 import 'priest_profile.dart' show showTempPassword;
@@ -1455,6 +1456,24 @@ class _Churches extends StatelessWidget {
                     onPressed: () async {
                       final ok = await _deleteChurch(context, c['id'] as String, '${c['name']}');
                       if (ok) await onRefresh();
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.place_rounded, size: 18),
+                    label: const Text('Адрес и Булстат'),
+                    onPressed: () async {
+                      final s = AppScope.of(context);
+                      try {
+                        final sum = await s.creatorChurchSummary(c['id'] as String);
+                        if (!context.mounted) return;
+                        final ok = await editChurchInfo(context,
+                            churchId: c['id'] as String,
+                            address: sum['address'] as String?,
+                            bulstat: sum['bulstat'] as String?);
+                        if (ok && context.mounted) showMessage(context, 'Записано.');
+                      } on AppError catch (e) {
+                        if (context.mounted) showMessage(context, e.message);
+                      }
                     },
                   ),
                   OutlinedButton.icon(

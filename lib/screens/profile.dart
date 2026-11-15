@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/app_state.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
+import '../widgets/church_address.dart';
 import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
@@ -66,6 +67,8 @@ class ProfileScreen extends StatelessWidget {
               Text(church.place, style: TextStyle(fontSize: 15, color: p.textMuted)),
               Text(s.isManagerOf(church.id) ? 'Вие сте председател' : 'Свещеник',
                   style: TextStyle(fontSize: 15, color: p.textMuted)),
+              const SizedBox(height: 12),
+              ChurchAddressBlock(church, canEdit: s.isManagerOf(church.id)),
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: () => Navigator.push(
