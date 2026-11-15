@@ -23,6 +23,7 @@ dependencies:
   flutter_local_notifications: ^23.0.1
   timezone: ^0.11.0
   ota_update: ^7.1.0
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:

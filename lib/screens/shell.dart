@@ -19,6 +19,7 @@ import 'chat.dart';
 import 'duties.dart';
 import 'home.dart';
 import 'profile.dart';
+import 'program_draft.dart';
 
 /// Основната рамка с долната лента: Начало, Календар, Профил.
 class Shell extends StatefulWidget {
@@ -167,6 +168,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         return const CashScreen();
       case 'stock':
         return const StockScreen();
+      case 'program':
+        return const ProgramDraftScreen();
       default:
         return const ProfileScreen();
     }
@@ -184,6 +187,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       if (church?.cashEnabled != false) ('cash', Icons.payments_outlined, 'Каса', 0),
       if (church?.stockEnabled != false) ('stock', Icons.inventory_2_outlined, 'Склад', 0),
       ('profile', Icons.person_outline_rounded, 'Профил', 0),
+      // Проба на програмите за архиерейски служения – само за създателя, само в уеб.
+      if (kIsWeb && s.isCreator) ('program', Icons.directions_car_outlined, 'Програма (проба)', 0),
     ];
     if (!items.any((i) => i.$1 == _dest)) _dest = 'home';
     Widget pane(String d) {
