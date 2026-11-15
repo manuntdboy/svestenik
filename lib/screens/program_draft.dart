@@ -387,8 +387,8 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
     );
   }
 
-  /// „Добави от пътуващите“ – отметки, предложени по сана и по миналите избори.
-  Future<void> _addFromTravellers(ProgramList l) async {
+  /// Всички пътуващи (владиката пръв), без повторения и без вече вписаните.
+  List<ProgramPerson> _travellers(ProgramList l) {
     final have = l.people.map((p) => p.fullName).toSet();
     final cand = <ProgramPerson>[];
     final seen = <String>{};
@@ -402,6 +402,23 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
       }
     }
     cand.retainWhere((p) => seen.add(p.fullName) && !have.contains(p.fullName));
+    return cand;
+  }
+
+  /// „Списък на служещите“ – попълнен веднъж с всички със сан
+  /// (без тези, които преди сте махали от служещите).
+  void _addServingList() {
+    final l = ProgramList('Списък на служещите … от … часа.');
+    l.people.addAll(_travellers(l)
+        .where((p) => p.rank == 'Митрополит' || (p.clergy && mem.servesByDefault(p)))
+        .map((p) => ProgramPerson(p.name, rank: p.rank)));
+    if (l.people.isEmpty) l.people.add(ProgramPerson(''));
+    setState(() => doc.lists.add(l));
+  }
+
+  /// „Добави от пътуващите“ – отметки, предложени по сана и по миналите избори.
+  Future<void> _addFromTravellers(ProgramList l) async {
+    final cand = _travellers(l);
     if (cand.isEmpty) {
       showMessage(context, 'Всички пътуващи вече са в списъка.');
       return;
@@ -561,15 +578,20 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
           ),
           const SizedBox(height: 18),
           for (var i = 0; i < doc.lists.length; i++) _list(i),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-            style: _btn,
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            OutlinedButton.icon(
+              style: _btn,
+              icon: const Icon(Icons.groups_rounded),
+              label: const Text('Списък на служещите'),
+              onPressed: _addServingList,
+            ),
+            OutlinedButton.icon(
+              style: _btn,
               icon: const Icon(Icons.list_alt_rounded),
-              label: const Text('Добави списък (служещи, гости на обяд…)'),
+              label: const Text('Друг списък (гости на обяд…)'),
               onPressed: () => setState(() => doc.lists.add(ProgramList('', [ProgramPerson('')]))),
             ),
-          ),
+          ]),
           const SizedBox(height: 18),
           _card(
             'Забележки и изготвил',
