@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Звукът „чака одобрение“ се ползва само от известията – да не се изрязва при изграждането. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/approval" />

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:ui' show Color;
 
 import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
@@ -57,6 +59,20 @@ class Notifier {
         'Събития от колеги',
         description: 'Когато колега запише или промени събитие за вас',
         importance: Importance.high,
+      ));
+      // Отделен канал за „чака одобрение“ (каса и склад): меко двойно
+      // звънче и двойна вибрация, за да не чака колегата.
+      await _android?.createNotificationChannel(AndroidNotificationChannel(
+        approvalChannel,
+        'Чака одобрение',
+        description: 'Запис в касата, приключване на месец или изписване от склада чака вашето решение',
+        importance: Importance.high,
+        sound: const RawResourceAndroidNotificationSound('approval'),
+        playSound: true,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 180, 120, 180]),
+        enableLights: true,
+        ledColor: approvalColor,
       ));
       _ready = true;
     } catch (e) {
@@ -250,15 +266,31 @@ class Notifier {
       title: title,
       payload: data == null ? null : jsonEncode(data),
       body: body,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'events',
-          'Събития от колеги',
-          channelDescription: 'Когато колега запише или промени събитие за вас',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
+      notificationDetails: NotificationDetails(
+        android: data?['approval'] == '1'
+            ? AndroidNotificationDetails(
+                approvalChannel,
+                'Чака одобрение',
+                channelDescription:
+                    'Запис в касата, приключване на месец или изписване от склада чака вашето решение',
+                importance: Importance.high,
+                priority: Priority.high,
+                sound: const RawResourceAndroidNotificationSound('approval'),
+                color: approvalColor,
+                vibrationPattern: Int64List.fromList([0, 180, 120, 180]),
+              )
+            : const AndroidNotificationDetails(
+                'events',
+                'Събития от колеги',
+                channelDescription: 'Когато колега запише или промени събитие за вас',
+                importance: Importance.high,
+                priority: Priority.high,
+              ),
       ),
     );
   }
+
+  /// Канал и цвят за известията „чака одобрение“.
+  static const approvalChannel = 'approvals';
+  static const approvalColor = Color(0xFFE0AD2C);
 }

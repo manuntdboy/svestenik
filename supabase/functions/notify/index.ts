@@ -584,6 +584,14 @@ async function handle(req: Request): Promise<Response> {
     return json(200, { sent: 0, reason: "no_devices", recipients: recipients.length });
   }
 
+  // „Чака одобрение“ (каса и склад): отделен канал със собствен звук и
+  // златист цвят, за да не се бави колегата, който чака.
+  const approval = type === "cash_pending" || type === "cash_close_pending" || type === "stock_pending";
+  if (approval) data = { ...data, approval: "1" };
+  const androidNote = approval
+    ? { channel_id: "approvals", sound: "approval", color: "#E0AD2C" }
+    : { channel_id: "events", sound: "default" };
+
   const access = await fcmAccessToken(sa);
   let sent = 0;
   let stale = 0; // стари/изтрити телефони – чистят се сами, не са грешка
@@ -597,7 +605,7 @@ async function handle(req: Request): Promise<Response> {
           token,
           notification: { title, body: text },
           data,
-          android: { priority: "high", notification: { channel_id: "events", sound: "default" } },
+          android: { priority: "high", notification: androidNote },
         },
       }),
     });
