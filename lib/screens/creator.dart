@@ -956,7 +956,7 @@ class _ActivityScreenState extends State<_ActivityScreen> {
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text.rich(TextSpan(children: [
                                 TextSpan(
-                                    text: a['by_creator'] == true ? 'Вие' : '${a['actor']}',
+                                    text: a['by_creator'] == true ? 'Admin' : '${a['actor']}',
                                     style: const TextStyle(fontWeight: FontWeight.w800)),
                                 TextSpan(text: ' · ${a['action']}'),
                                 if (a['target'] != null) TextSpan(text: ' → ${a['target']}'),
