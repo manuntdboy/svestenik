@@ -34,6 +34,9 @@ class AppError implements Exception {
 /// се спазват от самата база (RLS), не от приложението.
 class AppState extends ChangeNotifier {
   static const _kChurch = 'current_church';
+  static const _kPrimary = 'primary_church';
+  /// При първото зареждане след старт – отваряме основния храм.
+  bool _openPrimary = true;
   static const _kTheme = 'theme_mode';
   static const _kTextScale = 'text_scale';
   static const _kRemember = 'remember_me';
@@ -110,7 +113,8 @@ class AppState extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     themeMode = ThemeMode.values[_prefs.getInt(_kTheme) ?? 0];
     textScale = _prefs.getDouble(_kTextScale) ?? 1.0;
-    currentChurchId = _prefs.getString(_kChurch);
+    // Основният храм (ако е отбелязан) печели пред последно отворения.
+    currentChurchId = _prefs.getString(_kPrimary) ?? _prefs.getString(_kChurch);
     rememberMe = _prefs.getBool(_kRemember) ?? true;
     lastUsername = rememberMe ? (_prefs.getString(_kLastUser) ?? '') : '';
 
@@ -279,6 +283,14 @@ class AppState extends ChangeNotifier {
         ..addEntries(results[3].map((r) => MapEntry(r['id'] as String, r)));
 
       currentUser = _profiles.where((p) => p.id == authUser.id).firstOrNull;
+      final prim = currentUser?.primaryChurch;
+      if (prim == null) {
+        unawaited(_prefs.remove(_kPrimary));
+      } else {
+        unawaited(_prefs.setString(_kPrimary, prim));
+        if (_openPrimary && myChurches.any((c) => c.id == prim)) currentChurchId = prim;
+      }
+      _openPrimary = false;
       if (currentChurchId == null || !myChurches.any((c) => c.id == currentChurchId)) {
         currentChurchId = myChurches.firstOrNull?.id;
       }
@@ -329,6 +341,7 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('need_chair')) return 'Първо изберете друг председател на храма.';
+    if (t.contains('not_member')) return 'Не сте член на този храм.';
     if (t.contains('bad_bulstat')) return 'Булстатът трябва да е 9 или 13 цифри.';
     if (t.contains('address_too_long')) return 'Адресът е твърде дълъг (до 200 знака).';
     if (t.contains('name_mismatch')) return 'Името не съвпада – храмът не е изтрит.';
@@ -1215,6 +1228,8 @@ class AppState extends ChangeNotifier {
     await Push.deleteToken();
     _clear();
     currentChurchId = null;
+    _openPrimary = true;
+    unawaited(_prefs.remove(_kPrimary));
     await _prefs.remove(_kChurch);
     notifyListeners();
     try {
@@ -1235,8 +1250,59 @@ class AppState extends ChangeNotifier {
         .where((m) => m.userId == u.id && m.isActive)
         .map((m) => m.churchId)
         .toSet();
-    return _churches.where((c) => ids.contains(c.id)).toList();
+    final prim = u.primaryChurch;
+    // Основният най-отгоре, после по азбучен ред.
+    return _churches.where((c) => ids.contains(c.id)).toList()
+      ..sort((a, b) {
+        if (a.id == prim) return -1;
+        if (b.id == prim) return 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
   }
+
+  bool isPrimary(String churchId) => currentUser?.primaryChurch == churchId;
+
+  /// Отбелязва (или маха с null) основния храм.
+  Future<void> setPrimaryChurch(String? churchId) async {
+    try {
+      await _db.rpc('set_primary_church', params: {'p_church': churchId});
+      currentUser?.primaryChurch = churchId;
+      if (churchId == null) {
+        await _prefs.remove(_kPrimary);
+      } else {
+        await _prefs.setString(_kPrimary, churchId);
+      }
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Колко неща чакат мен в този храм (картите в Начало без „малко в склада“).
+  int waitingIn(String churchId) {
+    final ch = _churches.where((c) => c.id == churchId).firstOrNull;
+    final cashOn = ch?.cashEnabled ?? true;
+    final stockOn = ch?.stockEnabled ?? true;
+    var n = announcementsToAck(churchId).length +
+        leavesToAck(churchId).length +
+        chairOffers.where((c) => c.id == churchId).length +
+        archieraticToConfirm.where((e) => e.churchId == churchId).length +
+        awaitingMyConfirmation.where((e) => e.churchId == churchId).length +
+        declinedForReview(churchId).length +
+        swapsForMe(churchId).length +
+        swapsForChair(churchId).length +
+        pendingLeaves(churchId).length;
+    if (cashOn) {
+      n += cashReturnsToAck(churchId).length + closesToApprove(churchId).length + cashToDecide(churchId).length;
+    }
+    if (stockOn) n += stockToDecide(churchId).length;
+    if (isManagerOf(churchId)) n += pendingRequests(churchId).length;
+    return n;
+  }
+
+  /// Има ли нещо чакащо в друг мой храм (за точката при „смени“).
+  bool get waitingElsewhere =>
+      myChurches.any((c) => c.id != currentChurchId && waitingIn(c.id) > 0);
 
   /// Храмовете, в които чакам одобрение от председателя.
   List<Church> get pendingChurches {

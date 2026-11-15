@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/models.dart';
 import '../theme.dart';
+import 'common.dart';
 
 /// Моята роля в храма – председател, касиер или свещеник.
 enum ChurchRole {
@@ -41,49 +43,114 @@ class RoleBadge extends StatelessWidget {
 }
 
 /// Избор на храм (падащо меню отдолу), с ролята ми във всеки.
+/// Звездичката отбелязва основния храм; числата показват какво чака в
+/// другите храмове (златисто – за решение, синьо – чат).
 void pickChurch(BuildContext context) {
   final s = AppScope.read(context);
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Изберете храм', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-          ),
-          for (final c in s.myChurches)
-            ListTile(
-              minTileHeight: 64,
-              title: Text(c.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                  RoleBadge(roleIn(s, c.id), small: true),
-                  Text(c.place),
-                ]),
-              ),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (s.chatOn && c.id != s.currentChurchId && s.chatUnreadTotal(c.id) > 0)
-                  Badge(
-                    label: Text('${s.chatUnreadTotal(c.id)}'),
-                    child: const Icon(Icons.chat_bubble_outline_rounded),
-                  ),
-                if (c.id == s.currentChurchId) const Icon(Icons.check_circle_rounded),
-              ]),
-              onTap: () {
-                Navigator.pop(ctx);
-                if (c.id != s.currentChurchId) s.selectChurch(c.id);
-              },
+      child: ListenableBuilder(
+        listenable: s,
+        builder: (ctx, _) {
+          final p = Palette.of(ctx);
+          return SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, 2),
+                  child: Text('Изберете храм', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text('★ – основен храм: най-отгоре и с него се отваря Кайрос.',
+                      style: TextStyle(fontSize: 13.5, color: p.textMuted)),
+                ),
+                for (final c in s.myChurches)
+                  _ChurchPickTile(church: c, onPick: () {
+                    Navigator.pop(ctx);
+                    if (c.id != s.currentChurchId) s.selectChurch(c.id);
+                  }),
+                const SizedBox(height: 8),
+              ],
             ),
-          const SizedBox(height: 8),
-        ],
+          );
+        },
       ),
     ),
   );
+}
+
+class _ChurchPickTile extends StatelessWidget {
+  final Church church;
+  final VoidCallback onPick;
+  const _ChurchPickTile({required this.church, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.read(context);
+    final p = Palette.of(context);
+    final c = church;
+    final current = c.id == s.currentChurchId;
+    final primary = s.isPrimary(c.id);
+    final waiting = current ? 0 : s.waitingIn(c.id);
+    final unread = s.chatOn && !current ? s.chatUnreadTotal(c.id) : 0;
+    Widget count(int n, Color bg, Color fg, IconData icon, String tip) => Tooltip(
+          message: tip,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 4),
+              Text(n > 99 ? '99+' : '$n',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: fg)),
+            ]),
+          ),
+        );
+    return ListTile(
+      minTileHeight: 64,
+      contentPadding: const EdgeInsets.only(left: 6, right: 16),
+      leading: IconButton(
+        tooltip: primary ? 'Основен храм (натиснете, за да махнете)' : 'Направи основен',
+        icon: Icon(primary ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: 30, color: primary ? Palette.yellow : p.textMuted),
+        onPressed: () async {
+          try {
+            await s.setPrimaryChurch(primary ? null : c.id);
+            if (context.mounted) {
+              showMessage(context, primary ? 'Няма основен храм.' : 'Основен храм: ${c.name}');
+            }
+          } on AppError catch (e) {
+            if (context.mounted) showMessage(context, e.message);
+          }
+        },
+      ),
+      title: Text(c.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          RoleBadge(roleIn(s, c.id), small: true),
+          Text(c.place),
+        ]),
+      ),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (waiting > 0)
+          count(waiting, Palette.yellow, const Color(0xFF3B2A00), Icons.pending_actions_rounded,
+              'Чака ви: $waiting'),
+        if (waiting > 0 && unread > 0) const SizedBox(width: 6),
+        if (unread > 0)
+          count(unread, const Color(0xFF2F5D8C), Colors.white, Icons.chat_bubble_rounded,
+              'Непрочетени съобщения: $unread'),
+        if (current) const Icon(Icons.check_circle_rounded),
+      ]),
+      onTap: onPick,
+    );
+  }
 }
 
 /// Лента „в кой храм съм и с каква роля“. Цветът следва ролята:
@@ -137,9 +204,9 @@ class ChurchBanner extends StatelessWidget {
             ),
             if (many)
               Column(mainAxisSize: MainAxisSize.min, children: [
-                // Червена точка – нови съобщения в друг мой храм.
+                // Червена точка – нови съобщения или нещо чакащо в друг мой храм.
                 Badge(
-                  isLabelVisible: s.chatOn && s.chatUnreadOther().isNotEmpty,
+                  isLabelVisible: (s.chatOn && s.chatUnreadOther().isNotEmpty) || s.waitingElsewhere,
                   smallSize: 10,
                   child: const Icon(Icons.unfold_more_rounded),
                 ),

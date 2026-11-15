@@ -67,6 +67,8 @@ class AppUser {
   final int privacyVersion;
   /// Временно спрян от създателя.
   final bool suspended;
+  /// Основният храм – най-отгоре в списъка и с него се отваря приложението.
+  String? primaryChurch;
 
   AppUser({
     required this.id,
@@ -77,6 +79,7 @@ class AppUser {
     this.email = '',
     this.privacyVersion = 0,
     this.suspended = false,
+    this.primaryChurch,
   }) : name = fullName;
 
   /// Името за показване – със сана отпред, ако е избран.
@@ -91,6 +94,7 @@ class AppUser {
         email: email,
         privacyVersion: (r['privacy_version'] as num?)?.toInt() ?? 0,
         suspended: r['suspended_at'] != null,
+        primaryChurch: r['primary_church'] as String?,
       );
 }
 

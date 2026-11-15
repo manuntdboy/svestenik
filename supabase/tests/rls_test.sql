@@ -867,6 +867,16 @@ select public.church_set_info(:'cid', '', null) \g /dev/null
 select t.ok((select address is null and bulstat is null from churches where id = :'cid'), 'полетата се изчистват');
 select t.ok(exists (select 1 from jsonb_array_elements(public.creator_activity(null, :'cid', 50)) x
                      where x->>'action' = 'Адрес и Булстат на храма'), 'промяната е в дневника');
+\echo '== Основен храм'
+select t.as_user(:'B');
+select public.set_primary_church(:'cid') \g /dev/null
+select t.ok((select primary_church = :'cid' from profiles where id = :'B'), 'свещеникът си отбелязва основен храм');
+select t.fails(format('select public.set_primary_church(%L)', gen_random_uuid()), 'чужд храм не може да е основен', 'not_member');
+select public.set_primary_church(null) \g /dev/null
+select t.ok((select primary_church is null from profiles where id = :'B'), 'основният храм се маха');
+select public.set_primary_church(:'cid') \g /dev/null
+select t.as_user(:'A');
+select t.ok((select primary_church = :'cid' from profiles where id = :'B'), 'колегата вижда профила (полето не е тайна)');
 \echo '== Създателят изтрива храм'
 select t.as_user(:'C');
 select t.fails(format('select public.creator_delete_church(%L, %L)', :'rcid', 'Роли'), 'само създателят трие храмове', 'forbidden');
