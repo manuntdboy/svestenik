@@ -20,6 +20,8 @@ class ProgramDraftScreen extends StatefulWidget {
 class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
   ProgramDoc doc = ProgramDoc.sample();
   final mem = ProgramMemory();
+  // Темата прави бутоните широки колкото екрана – тук са по съдържанието.
+  static final _btn = OutlinedButton.styleFrom(minimumSize: const Size(0, 44));
   int _rev = 0; // „Нова празна“ – всички полета наново
   final _grev = Expando<int>(); // смяна на кола отвън – полетата на групата наново
   final _tc = Expando<TextEditingController>(); // часовете
@@ -457,6 +459,7 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
         ]),
         actions: [
           OutlinedButton.icon(
+            style: _btn,
             icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
             label: const Text('Добави от пътуващите'),
             onPressed: () => _addFromTravellers(l),
@@ -536,6 +539,7 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
               const SizedBox(height: 10),
               Row(children: [
                 OutlinedButton.icon(
+            style: _btn,
                   icon: const Icon(Icons.event_rounded),
                   label: Text('$date · ${weekdayBg(doc.date)}'),
                   onPressed: _pickDate,
@@ -549,6 +553,7 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
+            style: _btn,
               icon: const Icon(Icons.directions_car_rounded),
               label: const Text('Добави група (кола)'),
               onPressed: () => _change(() => doc.groups.add(ProgramGroup(people: [ProgramPerson('')]))),
@@ -559,6 +564,7 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
+            style: _btn,
               icon: const Icon(Icons.list_alt_rounded),
               label: const Text('Добави списък (служещи, гости на обяд…)'),
               onPressed: () => setState(() => doc.lists.add(ProgramList('', [ProgramPerson('')]))),
