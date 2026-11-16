@@ -196,10 +196,7 @@ class _MetroThreadScreenState extends State<MetroThreadScreen> {
                   itemBuilder: (_, i) {
                     final m = msgs[i];
                     final mine = m.senderId == me;
-                    return Align(
-                      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                      child: GestureDetector(
-                        onLongPress: () async {
+                    Future<void> act() async {
                           final canDelete = mine || (m.recipientId == null && s.isMetropolitanOf(m.dioceseId));
                           final ok = canDelete &&
                               await confirm(context, 'Изтриване', 'Да изтрия ли съобщението?', 'Изтрий');
@@ -210,7 +207,13 @@ class _MetroThreadScreenState extends State<MetroThreadScreen> {
                               if (context.mounted) showMessage(context, e.message);
                             }
                           }
-                        },
+}
+
+                    return Align(
+                      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                      child: GestureDetector(
+                        onLongPress: act,
+                        onSecondaryTap: act, // десен бутон на мишката
                         child: Container(
                           constraints: const BoxConstraints(maxWidth: 520),
                           margin: const EdgeInsets.only(bottom: 8),

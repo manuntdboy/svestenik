@@ -228,6 +228,9 @@ class ProfileScreen extends StatelessWidget {
           onLongPress: s.isCreator
               ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CreatorScreen()))
               : null,
+          onSecondaryTap: s.isCreator
+              ? () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const CreatorScreen()))
+              : null,
           child: SurfaceCard(
             child: Row(children: [
               ClipRRect(

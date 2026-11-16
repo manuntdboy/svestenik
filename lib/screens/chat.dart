@@ -461,9 +461,10 @@ class _Bubble extends StatelessWidget {
     final seen = mine ? s.chatSeenBy(msg) : const <String>[];
     final bubble = GestureDetector(
       onLongPress: onLongPress,
+      onSecondaryTap: onLongPress, // десен бутон на мишката – същото меню
       onTap: mine ? () => _showSeen(context, s, msg, seen) : null,
       child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * .74),
+        constraints: BoxConstraints(maxWidth: (MediaQuery.of(context).size.width * .74).clamp(0, 560)),
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
           color: bg,
