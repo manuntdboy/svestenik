@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/desk_chrome.dart';
 import 'church_connect.dart';
+import 'creator.dart';
 import 'diocese.dart';
 import 'metro_cabinet.dart';
 import 'metro_chat.dart';
@@ -465,6 +466,14 @@ class _MetroProfile extends StatelessWidget {
             onPressed: () => Navigator.push(
                 context, MaterialPageRoute(builder: (_) => const ChurchConnectScreen(pushed: true))),
           ),
+        if (s.isCreator) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.insights_rounded),
+            label: const Text('Кайрос в числа'),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreatorScreen())),
+          ),
+        ],
         const SizedBox(height: 12),
         TextButton(onPressed: s.logout, child: const Text('Изход')),
       ]),
