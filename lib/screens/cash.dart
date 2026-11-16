@@ -666,7 +666,7 @@ class CashRow extends StatelessWidget {
 
 /// Подробности за запис; оттук – сторно.
 Future<void> showCashEntry(BuildContext context, CashEntry e) async {
-  await showModalBottomSheet<void>(
+  await showAppSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

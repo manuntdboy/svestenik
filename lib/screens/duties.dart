@@ -348,7 +348,7 @@ Future<void> showDutyForm(BuildContext context, {Duty? duty, DateTime? day}) asy
   DateTime? start = duty?.start ?? day;
   DateTime? end = duty?.end ?? day?.add(const Duration(days: 6));
   final note = TextEditingController(text: duty?.note ?? '');
-  final result = await showModalBottomSheet<String>(
+  final result = await showAppSheet<String>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -487,7 +487,7 @@ Future<void> showSwapSheet(BuildContext context, Duty mine) async {
     showMessage(context, 'Няма предстоящи дежурства на колеги, с които да се разменят.');
     return;
   }
-  final picked = await showModalBottomSheet<Duty>(
+  final picked = await showAppSheet<Duty>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

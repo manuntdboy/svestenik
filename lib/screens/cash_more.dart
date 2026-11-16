@@ -76,7 +76,7 @@ Future<CashFilter?> showCashFilter(BuildContext context, CashFilter current, Str
   final now = DateTime.now();
   final thisMonth = DateTime(now.year, now.month, 1);
   final cats = {...incomeCategories, ...expenseCategories}.where((c) => c != 'Друго').toList()..add('Друго');
-  return showModalBottomSheet<CashFilter>(
+  return showAppSheet<CashFilter>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

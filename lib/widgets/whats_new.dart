@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/app_state.dart';
 import '../theme.dart';
+import 'common.dart';
 
 /// Номер на изграждането (подава се от GitHub). 0 = местно изграждане.
 const buildNumber = int.fromEnvironment('BUILD_NUMBER');
@@ -112,7 +113,7 @@ Future<void> showWhatsNew(BuildContext context) async {
   final key = 'whats_new_tested_$buildNumber';
   final done = (prefs.getStringList(key) ?? const <String>[]).toSet();
   if (!context.mounted) return;
-  await showModalBottomSheet<void>(
+  await showAppSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

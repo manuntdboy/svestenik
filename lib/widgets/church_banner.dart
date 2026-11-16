@@ -47,7 +47,7 @@ class RoleBadge extends StatelessWidget {
 /// другите храмове (златисто – за решение, синьо – чат).
 void pickChurch(BuildContext context) {
   final s = AppScope.read(context);
-  showModalBottomSheet<void>(
+  showAppSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,

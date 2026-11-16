@@ -460,7 +460,7 @@ class _ItemCard extends StatelessWidget {
 
 /// История на вида: кой какво зареди, изписа, кога.
 Future<void> showStockHistory(BuildContext context, StockItem item) async {
-  await showModalBottomSheet<void>(
+  await showAppSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

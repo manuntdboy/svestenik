@@ -730,7 +730,7 @@ class _PersonCard extends StatelessWidget {
                     if (context.mounted) showMessage(context, e.message);
                   }
                 } else if (v == 'roles') {
-                  await showModalBottomSheet<void>(
+                  await showAppSheet<void>(
                     context: context,
                     isScrollControlled: true,
                     showDragHandle: true,
@@ -1608,7 +1608,7 @@ class _Churches extends StatelessWidget {
                     icon: const Icon(Icons.payments_rounded, size: 18),
                     label: const Text('Каса – решения'),
                     onPressed: () async {
-                      await showModalBottomSheet<void>(
+                      await showAppSheet<void>(
                         context: context,
                         isScrollControlled: true,
                         showDragHandle: true,
@@ -1670,7 +1670,7 @@ class _ChurchControlsState extends State<_ChurchControls> {
       return;
     }
     if (!mounted) return;
-    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+    final picked = await showAppSheet<Map<String, dynamic>>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(

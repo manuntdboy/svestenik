@@ -372,3 +372,38 @@ class StaffBadge extends StatelessWidget {
         ),
       );
 }
+
+/// Прозорец „отдолу“: на телефона излиза отдолу, а на широк екран (компютър)
+/// се отваря в средата като обикновен прозорец.
+Future<T?> showAppSheet<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool isScrollControlled = false,
+  bool showDragHandle = false,
+}) {
+  final size = MediaQuery.sizeOf(context);
+  if (size.width < 900) {
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: isScrollControlled,
+      showDragHandle: showDragHandle,
+      builder: builder,
+    );
+  }
+  return showDialog<T>(
+    context: context,
+    builder: (ctx) => Dialog(
+      insetPadding: const EdgeInsets.all(24),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 640, maxHeight: size.height * .85),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 20),
+          // Отместването от клавиатурата не важи в средата на екрана.
+          child: MediaQuery.removeViewInsets(context: ctx, removeBottom: true, child: Builder(builder: builder)),
+        ),
+      ),
+    ),
+  );
+}

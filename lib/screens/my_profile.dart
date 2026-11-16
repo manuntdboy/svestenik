@@ -26,7 +26,7 @@ String daysLabel(int n) => n == 0
 /// Избор на снимка от галерията или камерата и качване.
 Future<void> pickAndUploadPhoto(BuildContext context) async {
   final s = AppScope.read(context);
-  final source = await showModalBottomSheet<String>(
+  final source = await showAppSheet<String>(
     context: context,
     showDragHandle: true,
     builder: (ctx) => SafeArea(

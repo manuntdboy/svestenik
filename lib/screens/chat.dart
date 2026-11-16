@@ -283,7 +283,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _mutedList() async {
     final s = AppScope.read(context);
     final ids = s.chatMutedBy(s.currentChurchId!);
-    await showModalBottomSheet<void>(
+    await showAppSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -524,7 +524,7 @@ void _showSeen(BuildContext context, AppState s, ChatMessage m, List<String> see
       ? s.priestsOf(m.churchId).where((x) => x.$1.id != m.senderId && x.$2.isActive).map((x) => x.$1.id).toList()
       : [m.recipientId!];
   final notYet = all.where((u) => !seen.contains(u)).toList();
-  showModalBottomSheet<void>(
+  showAppSheet<void>(
     context: context,
     showDragHandle: true,
     builder: (ctx) => SafeArea(

@@ -137,7 +137,7 @@ Future<void> showDeclineSheet(BuildContext context, ChurchEvent e) async {
       .priestsOf(e.churchId)
       .where((x) => x.$1.id != s.currentUser?.id && !s.isOnLeave(e.churchId, x.$1.id, day))
       .toList();
-  final ok = await showModalBottomSheet<bool>(
+  final ok = await showAppSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
