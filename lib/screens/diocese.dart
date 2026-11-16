@@ -98,58 +98,12 @@ class _DioceseScreenState extends State<DioceseScreen> {
   }
 
   Future<void> _addEmployee() async {
-    final s = AppScope.read(context);
     final d = (data?['diocese'] as Map?)?['id'] as String?;
     if (d == null) return;
-    final u = TextEditingController();
-    final t = TextEditingController();
-    var role = StaffRole.employee;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, set) => AlertDialog(
-        title: const Text('Човек в администрацията'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          DropdownButtonFormField<StaffRole>(
-            initialValue: role,
-            decoration: const InputDecoration(labelText: 'Длъжност'),
-            items: const [
-              DropdownMenuItem(value: StaffRole.secretary, child: Text('Секретар')),
-              DropdownMenuItem(value: StaffRole.protosyngel, child: Text('Протосингел')),
-              DropdownMenuItem(value: StaffRole.employee, child: Text('Служител (шофьор, счетоводител…)')),
-            ],
-            onChanged: (v) => set(() => role = v ?? StaffRole.employee),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: u,
-            autofocus: true,
-            autocorrect: false,
-            decoration: const InputDecoration(
-                labelText: 'Потребителско име', helperText: 'Човекът се регистрира в Кайрос с тази епархия.'),
-          ),
-          if (role == StaffRole.employee) ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: t,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Какво работи', hintText: 'Шофьор'),
-            ),
-          ],
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Добави')),
-        ],
-      )),
-    );
+    final ok = await showDialog<bool>(context: context, builder: (_) => _AddStaffDialog(dioceseId: d));
     if (ok != true || !mounted) return;
-    try {
-      await s.staffAddByUsername(d, u.text, role, title: role == StaffRole.employee ? t.text : null);
-      await _load();
-      if (mounted) showMessage(context, 'Добавен в администрацията.');
-    } on AppError catch (e) {
-      if (mounted) showMessage(context, e.message);
-    }
+    await _load();
+    if (mounted) showMessage(context, 'Добавен в администрацията.');
   }
 
   Future<void> _release(Map<String, dynamic> st) async {
@@ -557,6 +511,178 @@ class _DioceseScreenState extends State<DioceseScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(title), automaticallyImplyLeading: !widget.embedded),
       body: body,
+    );
+  }
+}
+
+
+/// „Човек в администрацията“: длъжност, търсене по име или телефон сред
+/// регистрираните в епархията, и (за служител) какво работи.
+class _AddStaffDialog extends StatefulWidget {
+  final String dioceseId;
+  const _AddStaffDialog({required this.dioceseId});
+
+  @override
+  State<_AddStaffDialog> createState() => _AddStaffDialogState();
+}
+
+class _AddStaffDialogState extends State<_AddStaffDialog> {
+  var role = StaffRole.employee;
+  final title = TextEditingController();
+  List<Map<String, dynamic>> hits = [];
+  Map<String, dynamic>? picked;
+  String q = '';
+  bool loading = false;
+  bool busy = false;
+  int _seq = 0;
+
+  static const _roleNames = {
+    'metropolitan': 'митрополит',
+    'secretary': 'секретар',
+    'protosyngel': 'протосингел',
+    'vicar': 'наместник',
+    'employee': 'служител',
+  };
+
+  Future<void> _search(String v) async {
+    q = v;
+    final my = ++_seq;
+    if (v.trim().length < 2) {
+      setState(() => hits = []);
+      return;
+    }
+    setState(() => loading = true);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (my != _seq || !mounted) return;
+    try {
+      final r = await AppScope.read(context).staffCandidates(widget.dioceseId, v);
+      if (my == _seq && mounted) setState(() => hits = r);
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+    if (my == _seq && mounted) setState(() => loading = false);
+  }
+
+  Future<void> _add() async {
+    final x = picked;
+    if (x == null) return;
+    setState(() => busy = true);
+    try {
+      await AppScope.read(context).staffAddByUsername(widget.dioceseId, '${x['username']}', role,
+          title: role == StaffRole.employee ? title.text : null);
+      if (mounted) Navigator.pop(context, true);
+    } on AppError catch (e) {
+      if (mounted) {
+        setState(() => busy = false);
+        showMessage(context, e.message);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return AlertDialog(
+      title: const Text('Човек в администрацията'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            DropdownButtonFormField<StaffRole>(
+              initialValue: role,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Длъжност'),
+              items: const [
+                DropdownMenuItem(value: StaffRole.secretary, child: Text('Секретар')),
+                DropdownMenuItem(value: StaffRole.protosyngel, child: Text('Протосингел')),
+                DropdownMenuItem(
+                    value: StaffRole.employee,
+                    child: Text('Служител (шофьор, счетоводител…)', overflow: TextOverflow.ellipsis)),
+              ],
+              onChanged: (v) => setState(() => role = v ?? StaffRole.employee),
+            ),
+            const SizedBox(height: 12),
+            if (picked == null) ...[
+              TextField(
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Търсене: име или телефон',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : null,
+                ),
+                onChanged: _search,
+              ),
+              const SizedBox(height: 8),
+              if (q.trim().length >= 2 && !loading && hits.isEmpty)
+                Text('Няма намерени. Човекът трябва да е регистриран в Кайрос с тази епархия.',
+                    style: TextStyle(color: p.textMuted)),
+              if (q.trim().length < 2)
+                Text('Пишете поне 2 букви от името или 3 цифри от телефона.', style: TextStyle(color: p.textMuted)),
+              for (final x in hits)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: p.chipBg,
+                    child: Text('${x['name'] ?? '?'}'.characters.first, style: TextStyle(color: p.primary)),
+                  ),
+                  title: Text(withRank(ClergyRank.fromCode(x['rank']), '${x['name'] ?? ''}'),
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(
+                      [
+                        if ((x['church'] ?? '').toString().isNotEmpty) '${x['church']}',
+                        if ((x['phone'] ?? '').toString().isNotEmpty) '${x['phone']}',
+                        if ((x['staff'] ?? '').toString().isNotEmpty)
+                          'вече: ${'${x['staff']}'.split(',').map((r) => _roleNames[r] ?? r).join(', ')}',
+                      ].join(' · '),
+                      style: TextStyle(color: p.textMuted)),
+                  onTap: () => setState(() => picked = x),
+                ),
+            ] else
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: p.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: p.primary, width: 2)),
+                child: Row(children: [
+                  Icon(Icons.check_circle_rounded, color: p.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(withRank(ClergyRank.fromCode(picked!['rank']), '${picked!['name'] ?? ''}'),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      if ((picked!['church'] ?? '').toString().isNotEmpty)
+                        Text('${picked!['church']}', style: TextStyle(color: p.textMuted)),
+                    ]),
+                  ),
+                  TextButton(onPressed: () => setState(() => picked = null), child: const Text('Друг')),
+                ]),
+              ),
+            if (role == StaffRole.employee) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: title,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Какво работи', hintText: 'Шофьор'),
+              ),
+            ],
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отказ')),
+        FilledButton(onPressed: picked == null || busy ? null : _add, child: const Text('Добави')),
+      ],
     );
   }
 }

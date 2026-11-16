@@ -1018,6 +1018,12 @@ select t.as_user(:'E1');
 select t.ok(public.diocese_church(:'szc')->>'name' = 'Св. Тест', 'наместникът вижда храм от своята околия');
 select t.as_user(:'B');
 select t.fails(format('select public.diocese_church(%L)', :'szc'), 'свещеник от друг храм не вижда', 'forbidden');
+select t.as_user(:'E3');
+select t.ok(jsonb_array_length(public.staff_candidates(:'szd', 'Секретар')) = 1, 'владиката намира човек по име');
+select t.ok(public.staff_candidates(:'szd', 'Секретар')->0->>'staff' = 'secretary', 'вижда, че вече е секретар');
+select t.ok(jsonb_array_length(public.staff_candidates(:'szd', 'x')) = 0, 'под 2 букви – нищо');
+select t.as_user(:'E5');
+select t.fails(format('select public.staff_candidates(%L, %L)', :'szd', 'Иван'), 'секретарят не търси хора за администрацията', 'forbidden');
 select t.as_user(:'A');
 \echo '== Адрес и Булстат на храма'
 select t.as_user(:'B');

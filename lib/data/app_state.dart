@@ -1570,6 +1570,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Хора от епархията за администрацията – търсене по име или телефон.
+  Future<List<Map<String, dynamic>>> staffCandidates(String dioceseId, String q) async {
+    try {
+      final r = await _db.rpc('staff_candidates', params: {'p_diocese': dioceseId, 'p_q': q});
+      return (r as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   Future<void> staffRemove(String userId, StaffRole role, {String? vicariateId}) async {
     try {
       await _db.rpc('staff_remove', params: {'p_user': userId, 'p_role': role.code, 'p_vicariate': vicariateId});
