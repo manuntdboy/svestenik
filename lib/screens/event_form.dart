@@ -28,7 +28,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
   bool _saving = false;
   // Продължителността следва вида, докато не я промените ръчно.
   late bool _durationTouched = widget.editing || widget.copying;
-  late bool _shared = widget.draft.shared;
+  // Ново събитие „в храма“ е споделено с храма по подразбиране; щом човекът
+  // сам избере „Само аз“/„Споделено“, мястото вече не го променя.
+  late bool _shared = widget.draft.shared || (!widget.editing && !widget.copying && !widget.draft.outsideChurch);
+  bool _sharedTouched = false;
+  void _syncShared() {
+    if (!_sharedTouched && !widget.editing && !widget.copying) _shared = !_outside;
+  }
   late String _assignee = widget.draft.assigneeId;
   late final _forWhom = TextEditingController(text: widget.draft.forWhom);
   final _forWhomFocus = FocusNode();
@@ -462,6 +468,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       _duration = k.defaultMinutes;
                       _outside = false;
                     }
+                    _syncShared();
                   });
                 },
               ),
@@ -568,8 +575,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
             ),
             _section(
                 'Къде',
-                _twoWay('В храма', 'Извън храма', _outside,
-                    (v) => setState(() => _outside = v))),
+                _twoWay('В храма', 'Извън храма', _outside, (v) => setState(() {
+                      _outside = v;
+                      _syncShared();
+                    }))),
             if (_outside)
               _section(
                 'Адрес',
@@ -662,8 +671,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
             else if (_assignee == widget.draft.ownerId)
               _section(
                   'Кой го вижда',
-                  _twoWay('Само аз', 'Споделено с храма', _shared,
-                      (v) => setState(() => _shared = v)))
+                  _twoWay('Само аз', 'Споделено с храма', _shared, (v) => setState(() {
+                        _shared = v;
+                        _sharedTouched = true;
+                      })))
             else
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
