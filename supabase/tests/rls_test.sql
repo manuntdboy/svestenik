@@ -1025,6 +1025,23 @@ select t.ok(jsonb_array_length(public.staff_candidates(:'szd', 'x')) = 0, 'по�
 select t.as_user(:'E5');
 select t.fails(format('select public.staff_candidates(%L, %L)', :'szd', 'Иван'), 'секретарят не търси хора за администрацията', 'forbidden');
 select t.as_user(:'A');
+\echo '== Митрополит за проба: предишният сан се връща'
+reset role;
+update profiles set rank = 'priest' where id = :'E5';
+set role authenticated;
+select t.as_user(:'A');
+select public.staff_set(:'E5', 'metropolitan') \g /dev/null
+reset role;
+select t.ok((select rank from profiles where id = :'E5') = 'metropolitan' and (select rank from profiles where id = :'E3') is null,
+            'новият става митрополит, досегашният си връща сана');
+set role authenticated;
+select t.as_user(:'A');
+select public.staff_remove(:'E5', 'metropolitan') \g /dev/null
+select public.staff_set(:'E3', 'metropolitan') \g /dev/null
+reset role;
+select t.ok((select rank from profiles where id = :'E5') = 'priest', 'при освобождаване санът „иерей“ се връща');
+set role authenticated;
+select t.as_user(:'A');
 \echo '== Адрес и Булстат на храма'
 select t.as_user(:'B');
 select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '123456789'), 'свещеникът не сменя адреса', 'not_manager');

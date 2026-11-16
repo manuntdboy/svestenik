@@ -568,7 +568,7 @@ class _PersonCard extends StatelessWidget {
             ),
           Icon(u['push'] == true ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
               size: 20, color: u['push'] == true ? p.primary : p.textMuted),
-          if (u['id'] != AppScope.of(context).currentUser?.id)
+          // За собствения профил – само длъжността в митрополията (за проба).
             PopupMenuButton<String>(
               tooltip: 'Действия',
               onSelected: (v) async {
@@ -756,7 +756,9 @@ class _PersonCard extends StatelessWidget {
                   }
                 }
               },
-              itemBuilder: (_) => [
+              itemBuilder: (_) => u['id'] == AppScope.read(context).currentUser?.id
+                  ? const [PopupMenuItem(value: 'staff', child: Text('Длъжност в митрополията'))]
+                  : [
                 const PopupMenuItem(value: 'view', child: Text('Какво вижда')),
                 const PopupMenuItem(value: 'test', child: Text('Пробно известие')),
                 const PopupMenuItem(value: 'log', child: Text('Дневник на действията')),
