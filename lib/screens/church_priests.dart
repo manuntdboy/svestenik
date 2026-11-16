@@ -66,6 +66,7 @@ class ChurchPriestsScreen extends StatelessWidget {
                                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                               Text(m.isManager ? 'Председател' : (m.isCashier ? 'Свещеник · касиер' : 'Свещеник'),
                                   style: TextStyle(fontSize: 15, color: p.textMuted)),
+                              if (s.staffBadge(u.id) != null) StaffBadge(s.staffBadge(u.id)!),
                               Builder(builder: (context) {
                                 final n = s.visibleEvents
                                     .where((e) => e.assigneeId == u.id && e.startsAt.isAfter(now))

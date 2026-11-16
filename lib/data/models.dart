@@ -1204,7 +1204,11 @@ enum StaffRole {
   metropolitan('metropolitan', 'Митрополит'),
   secretary('secretary', 'Секретар'),
   protosyngel('protosyngel', 'Протосингел'),
-  vicar('vicar', 'Архиерейски наместник');
+  vicar('vicar', 'Архиерейски наместник'),
+  employee('employee', 'Служител в митрополията');
+
+  /// Администрацията (чатът „Митрополия“) – без наместниците.
+  bool get admin => this != StaffRole.vicar;
 
   final String code;
   final String label;
@@ -1218,7 +1222,9 @@ class StaffEntry {
   final String userId;
   final StaffRole role;
   final String? vicariateId;
-  const StaffEntry({required this.dioceseId, required this.userId, required this.role, this.vicariateId});
+  final String? title; // титла на служителя („Счетоводител“)
+  const StaffEntry(
+      {required this.dioceseId, required this.userId, required this.role, this.vicariateId, this.title});
 
   static StaffEntry? fromRow(Map<String, dynamic> r) {
     final role = StaffRole.fromCode(r['role']);
@@ -1228,6 +1234,33 @@ class StaffEntry {
       userId: r['user_id'] as String,
       role: role,
       vicariateId: r['vicariate_id'] as String?,
+      title: r['title'] as String?,
     );
   }
+}
+
+/// Съобщение в чата „Митрополия“.
+class MetroMessage {
+  final String id;
+  final String dioceseId;
+  final String? senderId;
+  final String? recipientId; // null – общият чат на администрацията
+  final String body;
+  final DateTime createdAt;
+  const MetroMessage(
+      {required this.id,
+      required this.dioceseId,
+      this.senderId,
+      this.recipientId,
+      required this.body,
+      required this.createdAt});
+
+  factory MetroMessage.fromRow(Map<String, dynamic> r) => MetroMessage(
+        id: r['id'] as String,
+        dioceseId: r['diocese_id'] as String,
+        senderId: r['sender_id'] as String?,
+        recipientId: r['recipient_id'] as String?,
+        body: r['body'] as String,
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+      );
 }

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/models.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
 import '../widgets/layout.dart';
@@ -20,6 +21,8 @@ import 'duties.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'program_draft.dart';
+import 'diocese.dart' show metroTheme;
+import 'metro_chat.dart';
 
 /// Основната рамка с долната лента: Начало, Календар, Профил.
 class Shell extends StatefulWidget {
@@ -112,6 +115,14 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         await s.selectChurch(cid);
       }
       nav.push(MaterialPageRoute(builder: (_) => ChatScreen(thread: thread)));
+    } else if (type == 'metro_chat' && s.isAdmin) {
+      final thread = data['thread'] ?? 'c';
+      await s.loadMetroPeople();
+      final x = s.metroPeople.where((e) => e['user_id'] == thread).firstOrNull;
+      nav.push(MaterialPageRoute(
+          builder: (_) => metroTheme(MetroThreadScreen(
+              thread: thread,
+              title: thread == 'c' ? 'Администрация' : withRank(ClergyRank.fromCode(x?['rank']), '${x?['name'] ?? ''}')))));
     } else if (type.startsWith('duty')) {
       nav.push(MaterialPageRoute(builder: (_) => const DutyScreen()));
     } else if (type.startsWith('leave_')) {

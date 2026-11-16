@@ -171,6 +171,21 @@ async function handle(req: Request): Promise<Response> {
     const t = String(m.body);
     text = m.recipient_id ? t.slice(0, 180) : `${callerName}: ${t.slice(0, 160)}`;
     data = { type: "chat", church_id: String(m.church_id), thread: m.recipient_id ? caller.id : "c" };
+  } else if (type === "metro_chat") {
+    // Чат „Митрополия“ → до администрацията на епархията (или до събеседника).
+    const { data: m } = await admin.from("metro_messages").select("*").eq("id", String(body.message_id ?? "")).maybeSingle();
+    if (!m || m.sender_id !== caller.id) return json(404, { error: "not_found" });
+    if (m.recipient_id) {
+      recipients = [m.recipient_id];
+    } else {
+      const { data: st } = await admin.from("diocese_staff").select("user_id")
+        .eq("diocese_id", m.diocese_id).in("role", ["metropolitan", "secretary", "protosyngel", "employee"]);
+      recipients = [...new Set((st ?? []).map((x) => x.user_id))];
+    }
+    title = m.recipient_id ? `${callerName} · Митрополия` : "Чат · Митрополия";
+    const t = String(m.body);
+    text = m.recipient_id ? t.slice(0, 180) : `${callerName}: ${t.slice(0, 160)}`;
+    data = { type: "metro_chat", diocese_id: String(m.diocese_id), thread: m.recipient_id ? caller.id : "c" };
   } else if (type === "announcement") {
     // Съобщение от създателя → до всички или до членовете на един храм.
     const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();

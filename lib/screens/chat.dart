@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
+import 'diocese.dart' show metroTheme;
+import 'metro_chat.dart';
 import '../widgets/church_banner.dart';
 import '../widgets/common.dart';
 import '../widgets/layout.dart';
@@ -103,6 +105,32 @@ class ChatListScreen extends StatelessWidget {
       children: [
         const ChurchBanner(title: 'Чат'),
         const SizedBox(height: 14),
+        // Чатът на митрополията – за хората от администрацията.
+        if (s.isAdmin)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Palette.metro.heroBg,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => metroTheme(const MetroChatScreen()))),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(children: [
+                    Text('☦', style: TextStyle(fontSize: 20, color: Palette.metro.primary)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                          s.metroUnreadAll > 0 ? 'Митрополия · ${s.metroUnreadAll} нови' : 'Чат · Митрополия',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Palette.metro.text)),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: Palette.metro.primary),
+                  ]),
+                ),
+              ),
+            ),
+          ),
         // Нови съобщения в другите ми храмове – натискане минава в храма.
         for (final (c, n) in s.chatUnreadOther())
           Padding(

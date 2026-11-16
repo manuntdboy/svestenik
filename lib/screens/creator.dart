@@ -638,6 +638,7 @@ class _PersonCard extends StatelessWidget {
                     (StaffRole.metropolitan, null, 'Митрополит'),
                     (StaffRole.secretary, null, 'Секретар'),
                     (StaffRole.protosyngel, null, 'Протосингел'),
+                    (StaffRole.employee, null, 'Служител (счетоводител, деловодител…)'),
                     for (final d in s.dioceses)
                       for (final vv in s.vicariatesOf(d.id).where((x) => !x.isCenter))
                         (StaffRole.vicar, vv.id, 'Наместник · ${d.name} · ${vv.name}'),
@@ -669,7 +670,25 @@ class _PersonCard extends StatelessWidget {
                   );
                   if (pick == null || !context.mounted) return;
                   try {
-                    if (pick.$1) {
+                    if (pick.$1 && pick.$2 == StaffRole.employee) {
+                      final tc = TextEditingController();
+                      final title = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Длъжност на служителя'),
+                          content: TextField(
+                              controller: tc,
+                              autofocus: true,
+                              decoration: const InputDecoration(hintText: 'Счетоводител')),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отказ')),
+                            FilledButton(onPressed: () => Navigator.pop(ctx, tc.text), child: const Text('Запази')),
+                          ],
+                        ),
+                      );
+                      if (title == null || title.trim().isEmpty) return;
+                      await s.staffSet(uid, StaffRole.employee, title: title);
+                    } else if (pick.$1) {
                       await s.staffSet(uid, pick.$2, vicariateId: pick.$3);
                     } else {
                       await s.staffRemove(uid, pick.$2, vicariateId: pick.$3);

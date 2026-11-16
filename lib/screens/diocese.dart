@@ -88,6 +88,47 @@ class _DioceseScreenState extends State<DioceseScreen> {
     }
   }
 
+  Future<void> _addEmployee() async {
+    final s = AppScope.read(context);
+    final d = (data?['diocese'] as Map?)?['id'] as String?;
+    if (d == null) return;
+    final u = TextEditingController();
+    final t = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Служител в митрополията'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: u,
+            autofocus: true,
+            autocorrect: false,
+            decoration: const InputDecoration(
+                labelText: 'Потребителско име', helperText: 'Човекът се регистрира в Кайрос с тази епархия.'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: t,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Длъжност', hintText: 'Счетоводител'),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Добави')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await s.staffAddEmployee(d, u.text, t.text);
+      await _load();
+      if (mounted) showMessage(context, 'Добавен в администрацията.');
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+  }
+
   Future<void> _release(Map<String, dynamic> st) async {
     final s = AppScope.read(context);
     final role = StaffRole.fromCode(st['role']);
@@ -191,7 +232,14 @@ class _DioceseScreenState extends State<DioceseScreen> {
                   title: Text(_person(st), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   subtitle: Text(
                       [
-                        StaffRole.fromCode(st['role'])?.label ?? '',
+                        StaffRole.fromCode(st['role']) == StaffRole.employee
+                            ? (AppScope.read(context)
+                                    .staffOf(st['user_id'] as String)
+                                    .where((e) => e.role == StaffRole.employee)
+                                    .firstOrNull
+                                    ?.title ??
+                                'Служител')
+                            : StaffRole.fromCode(st['role'])?.label ?? '',
                         if (st['vicariate_id'] != null)
                           sections.where((x) => x['id'] == st['vicariate_id']).firstOrNull?['name'] ??
                               AppScope.read(context).vicariateName(st['vicariate_id'] as String?) ??
@@ -212,6 +260,15 @@ class _DioceseScreenState extends State<DioceseScreen> {
                         onPressed: () => _release(st),
                       ),
                   ]),
+                ),
+              if (_canAssign)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.person_add_alt_rounded, size: 18),
+                    label: const Text('Добави служител (счетоводител, деловодител…)'),
+                    onPressed: _addEmployee,
+                  ),
                 ),
             ]),
           ));

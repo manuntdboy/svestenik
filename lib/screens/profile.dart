@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
+import '../data/models.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
 import '../widgets/church_address.dart';
@@ -59,19 +60,20 @@ class ProfileScreen extends StatelessWidget {
             ],
           ),
         ),
-        if (s.hasDioceseView) ...[
+        if (s.myStaff.isNotEmpty) ...[
           heading('Митрополия'),
           SurfaceCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               for (final e in s.myStaff)
                 Text(
                     [
-                      e.role.label,
+                      e.role == StaffRole.employee ? (e.title ?? e.role.label) : e.role.label,
                       s.dioceseName(e.dioceseId) ?? '',
                       if (e.vicariateId != null) s.vicariateName(e.vicariateId) ?? '',
                     ].where((x) => x.isNotEmpty).join(' · '),
                     style: TextStyle(fontSize: 15, color: p.textMuted)),
               const SizedBox(height: 10),
+              if (s.hasDioceseView)
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                     backgroundColor: Palette.metro.heroBg, foregroundColor: Palette.metro.primary),

@@ -4,7 +4,9 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'church_connect.dart';
 import 'diocese.dart';
+import 'metro_chat.dart';
 
 /// Митрополитският изглед – собствено меню и начален екран, в пурпур и злато.
 class MetroShell extends StatefulWidget {
@@ -15,58 +17,82 @@ class MetroShell extends StatefulWidget {
 }
 
 class _MetroShellState extends State<MetroShell> {
-  int tab = 0;
+  String tab = '';
 
-  static const _items = [
-    (Icons.home_rounded, 'Начало'),
-    (Icons.account_balance_outlined, 'Епархия'),
-    (Icons.airport_shuttle_outlined, 'Програми'),
-    (Icons.calendar_month_outlined, 'Календар'),
-    (Icons.person_outline_rounded, 'Профил'),
-  ];
+  /// Менюто според длъжността: митрополитът – всичко; служителят – чат,
+  /// календар и профил; останалите – епархия, чат (ако са в администрацията).
+  List<(String, IconData, String, int)> _items(AppState s) => [
+        if (s.isMetropolitan) ('home', Icons.home_rounded, 'Начало', 0),
+        if (s.hasDioceseView) ('diocese', Icons.account_balance_outlined, 'Епархия', 0),
+        if (s.isAdmin) ('chat', Icons.chat_bubble_outline_rounded, 'Чат', s.metroUnreadAll),
+        if (s.isMetropolitan || s.myStaff.any((e) => e.role == StaffRole.secretary))
+          ('programs', Icons.airport_shuttle_outlined, 'Програми', 0),
+        if (s.isMetropolitan || s.isEmployee) ('calendar', Icons.calendar_month_outlined, 'Календар', 0),
+        ('profile', Icons.person_outline_rounded, 'Профил', 0),
+      ];
 
-  Widget _page() => switch (tab) {
-        0 => _MetroHome(onOpen: (i) => setState(() => tab = i)),
-        1 => const DioceseScreen(embedded: true),
-        2 => const _Soon('Програми за архиерейски служения',
+  void _open(String id) => setState(() => tab = id);
+
+  Widget _page(String id) => switch (id) {
+        'home' => _MetroHome(onOpen: (i) => _open(const ['home', 'diocese', 'programs', 'calendar'][i])),
+        'diocese' => const DioceseScreen(embedded: true),
+        'chat' => const MetroChatScreen(embedded: true),
+        'programs' => const _Soon('Програми за архиерейски служения',
             'Секретарят съставя програмата – групи, коли, служещи, гости на обяд. Владиката я утвърждава, '
                 'всеки участник получава известие със своята част, а документът излиза готов за печат.'),
-        3 => const _Soon('Календар на владиката',
-            'Срещи, посещения и служения – записват ги владиката и секретарят. Утвърдените програми '
-                'влизат сами, а личните записи остават само за владиката.'),
+        'calendar' => const _Soon('Календар',
+            'Срещи, посещения и служения. Владиката и секретарят записват в календара на владиката; '
+                'при служителите събитията влизат сами, когато са вписани някъде (напр. шофьор в програма).'),
         _ => const _MetroProfile(),
       };
 
   @override
+  void initState() {
+    super.initState();
+    final s = AppScope.read(context);
+    if (s.isAdmin) s.loadMetroPeople();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final s = AppScope.of(context);
+    final items = _items(s);
+    final ids = items.map((e) => e.$1).toList();
+    final current = ids.contains(tab) ? tab : ids.first;
+    final index = ids.indexOf(current);
+    Widget icon((String, IconData, String, int) it) =>
+        it.$4 > 0 ? Badge(label: Text('${it.$4}'), child: Icon(it.$2)) : Icon(it.$2);
     final wide = MediaQuery.sizeOf(context).width >= 1000;
     if (wide) {
       return Scaffold(
         body: Row(children: [
           NavigationRail(
             backgroundColor: p.surfaceAlt,
-            selectedIndex: tab,
+            selectedIndex: index,
             labelType: NavigationRailLabelType.all,
-            onDestinationSelected: (i) => setState(() => tab = i),
+            onDestinationSelected: (i) => _open(ids[i]),
             destinations: [
-              for (final it in _items) NavigationRailDestination(icon: Icon(it.$1), label: Text(it.$2)),
+              for (final it in items) NavigationRailDestination(icon: icon(it), label: Text(it.$3)),
             ],
           ),
           Expanded(
-            child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 900), child: _page())),
+            child: Center(
+                child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 900), child: _page(current))),
           ),
         ]),
       );
     }
     return Scaffold(
-      body: _page(),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: p.surfaceAlt,
-        selectedIndex: tab,
-        onDestinationSelected: (i) => setState(() => tab = i),
-        destinations: [for (final it in _items) NavigationDestination(icon: Icon(it.$1), label: it.$2)],
-      ),
+      body: _page(current),
+      bottomNavigationBar: items.length < 2
+          ? null
+          : NavigationBar(
+              backgroundColor: p.surfaceAlt,
+              selectedIndex: index,
+              onDestinationSelected: (i) => _open(ids[i]),
+              destinations: [for (final it in items) NavigationDestination(icon: icon(it), label: it.$3)],
+            ),
     );
   }
 }
@@ -234,7 +260,7 @@ class _MetroProfile extends StatelessWidget {
         for (final e in s.myStaff)
           Text(
               [
-                e.role.label,
+                e.role == StaffRole.employee ? (e.title ?? e.role.label) : e.role.label,
                 s.dioceseName(e.dioceseId) ?? '',
                 if (e.vicariateId != null) s.vicariateName(e.vicariateId) ?? '',
               ].where((x) => x.isNotEmpty).join(' · '),
@@ -245,6 +271,13 @@ class _MetroProfile extends StatelessWidget {
             icon: const Icon(Icons.church_outlined),
             label: const Text('Към храма'),
             onPressed: () => s.setMetroMode(false),
+          ),
+        if (s.myChurches.isEmpty && !s.isMetropolitan)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.church_outlined),
+            label: const Text('Свържи се с храм'),
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const ChurchConnectScreen(pushed: true))),
           ),
         const SizedBox(height: 12),
         TextButton(onPressed: s.logout, child: const Text('Изход')),

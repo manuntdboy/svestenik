@@ -941,6 +941,34 @@ select t.ok(jsonb_array_length(public.diocese_overview()->'sections') = 1, 'на
 select t.as_user(:'B');
 select t.fails($$select public.diocese_overview()$$, 'свещеник без длъжност не вижда епархията', 'forbidden');
 select t.as_user(:'A');
+\echo '== Администрация на митрополията и чат „Митрополия“'
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+ ('00000000-0000-0000-0000-0000000000e4', 'e4@x.bg', json_build_object('username','schet','full_name','Мария Счетоводна','diocese_id',:'szd')::jsonb);
+set role authenticated;
+\set E4 '00000000-0000-0000-0000-0000000000e4'
+select t.as_user(:'E3');
+select t.fails(format('select public.staff_set(%L, %L)', :'E4', 'employee'), 'служител – само с титла', 'bad_name');
+select t.fails(format('select public.staff_add_employee(%L, %L, %L)', :'szd', 'nyama', 'Х'), 'служител – по съществуващо име', 'user_not_found');
+select public.staff_add_employee(:'szd', 'schet', 'Счетоводител') \g /dev/null
+select public.staff_set(:'E1', 'protosyngel') \g /dev/null
+select t.ok((select title from diocese_staff where user_id = :'E4') = 'Счетоводител', 'митрополитът назначава служител с титла');
+select public.metro_chat_send(:'szd', null, 'Добро утро на всички') \g /dev/null
+select public.metro_chat_send(:'szd', :'E4', 'Мария, моля сметките') \g /dev/null
+select t.as_user(:'E4');
+select t.ok((select count(*) from metro_messages) = 2, 'служителят вижда общия чат и личното до него');
+select t.fails($$select public.diocese_overview()$$, 'служителят няма изглед „Епархия“', 'forbidden');
+select t.as_user(:'E1');
+select t.ok((select count(*) from metro_messages) = 1, 'протосингелът вижда общия, но не чуждото лично');
+select t.as_user(:'E2');
+select t.fails(format('select public.metro_chat_send(%L, null, %L)', :'szd', 'здравейте'), 'извън администрацията не пише', 'not_member');
+select t.ok((select count(*) from metro_messages) = 0, 'извън администрацията не чете');
+select t.as_user(:'E3');
+select public.staff_set(:'E1', 'vicar', :'kzl') \g /dev/null
+select public.staff_remove(:'E1', 'protosyngel') \g /dev/null
+select t.as_user(:'E1');
+select t.ok((select count(*) from metro_messages) = 0, 'наместникът не е в чата на администрацията');
+select t.as_user(:'A');
 \echo '== Адрес и Булстат на храма'
 select t.as_user(:'B');
 select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '123456789'), 'свещеникът не сменя адреса', 'not_manager');

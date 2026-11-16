@@ -50,6 +50,9 @@ class AppState extends ChangeNotifier {
   final List<Diocese> _dioceses = [];
   final List<Vicariate> _vicariates = [];
   final List<StaffEntry> _staff = [];
+  final List<MetroMessage> _metroMsgs = [];
+  final Map<String, DateTime> _metroReads = {}; // нишка ('c' или id) → прочетено до
+  List<Map<String, dynamic>> metroPeople = []; // администрацията (за чата)
   /// Митрополитът вижда митрополитския изглед; може да мине към храма си.
   bool metroMode = true;
   final List<Church> _churches = [];
@@ -153,6 +156,9 @@ class AppState extends ChangeNotifier {
 
   void _clear() {
     _staff.clear();
+    _metroMsgs.clear();
+    _metroReads.clear();
+    metroPeople = [];
     metroMode = true;
     mustChangePassword = false;
     isCreator = false;
@@ -220,10 +226,19 @@ class AppState extends ChangeNotifier {
         _db.from('chat_reads').select(),
         _db.from('chat_mutes').select(),
         _db.from('diocese_staff').select(),
+        _db.from('metro_messages').select().order('created_at', ascending: true),
+        _db.from('metro_reads').select().eq('user_id', authUser.id),
       ]);
       _staff
         ..clear()
-        ..addAll(results.last.map(StaffEntry.fromRow).whereType<StaffEntry>());
+        ..addAll(results[results.length - 3].map(StaffEntry.fromRow).whereType<StaffEntry>());
+      _metroMsgs
+        ..clear()
+        ..addAll(results[results.length - 2].map(MetroMessage.fromRow));
+      _metroReads
+        ..clear()
+        ..addEntries(results.last.map((r) =>
+            MapEntry(r['thread'] as String, DateTime.parse(r['read_at'] as String).toLocal())));
       _profiles
         ..clear()
         ..addAll(results[0].map((r) => AppUser.fromRow(r,
@@ -359,6 +374,7 @@ class AppState extends ChangeNotifier {
       return 'Този храм е в друга епархия. Ако сте избрали грешна епархия при регистрацията, '
           'свържете се със създателя на Кайрос – само той може да я смени.';
     }
+    if (t.contains('user_not_found')) return 'Няма такова потребителско име.';
     if (t.contains('no_diocese')) return 'Човекът няма избрана епархия – първо я задайте.';
     if (t.contains('is_chair')) return 'Човекът е председател на храм в старата епархия – първо сменете председателя.';
     if (t.contains('name_taken')) return 'Такава околия вече има.';
@@ -1294,11 +1310,102 @@ class AppState extends ChangeNotifier {
   bool isMetropolitanOf(String? dioceseId) =>
       myStaff.any((e) => e.role == StaffRole.metropolitan && e.dioceseId == dioceseId);
 
-  /// Има ли изглед „Епархия“ (всяка длъжност в митрополията).
-  bool get hasDioceseView => myStaff.isNotEmpty;
+  /// Има ли изглед „Епархия“ (длъжностите над храмовете, без служителите).
+  bool get hasDioceseView => myStaff.any((e) => e.role != StaffRole.employee);
 
-  /// Показва ли се митрополитският изглед вместо храма.
-  bool get showMetro => isMetropolitan && (metroMode || currentChurch == null);
+  /// В администрацията ли съм (чатът „Митрополия“).
+  bool get isAdmin => myStaff.any((e) => e.role.admin);
+  String? get adminDioceseId => myStaff.where((e) => e.role.admin).firstOrNull?.dioceseId;
+  bool get isEmployee => myStaff.any((e) => e.role == StaffRole.employee);
+
+  /// Показва ли се митрополитският изглед вместо храма: митрополитът по
+  /// подразбиране; останалите от митрополията – ако нямат храм.
+  bool get showMetro =>
+      (isMetropolitan && (metroMode || currentChurch == null)) || (myStaff.isNotEmpty && currentChurch == null);
+
+  /// Пурпурната значка до името: „Секретар на митрополията“, „Наместник – …“, „Счетоводител“.
+  String? staffBadge(String userId) {
+    final es = staffOf(userId);
+    if (es.isEmpty) return null;
+    final e = es.reduce((a, b) => a.role.index <= b.role.index ? a : b);
+    return switch (e.role) {
+      StaffRole.metropolitan => 'Митрополит',
+      StaffRole.secretary => 'Секретар на митрополията',
+      StaffRole.protosyngel => 'Протосингел',
+      StaffRole.vicar => 'Наместник · ${vicariateName(e.vicariateId) ?? ''}',
+      StaffRole.employee => e.title ?? 'Служител в митрополията',
+    };
+  }
+
+  // ------------------------------------------------- чат „Митрополия“
+
+  List<MetroMessage> metroThread(String thread) {
+    final me = currentUser?.id;
+    final d = adminDioceseId;
+    return _metroMsgs.where((m) {
+      if (m.dioceseId != d) return false;
+      if (thread == 'c') return m.recipientId == null;
+      return (m.senderId == me && m.recipientId == thread) || (m.senderId == thread && m.recipientId == me);
+    }).toList();
+  }
+
+  int metroUnread(String thread) {
+    final me = currentUser?.id;
+    final since = _metroReads[thread] ?? DateTime(2000);
+    return metroThread(thread).where((m) => m.senderId != me && m.createdAt.isAfter(since)).length;
+  }
+
+  int get metroUnreadAll {
+    if (!isAdmin) return 0;
+    final threads = {'c', ...metroPeople.map((x) => '${x['user_id']}')};
+    return threads.fold(0, (a, t) => a + metroUnread(t));
+  }
+
+  Future<void> loadMetroPeople() async {
+    final d = adminDioceseId;
+    if (d == null) return;
+    try {
+      final r = await _db.rpc('metro_admin_people', params: {'p_diocese': d});
+      metroPeople = (r as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> metroSend(String thread, String body) async {
+    final d = adminDioceseId;
+    if (d == null || body.trim().isEmpty) return;
+    try {
+      final row = await _db.rpc('metro_chat_send',
+          params: {'p_diocese': d, 'p_recipient': thread == 'c' ? null : thread, 'p_body': body.trim()});
+      final m = MetroMessage.fromRow(Map<String, dynamic>.from(row as Map));
+      _metroMsgs.add(m);
+      _metroReads[thread] = DateTime.now();
+      notifyListeners();
+      unawaited(_invokeNotify({'type': 'metro_chat', 'message_id': m.id}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> metroRead(String thread) async {
+    final d = adminDioceseId;
+    if (d == null) return;
+    _metroReads[thread] = DateTime.now();
+    notifyListeners();
+    try {
+      await _db.rpc('metro_chat_read', params: {'p_diocese': d, 'p_thread': thread});
+    } catch (_) {}
+  }
+
+  Future<void> metroDelete(String id) async {
+    try {
+      await _db.rpc('metro_chat_delete', params: {'p_id': id});
+      _metroMsgs.removeWhere((m) => m.id == id);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
 
   void setMetroMode(bool on) {
     metroMode = on;
@@ -1315,9 +1422,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> staffSet(String userId, StaffRole role, {String? vicariateId}) async {
+  Future<void> staffSet(String userId, StaffRole role, {String? vicariateId, String? title}) async {
     try {
-      await _db.rpc('staff_set', params: {'p_user': userId, 'p_role': role.code, 'p_vicariate': vicariateId});
+      await _db.rpc('staff_set',
+          params: {'p_user': userId, 'p_role': role.code, 'p_vicariate': vicariateId, 'p_title': title});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Служител по потребителско име (митрополитът или създателят).
+  Future<void> staffAddEmployee(String dioceseId, String username, String title) async {
+    try {
+      await _db.rpc('staff_add_employee',
+          params: {'p_diocese': dioceseId, 'p_username': username.trim(), 'p_title': title.trim()});
       await refresh();
     } catch (e) {
       throw AppError(_friendly(e));
