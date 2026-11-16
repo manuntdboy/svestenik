@@ -4,6 +4,7 @@ import '../data/app_state.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
 import '../widgets/church_address.dart';
+import 'diocese.dart';
 import '../widgets/common.dart';
 import 'church_code.dart';
 import 'church_connect.dart';
@@ -58,6 +59,31 @@ class ProfileScreen extends StatelessWidget {
             ],
           ),
         ),
+        if (s.hasDioceseView) ...[
+          heading('Митрополия'),
+          SurfaceCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (final e in s.myStaff)
+                Text(
+                    [
+                      e.role.label,
+                      s.dioceseName(e.dioceseId) ?? '',
+                      if (e.vicariateId != null) s.vicariateName(e.vicariateId) ?? '',
+                    ].where((x) => x.isNotEmpty).join(' · '),
+                    style: TextStyle(fontSize: 15, color: p.textMuted)),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                    backgroundColor: Palette.metro.heroBg, foregroundColor: Palette.metro.primary),
+                icon: const Icon(Icons.account_balance_outlined),
+                label: Text(s.isMetropolitan ? 'Митрополитски изглед' : 'Епархия'),
+                onPressed: () => s.isMetropolitan
+                    ? s.setMetroMode(true)
+                    : Navigator.push(context, MaterialPageRoute(builder: (_) => metroTheme(const DioceseScreen()))),
+              ),
+            ]),
+          ),
+        ],
         heading('Храм'),
         SurfaceCard(
           child: Column(

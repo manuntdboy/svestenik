@@ -49,6 +49,9 @@ class AppState extends ChangeNotifier {
   final List<AppUser> _profiles = [];
   final List<Diocese> _dioceses = [];
   final List<Vicariate> _vicariates = [];
+  final List<StaffEntry> _staff = [];
+  /// Митрополитът вижда митрополитския изглед; може да мине към храма си.
+  bool metroMode = true;
   final List<Church> _churches = [];
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
@@ -149,6 +152,8 @@ class AppState extends ChangeNotifier {
   }
 
   void _clear() {
+    _staff.clear();
+    metroMode = true;
     mustChangePassword = false;
     isCreator = false;
     _versionAt = null;
@@ -214,7 +219,11 @@ class AppState extends ChangeNotifier {
         _db.from('chat_messages').select().order('created_at', ascending: true),
         _db.from('chat_reads').select(),
         _db.from('chat_mutes').select(),
+        _db.from('diocese_staff').select(),
       ]);
+      _staff
+        ..clear()
+        ..addAll(results.last.map(StaffEntry.fromRow).whereType<StaffEntry>());
       _profiles
         ..clear()
         ..addAll(results[0].map((r) => AppUser.fromRow(r,
@@ -350,6 +359,7 @@ class AppState extends ChangeNotifier {
       return 'Този храм е в друга епархия. Ако сте избрали грешна епархия при регистрацията, '
           'свържете се със създателя на Кайрос – само той може да я смени.';
     }
+    if (t.contains('no_diocese')) return 'Човекът няма избрана епархия – първо я задайте.';
     if (t.contains('is_chair')) return 'Човекът е председател на храм в старата епархия – първо сменете председателя.';
     if (t.contains('name_taken')) return 'Такава околия вече има.';
     if (t.contains('bad_name')) return 'Въведете име.';
@@ -1276,6 +1286,52 @@ class AppState extends ChangeNotifier {
   bool isPrimary(String churchId) => currentUser?.primaryChurch == churchId;
 
   // ---------------------------------------------------------------- епархии
+
+  /// Моите длъжности в митрополията.
+  List<StaffEntry> get myStaff => _staff.where((e) => e.userId == currentUser?.id).toList();
+  List<StaffEntry> staffOf(String userId) => _staff.where((e) => e.userId == userId).toList();
+  bool get isMetropolitan => myStaff.any((e) => e.role == StaffRole.metropolitan);
+  bool isMetropolitanOf(String? dioceseId) =>
+      myStaff.any((e) => e.role == StaffRole.metropolitan && e.dioceseId == dioceseId);
+
+  /// Има ли изглед „Епархия“ (всяка длъжност в митрополията).
+  bool get hasDioceseView => myStaff.isNotEmpty;
+
+  /// Показва ли се митрополитският изглед вместо храма.
+  bool get showMetro => isMetropolitan && (metroMode || currentChurch == null);
+
+  void setMetroMode(bool on) {
+    metroMode = on;
+    notifyListeners();
+  }
+
+  /// Изгледът „Епархия“ (сървърът решава какво се вижда).
+  Future<Map<String, dynamic>> dioceseOverview([String? dioceseId]) async {
+    try {
+      final r = await _db.rpc('diocese_overview', params: {'p_diocese': dioceseId});
+      return Map<String, dynamic>.from(r as Map);
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> staffSet(String userId, StaffRole role, {String? vicariateId}) async {
+    try {
+      await _db.rpc('staff_set', params: {'p_user': userId, 'p_role': role.code, 'p_vicariate': vicariateId});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> staffRemove(String userId, StaffRole role, {String? vicariateId}) async {
+    try {
+      await _db.rpc('staff_remove', params: {'p_user': userId, 'p_role': role.code, 'p_vicariate': vicariateId});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
 
   /// Епархиите и околиите (публични – трябват още при регистрация).
   Future<void> loadPlaces() async {

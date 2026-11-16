@@ -9,6 +9,7 @@ import '../widgets/church_banner.dart';
 import '../widgets/church_address.dart';
 import '../widgets/common.dart';
 import '../widgets/whats_new.dart' show buildNumber;
+import 'diocese.dart';
 import 'priest_profile.dart' show showTempPassword;
 
 /// „Кайрос в числа“ – общ преглед за създателя. Данните идват от
@@ -628,6 +629,55 @@ class _PersonCard extends StatelessWidget {
                   } on AppError catch (e) {
                     if (context.mounted) showMessage(context, e.message);
                   }
+                } else if (v == 'staff') {
+                  if (s.dioceses.isEmpty) await s.loadPlaces();
+                  if (!context.mounted) return;
+                  final uid = u['id'] as String;
+                  final cur = s.staffOf(uid);
+                  final opts = <(StaffRole, String?, String)>[
+                    (StaffRole.metropolitan, null, 'Митрополит'),
+                    (StaffRole.secretary, null, 'Секретар'),
+                    (StaffRole.protosyngel, null, 'Протосингел'),
+                    for (final d in s.dioceses)
+                      for (final vv in s.vicariatesOf(d.id).where((x) => !x.isCenter))
+                        (StaffRole.vicar, vv.id, 'Наместник · ${d.name} · ${vv.name}'),
+                  ];
+                  final pick = await showDialog<(bool, StaffRole, String?, String)>(
+                    context: context,
+                    builder: (ctx) => SimpleDialog(
+                      title: Text('Длъжност в митрополията – $name'),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                          child: Text('В неговата епархия. Заема мястото на досегашния.',
+                              style: TextStyle(fontSize: 14, color: Palette.of(ctx).textMuted)),
+                        ),
+                        for (final e in cur)
+                          SimpleDialogOption(
+                            onPressed: () => Navigator.pop(ctx, (false, e.role, e.vicariateId, e.role.label)),
+                            child: Text(
+                                'Освободи: ${e.role.label}${e.vicariateId != null ? ' · ${s.vicariateName(e.vicariateId)}' : ''}',
+                                style: const TextStyle(fontSize: 16, color: Color(0xFFD0605A))),
+                          ),
+                        for (final o in opts)
+                          SimpleDialogOption(
+                            onPressed: () => Navigator.pop(ctx, (true, o.$1, o.$2, o.$3)),
+                            child: Text(o.$3, style: const TextStyle(fontSize: 16)),
+                          ),
+                      ],
+                    ),
+                  );
+                  if (pick == null || !context.mounted) return;
+                  try {
+                    if (pick.$1) {
+                      await s.staffSet(uid, pick.$2, vicariateId: pick.$3);
+                    } else {
+                      await s.staffRemove(uid, pick.$2, vicariateId: pick.$3);
+                    }
+                    if (context.mounted) showMessage(context, pick.$1 ? 'Назначен: ${pick.$4}.' : 'Освободен.');
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
                 } else if (v == 'diocese') {
                   if (s.dioceses.isEmpty) await s.loadPlaces();
                   if (!context.mounted) return;
@@ -694,6 +744,7 @@ class _PersonCard extends StatelessWidget {
                 const PopupMenuItem(value: 'roles', child: Text('Роли в храмовете')),
                 const PopupMenuItem(value: 'email', child: Text('Смени имейла')),
                 const PopupMenuItem(value: 'diocese', child: Text('Смени епархията')),
+                const PopupMenuItem(value: 'staff', child: Text('Длъжност в митрополията')),
                 const PopupMenuItem(value: 'pass', child: Text('Временна парола')),
                 PopupMenuItem(
                     value: u['suspended'] == true ? 'unsuspend' : 'suspend',
@@ -2002,6 +2053,18 @@ class _PlacesScreenState extends State<_PlacesScreen> {
               subtitle: Text('${s.vicariatesOf(d.id).length} раздела${d.hidden ? ' · скрита' : ''}',
                   style: TextStyle(color: p.textMuted)),
               children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                      label: const Text('Изглед „Епархия“ (както го вижда митрополитът)'),
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => metroTheme(DioceseScreen(dioceseId: d.id)))),
+                    ),
+                  ),
+                ),
                 for (final v in s.vicariatesOf(d.id))
                   ListTile(
                     dense: true,

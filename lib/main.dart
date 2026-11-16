@@ -14,7 +14,9 @@ import 'data/push.dart';
 import 'widgets/layout.dart';
 import 'screens/change_password.dart';
 import 'screens/church_connect.dart';
+import 'screens/diocese.dart';
 import 'screens/login.dart';
+import 'screens/metro_shell.dart';
 import 'screens/privacy.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
@@ -120,6 +122,8 @@ class RootGate extends StatelessWidget {
     if (s.currentUser?.suspended == true) return const _SuspendedScreen();
     if (s.mustChangePassword) return const ChangePasswordScreen(forced: true);
     if (s.needsPrivacy) return const PrivacyConsentScreen();
+    // Митрополитът – собствен изглед в пурпур и злато (може да мине към храма си).
+    if (s.showMetro) return metroTheme(const MetroShell());
     if (s.currentChurch == null) return const ChurchConnectScreen();
     // Ключът кара таблото да започне отначало при смяна на потребител или храм.
     return Shell(key: ValueKey('${s.currentUser!.id}-${s.currentChurch!.id}'));

@@ -11,7 +11,8 @@ enum ClergyRank {
   archpriest('archpriest', 'Протойерей'),
   stavrophor('stavrophor', 'Свещеноиконом'),
   archimandrite('archimandrite', 'Архимандрит'),
-  bishop('bishop', 'Епископ');
+  bishop('bishop', 'Епископ'),
+  metropolitan('metropolitan', 'Митрополит');
 
   final String code;
   final String label;
@@ -26,7 +27,7 @@ enum ClergyRank {
 const clergyTitleWords = {
   'о.', 'о', 'отец', 'свещеник', 'иерей', 'йерей', 'протойерей', 'протоиерей',
   'дякон', 'протодякон', 'свещеноиконом', 'ставрофор', 'йеродякон', 'иеродякон',
-  'архидякон', 'йеромонах', 'иеромонах', 'архимандрит', 'епископ', 'владика',
+  'архидякон', 'йеромонах', 'иеромонах', 'архимандрит', 'епископ', 'владика', 'митрополит',
 };
 
 String withRank(ClergyRank? rank, String name) {
@@ -1195,4 +1196,38 @@ class Vicariate {
         isCenter: (r['is_center'] as bool?) ?? false,
         sort: (r['sort'] as num?)?.toInt() ?? 0,
       );
+}
+
+
+/// Длъжност в митрополията.
+enum StaffRole {
+  metropolitan('metropolitan', 'Митрополит'),
+  secretary('secretary', 'Секретар'),
+  protosyngel('protosyngel', 'Протосингел'),
+  vicar('vicar', 'Архиерейски наместник');
+
+  final String code;
+  final String label;
+  const StaffRole(this.code, this.label);
+
+  static StaffRole? fromCode(Object? c) => StaffRole.values.where((r) => r.code == c).firstOrNull;
+}
+
+class StaffEntry {
+  final String dioceseId;
+  final String userId;
+  final StaffRole role;
+  final String? vicariateId;
+  const StaffEntry({required this.dioceseId, required this.userId, required this.role, this.vicariateId});
+
+  static StaffEntry? fromRow(Map<String, dynamic> r) {
+    final role = StaffRole.fromCode(r['role']);
+    if (role == null) return null;
+    return StaffEntry(
+      dioceseId: r['diocese_id'] as String,
+      userId: r['user_id'] as String,
+      role: role,
+      vicariateId: r['vicariate_id'] as String?,
+    );
+  }
 }

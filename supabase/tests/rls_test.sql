@@ -902,6 +902,45 @@ select t.ok((select diocese_id from vicariates where id = :'nv') = :'szd', 'съ
 select t.fails(format('select public.creator_vicariate_save(%L, null, %L)', :'szd', 'Тестова околия'), 'околиите не се повтарят', 'name_taken');
 select t.fails(format('select public.church_set_vicariate(%L, %L)', :'cid', :'kzl'),
                'храм с членове от друга епархия не се мести', 'members_other_diocese');
+\echo '== Митрополия: длъжности и изглед „Епархия“'
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+ ('00000000-0000-0000-0000-0000000000e3', 'e3@x.bg', json_build_object('username','mitro','full_name','Киприан','diocese_id',:'szd')::jsonb);
+set role authenticated;
+\set E3 '00000000-0000-0000-0000-0000000000e3'
+select t.as_user(:'E1');
+select t.fails(format('select public.staff_set(%L, %L)', :'E1', 'metropolitan'), 'никой не става сам митрополит', 'forbidden');
+select t.fails($$select public.diocese_overview()$$, 'без длъжност – няма изглед „Епархия“', 'forbidden');
+select t.as_user(:'A');
+select public.staff_set(:'E3', 'metropolitan') \g /dev/null
+reset role;
+select t.ok((select rank from profiles where id = :'E3') = 'metropolitan', 'създателят оторизира митрополита');
+set role authenticated;
+select t.as_user(:'E3');
+select public.diocese_overview() as ov \gset
+select t.ok((:'ov'::jsonb->'diocese'->>'id') = :'szd', 'митрополитът вижда своята епархия');
+select t.ok(jsonb_array_length(:'ov'::jsonb->'sections') = 7, 'всички раздели (център + 5 околии + новата)');
+select t.ok(exists (select 1 from jsonb_array_elements(:'ov'::jsonb->'sections') s,
+                     jsonb_array_elements(s->'churches') c, jsonb_array_elements(c->'priests') p
+                     where c->>'name' = 'Св. Тест' and (p->>'chair')::boolean), 'храмовете и председателят са в изгледа');
+select t.ok(:'ov'::text not like '%amount%' and :'ov'::text not like '%starts_at%', 'без каса и без служби');
+select public.staff_set(:'E1', 'secretary') \g /dev/null
+select public.staff_set(:'E1', 'vicar', :'kzl') \g /dev/null
+select t.ok((select count(*) from diocese_staff where diocese_id = :'szd') = 3, 'митрополитът назначава секретар и наместник');
+select t.fails(format('select public.staff_set(%L, %L, %L)', :'E1', 'vicar',
+                      (select id from vicariates where name = 'Тестова духовна околия')),
+               'наместник само в своята епархия', 'other_diocese');
+select t.fails(format('select public.staff_set(%L, %L)', :'B', 'secretary'), 'не назначава хора от друга епархия', 'forbidden');
+select t.as_user(:'E1');
+select t.ok(jsonb_array_length(public.diocese_overview()->'sections') = 7, 'секретарят вижда цялата епархия');
+select t.as_user(:'E3');
+select public.staff_remove(:'E1', 'secretary') \g /dev/null
+select t.as_user(:'E1');
+select t.fails(format('select public.staff_remove(%L, %L, %L)', :'E1', 'vicar', :'kzl'), 'само митрополитът освобождава', 'forbidden');
+select t.ok(jsonb_array_length(public.diocese_overview()->'sections') = 1, 'наместникът вижда само своята околия');
+select t.as_user(:'B');
+select t.fails($$select public.diocese_overview()$$, 'свещеник без длъжност не вижда епархията', 'forbidden');
+select t.as_user(:'A');
 \echo '== Адрес и Булстат на храма'
 select t.as_user(:'B');
 select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '123456789'), 'свещеникът не сменя адреса', 'not_manager');

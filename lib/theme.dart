@@ -104,8 +104,31 @@ class Palette {
   /// Текст върху цвета на свещеника.
   Color onPriest() => dark ? const Color(0xFF0F1D2D) : Colors.white;
 
-  static Palette of(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? darkP : light;
+  /// Митрополитската тема – пурпур и злато (като вътрешния вид на митрополията).
+  static const metro = Palette(
+    bg: Color(0xFF1E0912),
+    surface: Color(0xFF2E1220),
+    surfaceAlt: Color(0xFF26101B),
+    border: Color(0xFF4A2234),
+    text: Color(0xFFF6EAD6),
+    textMuted: Color(0xFFCDB9A0),
+    primary: Color(0xFFE2B553),
+    onPrimary: Color(0xFF2B0B18),
+    heroBg: Color(0xFF3A0F22),
+    heroBorder: Color(0xFFD9A63A),
+    heroMuted: Color(0xFFE8D4B4),
+    calendarTile: Color(0xFFE2B553),
+    onCalendarTile: Color(0xFF2B0B18),
+    calendarTileMuted: Color(0xFF3A1A28),
+    chipBg: Color(0xFF3A1A28),
+    chipText: Color(0xFFE8D4B4),
+    dark: true,
+  );
+
+  static Palette of(BuildContext context) {
+    final t = Theme.of(context);
+    return t.extension<PaletteTheme>()?.p ?? (t.brightness == Brightness.dark ? darkP : light);
+  }
 
   /// Приглушени цветове за видовете събития (фон, текст).
   (Color, Color) kind(EventKind k) {
@@ -140,6 +163,18 @@ class Palette {
   }
 }
 
+/// Палитрата, закачена към темата (за да работи и митрополитската).
+class PaletteTheme extends ThemeExtension<PaletteTheme> {
+  final Palette p;
+  const PaletteTheme(this.p);
+
+  @override
+  PaletteTheme copyWith({Palette? p}) => PaletteTheme(p ?? this.p);
+
+  @override
+  PaletteTheme lerp(covariant PaletteTheme? other, double t) => t < 0.5 ? this : (other ?? this);
+}
+
 ThemeData buildTheme(Palette p) {
   final base = ThemeData(
     useMaterial3: true,
@@ -154,6 +189,7 @@ ThemeData buildTheme(Palette p) {
       onSurface: p.text,
     ),
     scaffoldBackgroundColor: p.bg,
+    extensions: [PaletteTheme(p)],
   );
   final t = base.textTheme.apply(bodyColor: p.text, displayColor: p.text);
   return base.copyWith(
