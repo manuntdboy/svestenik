@@ -1432,11 +1432,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Служител по потребителско име (митрополитът или създателят).
-  Future<void> staffAddEmployee(String dioceseId, String username, String title) async {
+  /// Човек в администрацията по потребителско име (секретар, протосингел,
+  /// служител) – митрополитът или създателят.
+  Future<void> staffAddByUsername(String dioceseId, String username, StaffRole role, {String? title}) async {
     try {
-      await _db.rpc('staff_add_employee',
-          params: {'p_diocese': dioceseId, 'p_username': username.trim(), 'p_title': title.trim()});
+      await _db.rpc('staff_add', params: {
+        'p_diocese': dioceseId,
+        'p_username': username.trim(),
+        'p_role': role.code,
+        'p_title': title?.trim(),
+      });
       await refresh();
     } catch (e) {
       throw AppError(_friendly(e));

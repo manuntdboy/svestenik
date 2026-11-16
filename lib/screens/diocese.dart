@@ -94,11 +94,23 @@ class _DioceseScreenState extends State<DioceseScreen> {
     if (d == null) return;
     final u = TextEditingController();
     final t = TextEditingController();
+    var role = StaffRole.employee;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Служител в митрополията'),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, set) => AlertDialog(
+        title: const Text('Човек в администрацията'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
+          DropdownButtonFormField<StaffRole>(
+            initialValue: role,
+            decoration: const InputDecoration(labelText: 'Длъжност'),
+            items: const [
+              DropdownMenuItem(value: StaffRole.secretary, child: Text('Секретар')),
+              DropdownMenuItem(value: StaffRole.protosyngel, child: Text('Протосингел')),
+              DropdownMenuItem(value: StaffRole.employee, child: Text('Служител (шофьор, счетоводител…)')),
+            ],
+            onChanged: (v) => set(() => role = v ?? StaffRole.employee),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: u,
             autofocus: true,
@@ -106,22 +118,24 @@ class _DioceseScreenState extends State<DioceseScreen> {
             decoration: const InputDecoration(
                 labelText: 'Потребителско име', helperText: 'Човекът се регистрира в Кайрос с тази епархия.'),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: t,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Длъжност', hintText: 'Счетоводител'),
-          ),
+          if (role == StaffRole.employee) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: t,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Какво работи', hintText: 'Шофьор'),
+            ),
+          ],
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отказ')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Добави')),
         ],
-      ),
+      )),
     );
     if (ok != true || !mounted) return;
     try {
-      await s.staffAddEmployee(d, u.text, t.text);
+      await s.staffAddByUsername(d, u.text, role, title: role == StaffRole.employee ? t.text : null);
       await _load();
       if (mounted) showMessage(context, 'Добавен в администрацията.');
     } on AppError catch (e) {
@@ -266,7 +280,7 @@ class _DioceseScreenState extends State<DioceseScreen> {
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
                     icon: const Icon(Icons.person_add_alt_rounded, size: 18),
-                    label: const Text('Добави служител (счетоводител, деловодител…)'),
+                    label: const Text('Добави човек в администрацията (секретар, служител…)'),
                     onPressed: _addEmployee,
                   ),
                 ),

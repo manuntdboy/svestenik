@@ -175,3 +175,22 @@ end;
 $$;
 revoke execute on function public.staff_add_employee(uuid, text, text) from public, anon;
 grant execute on function public.staff_add_employee(uuid, text, text) to authenticated;
+
+-- Назначаване по потребителско име – и за секретар/протосингел, които може
+-- да са цивилни (без храм, затова ги няма в изгледа „Епархия“).
+create or replace function public.staff_add(p_diocese uuid, p_username text, p_role text, p_title text default null)
+returns uuid language plpgsql security definer set search_path = public, extensions as $$
+declare
+  u uuid;
+begin
+  if p_role not in ('secretary', 'protosyngel', 'employee') then raise exception 'bad_role'; end if;
+  if not (public.is_creator() or public.is_metropolitan_of(p_diocese)) then raise exception 'forbidden'; end if;
+  select id into u from profiles where username = lower(trim(coalesce(p_username, '')));
+  if u is null then raise exception 'user_not_found'; end if;
+  if (select diocese_id from profiles where id = u) is distinct from p_diocese then raise exception 'other_diocese'; end if;
+  perform public.staff_set(u, p_role, null, p_title);
+  return u;
+end;
+$$;
+revoke execute on function public.staff_add(uuid, text, text, text) from public, anon;
+grant execute on function public.staff_add(uuid, text, text, text) to authenticated;
