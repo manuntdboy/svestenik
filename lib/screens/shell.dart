@@ -120,7 +120,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       await s.loadMetroPeople();
       final x = s.metroPeople.where((e) => e['user_id'] == thread).firstOrNull;
       nav.push(MaterialPageRoute(
-          builder: (_) => metroTheme(MetroThreadScreen(
+          builder: (_) => (s.isMetropolitan ? metroTheme : (Widget w) => w)(MetroThreadScreen(
               thread: thread,
               title: thread == 'c' ? 'Администрация' : withRank(ClergyRank.fromCode(x?['rank']), '${x?['name'] ?? ''}')))));
     } else if (type.startsWith('duty')) {

@@ -110,22 +110,22 @@ class ChatListScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Material(
-              color: Palette.metro.heroBg,
+              color: p.heroBg,
               borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => metroTheme(const MetroChatScreen()))),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => s.isMetropolitan ? metroTheme(const MetroChatScreen()) : const MetroChatScreen())),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(children: [
-                    Text('☦', style: TextStyle(fontSize: 20, color: Palette.metro.primary)),
+                    const Text('☦', style: TextStyle(fontSize: 20, color: Palette.yellow)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                           s.metroUnreadAll > 0 ? 'Митрополия · ${s.metroUnreadAll} нови' : 'Чат · Митрополия',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Palette.metro.text)),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
                     ),
-                    Icon(Icons.chevron_right_rounded, color: Palette.metro.primary),
+                    const Icon(Icons.chevron_right_rounded, color: Palette.yellow),
                   ]),
                 ),
               ),

@@ -354,7 +354,7 @@ Future<void> openInMaps(BuildContext context, String address) async {
   if (!ok && context.mounted) showMessage(context, 'Картата не може да се отвори.');
 }
 
-/// Пурпурната значка „☦ длъжност в митрополията“ до името на човек.
+/// Значката „☦ длъжност в митрополията“ до името на човек.
 class StaffBadge extends StatelessWidget {
   final String label;
   const StaffBadge(this.label, {super.key});
@@ -364,11 +364,11 @@ class StaffBadge extends StatelessWidget {
         padding: const EdgeInsets.only(top: 3),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: Palette.metro.heroBg, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: Palette.of(context).heroBg, borderRadius: BorderRadius.circular(10)),
           child: Text('☦ $label',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Palette.metro.primary)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Palette.yellow)),
         ),
       );
 }

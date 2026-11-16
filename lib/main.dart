@@ -123,7 +123,8 @@ class RootGate extends StatelessWidget {
     if (s.mustChangePassword) return const ChangePasswordScreen(forced: true);
     if (s.needsPrivacy) return const PrivacyConsentScreen();
     // Митрополитът – собствен изглед в пурпур и злато (може да мине към храма си).
-    if (s.showMetro) return metroTheme(const MetroShell());
+    // Пурпурът е само за митрополита; останалите от митрополията – обичайната тема.
+    if (s.showMetro) return s.isMetropolitan ? metroTheme(const MetroShell()) : const MetroShell();
     if (s.currentChurch == null) return const ChurchConnectScreen();
     // Ключът кара таблото да започне отначало при смяна на потребител или храм.
     return Shell(key: ValueKey('${s.currentUser!.id}-${s.currentChurch!.id}'));

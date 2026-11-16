@@ -75,13 +75,15 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 10),
               if (s.hasDioceseView)
               FilledButton.icon(
-                style: FilledButton.styleFrom(
-                    backgroundColor: Palette.metro.heroBg, foregroundColor: Palette.metro.primary),
+                style: s.isMetropolitan
+                    ? FilledButton.styleFrom(
+                        backgroundColor: Palette.metro.heroBg, foregroundColor: Palette.metro.primary)
+                    : null,
                 icon: const Icon(Icons.account_balance_outlined),
                 label: Text(s.isMetropolitan ? 'Митрополитски изглед' : 'Епархия'),
                 onPressed: () => s.isMetropolitan
                     ? s.setMetroMode(true)
-                    : Navigator.push(context, MaterialPageRoute(builder: (_) => metroTheme(const DioceseScreen()))),
+                    : Navigator.push(context, MaterialPageRoute(builder: (_) => const DioceseScreen())),
               ),
             ]),
           ),
