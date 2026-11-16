@@ -628,6 +628,38 @@ class _PersonCard extends StatelessWidget {
                   } on AppError catch (e) {
                     if (context.mounted) showMessage(context, e.message);
                   }
+                } else if (v == 'diocese') {
+                  if (s.dioceses.isEmpty) await s.loadPlaces();
+                  if (!context.mounted) return;
+                  final d = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => SimpleDialog(
+                      title: Text('Епархия – $name'),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                          child: Text('Напуска храмовете си от другите епархии. Ако е председател там – първо сменете председателя.',
+                              style: TextStyle(fontSize: 14, color: Palette.of(ctx).textMuted)),
+                        ),
+                        for (final x in s.dioceses)
+                          SimpleDialogOption(
+                            onPressed: () => Navigator.pop(ctx, x.id),
+                            child: Text(x.name, style: const TextStyle(fontSize: 16)),
+                          ),
+                      ],
+                    ),
+                  );
+                  if (d == null || !context.mounted) return;
+                  try {
+                    final n = await s.creatorSetUserDiocese(u['id'] as String, d);
+                    if (context.mounted) {
+                      showMessage(context,
+                          'Епархията е сменена: ${s.dioceseName(d)}.${n > 0 ? ' Напусна $n храм(а).' : ''}');
+                    }
+                    await onRefresh?.call();
+                  } on AppError catch (e) {
+                    if (context.mounted) showMessage(context, e.message);
+                  }
                 } else if (v == 'roles') {
                   await showModalBottomSheet<void>(
                     context: context,
@@ -661,6 +693,7 @@ class _PersonCard extends StatelessWidget {
                 const PopupMenuItem(value: 'log', child: Text('Дневник на действията')),
                 const PopupMenuItem(value: 'roles', child: Text('Роли в храмовете')),
                 const PopupMenuItem(value: 'email', child: Text('Смени имейла')),
+                const PopupMenuItem(value: 'diocese', child: Text('Смени епархията')),
                 const PopupMenuItem(value: 'pass', child: Text('Временна парола')),
                 PopupMenuItem(
                     value: u['suspended'] == true ? 'unsuspend' : 'suspend',
@@ -1427,7 +1460,14 @@ class _Churches extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
         children: [
-          Text('${list.length} храма', style: TextStyle(color: p.textMuted, fontSize: 13.5)),
+          Row(children: [
+            Expanded(child: Text('${list.length} храма', style: TextStyle(color: p.textMuted, fontSize: 13.5))),
+            TextButton.icon(
+              icon: const Icon(Icons.account_balance_outlined, size: 18),
+              label: const Text('Епархии и околии'),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _PlacesScreen())),
+            ),
+          ]),
           const SizedBox(height: 8),
           for (final c in list) ...[
             SurfaceCard(
@@ -1456,6 +1496,24 @@ class _Churches extends StatelessWidget {
                     onPressed: () async {
                       final ok = await _deleteChurch(context, c['id'] as String, '${c['name']}');
                       if (ok) await onRefresh();
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.account_balance_outlined, size: 18),
+                    label: const Text('Околия'),
+                    onPressed: () async {
+                      final s = AppScope.of(context);
+                      try {
+                        final sum = await s.creatorChurchSummary(c['id'] as String);
+                        if (!context.mounted) return;
+                        final ok = await editChurchVicariate(context,
+                            churchId: c['id'] as String,
+                            dioceseId: sum['diocese_id'] as String?,
+                            vicariateId: sum['vicariate_id'] as String?);
+                        if (ok && context.mounted) showMessage(context, 'Записано.');
+                      } on AppError catch (e) {
+                        if (context.mounted) showMessage(context, e.message);
+                      }
                     },
                   ),
                   OutlinedButton.icon(
@@ -1881,6 +1939,94 @@ class _AnnounceState extends State<_Announce> {
           ],
         ],
       ),
+    );
+  }
+}
+
+
+/// Епархии и околии: добавяне и преименуване на околии (само създателят).
+class _PlacesScreen extends StatefulWidget {
+  const _PlacesScreen();
+
+  @override
+  State<_PlacesScreen> createState() => _PlacesScreenState();
+}
+
+class _PlacesScreenState extends State<_PlacesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    AppScope.read(context).loadPlaces();
+  }
+
+  Future<void> _edit(String dioceseId, {String? id, String name = ''}) async {
+    final s = AppScope.read(context);
+    final c = TextEditingController(text: name);
+    final v = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(id == null ? 'Нова духовна околия' : 'Преименуване'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(labelText: 'Име', hintText: 'Казанлъшка духовна околия'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отказ')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Запази')),
+        ],
+      ),
+    );
+    if (v == null || !mounted) return;
+    try {
+      await s.creatorSaveVicariate(dioceseId, id, v);
+      if (mounted) showMessage(context, 'Записано.');
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final p = Palette.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Епархии и околии')),
+      body: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 28), children: [
+        for (final d in s.dioceses)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ExpansionTile(
+              title: Text(d.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('${s.vicariatesOf(d.id).length} раздела${d.hidden ? ' · скрита' : ''}',
+                  style: TextStyle(color: p.textMuted)),
+              children: [
+                for (final v in s.vicariatesOf(d.id))
+                  ListTile(
+                    dense: true,
+                    title: Text(v.isCenter ? '${v.name} (епархийски център)' : v.name),
+                    trailing: IconButton(
+                      tooltip: 'Преименувай',
+                      icon: const Icon(Icons.edit_rounded, size: 18),
+                      onPressed: () => _edit(d.id, id: v.id, name: v.name),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Добави околия'),
+                      onPressed: () => _edit(d.id),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ]),
     );
   }
 }

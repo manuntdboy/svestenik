@@ -853,6 +853,48 @@ select public.creator_view_as(:'C') as va \gset
 select t.ok(jsonb_array_length(:'va'::jsonb->'churches') >= 1 and (:'va'::jsonb ? 'cards'), '„какво вижда“ връща храмове и карти');
 select t.ok(public.creator_cash_overview(:'cid') ? 'pending', 'създателят вижда чакащите в касата');
 select t.fails(format('select public.creator_cash_reopen(%L, %L)', :'cid', '1990-01-01'), 'неприключен месец не се отключва', 'not_found');
+\echo '== Епархии и околии'
+select t.ok((select count(*) from dioceses where not hidden) = 15, '15 епархии в менюто, „Тест“ е скрита');
+select t.ok((select count(*) from vicariates v join dioceses d on d.id = v.diocese_id
+              where d.name = 'Старозагорска епархия') = 6, 'Старозагорска: център + 5 околии');
+select t.ok((select d.name from churches c join dioceses d on d.id = c.diocese_id where c.id = :'cid') = 'Тест'
+            and (select vicariate_id is not null from churches where id = :'cid'), 'новият храм е в епархията на създателя, в центъра');
+select id as szd from dioceses where name = 'Старозагорска епархия' \gset
+select id as kzl from vicariates where name = 'Казанлъшка духовна околия' \gset
+select id as tst from dioceses where name = 'Тест' \gset
+reset role;
+select join_code as jc from churches where id = :'cid' \gset
+insert into auth.users (id, email, raw_user_meta_data) values
+ ('00000000-0000-0000-0000-0000000000e1', 'e1@x.bg', json_build_object('username','eparh1','full_name','Отец Е','diocese_id',:'szd')::jsonb),
+ ('00000000-0000-0000-0000-0000000000e2', 'e2@x.bg', json_build_object('username','eparh2','full_name','Отец Ж','diocese_id',:'tst')::jsonb);
+\set E1 '00000000-0000-0000-0000-0000000000e1'
+\set E2 '00000000-0000-0000-0000-0000000000e2'
+select t.ok((select diocese_id from profiles where id = :'E1') = :'szd', 'епархията идва от регистрацията');
+select t.ok((select diocese_id is null from profiles where id = :'E2'), 'скритата „Тест“ не се приема при регистрация');
+set role authenticated;
+select t.as_user(:'E1');
+select t.fails(format('select public.join_church(%L)', :'jc'),
+               'не се влиза в храм от чужда епархия', 'other_diocese');
+select t.as_user(:'E2');
+select public.join_church(:'jc') \g /dev/null
+reset role;
+select t.ok((select diocese_id from profiles where id = :'E2') = :'tst', 'без епархия – поема епархията на храма');
+set role authenticated;
+select t.as_user(:'B');
+select t.fails(format('select public.church_set_vicariate(%L, %L)', :'cid', :'kzl'), 'свещеникът не сменя околията', 'not_manager');
+select t.fails(format('select public.creator_set_user_diocese(%L, %L)', :'E1', :'tst'), 'само създателят сменя епархия', 'forbidden');
+select t.as_user(:'A');
+select t.ok(public.creator_set_user_diocese(:'E1', :'tst') = 0, 'създателят сменя епархията');
+select t.as_user(:'E1');
+select public.join_church(:'jc') \g /dev/null
+select t.ok(exists (select 1 from church_members where church_id = :'cid' and user_id = :'E1'), 'след смяната влиза в храма');
+select t.as_user(:'A');
+select t.ok(public.creator_set_user_diocese(:'E1', :'szd') = 1, 'смяна на епархия – напуска храмовете от старата');
+select public.creator_vicariate_save(:'szd', null, 'Тестова околия') as nv \gset
+select t.ok((select diocese_id from vicariates where id = :'nv') = :'szd', 'създателят добавя околия');
+select t.fails(format('select public.creator_vicariate_save(%L, null, %L)', :'szd', 'Тестова околия'), 'околиите не се повтарят', 'name_taken');
+select t.fails(format('select public.church_set_vicariate(%L, %L)', :'cid', :'kzl'),
+               'храм с членове от друга епархия не се мести', 'members_other_diocese');
 \echo '== Адрес и Булстат на храма'
 select t.as_user(:'B');
 select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '123456789'), 'свещеникът не сменя адреса', 'not_manager');

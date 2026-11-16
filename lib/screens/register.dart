@@ -22,6 +22,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _show = false;
   bool _busy = false;
   String? _error;
+  String? _diocese;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = AppScope.read(context);
+    if (s.dioceses.isEmpty) s.loadPlaces();
+  }
 
   @override
   void dispose() {
@@ -47,6 +55,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       username: _user.text,
       email: _email.text,
       password: _pass.text,
+      dioceseId: _diocese,
     );
     if (!mounted) return;
     if (err == null) {
@@ -117,6 +126,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 hint: 'например georgi', autofill: const [AutofillHints.newUsername]),
             _field('Имейл (за забравена парола)', _email,
                 type: TextInputType.emailAddress, autofill: const [AutofillHints.email]),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const FieldLabel('Епархия'),
+                ListenableBuilder(
+                  listenable: AppScope.read(context),
+                  builder: (ctx, _) {
+                    final ds = AppScope.read(ctx).dioceses.where((d) => !d.hidden).toList();
+                    return DropdownButtonFormField<String>(
+                      initialValue: _diocese,
+                      isExpanded: true,
+                      hint: Text(ds.isEmpty ? 'Зареждане…' : 'Изберете епархията си'),
+                      items: [
+                        for (final d in ds)
+                          DropdownMenuItem(value: d.id, child: Text(d.name, overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (v) => setState(() => _diocese = v),
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+                Text('Влизате само в храмове от тази епархия. Сменя се само чрез създателя на Кайрос.',
+                    style: TextStyle(fontSize: 14, color: p.textMuted)),
+              ]),
+            ),
             _field('Парола (поне 6 знака)', _pass,
                 password: true, autofill: const [AutofillHints.newPassword]),
             _field('Повторете паролата', _pass2, password: true),

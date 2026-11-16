@@ -126,6 +126,74 @@ Future<bool> editChurchInfo(BuildContext context,
   return saved == true;
 }
 
+/// Избор на духовна околия за храм. Председателят – в своята епархия;
+/// създателят – във всички (с епархията пред името). Връща true при запис.
+Future<bool> editChurchVicariate(BuildContext context,
+    {required String churchId, String? dioceseId, String? vicariateId}) async {
+  final s = AppScope.read(context);
+  if (s.dioceses.isEmpty) await s.loadPlaces();
+  if (!context.mounted) return false;
+  final all = s.isCreator;
+  final options = <(String, String)>[
+    for (final d in all ? s.dioceses : s.dioceses.where((d) => d.id == dioceseId))
+      for (final v in s.vicariatesOf(d.id))
+        (v.id, '${all ? '${d.name} · ' : ''}${v.name}${v.isCenter ? ' (епархийски център)' : ''}'),
+  ];
+  String? pick = vicariateId;
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (ctx) {
+      String? err;
+      var busy = false;
+      return StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('Духовна околия'),
+          content: SizedBox(
+            width: 460,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              DropdownButtonFormField<String>(
+                initialValue: options.any((o) => o.$1 == pick) ? pick : null,
+                isExpanded: true,
+                hint: const Text('Изберете'),
+                items: [
+                  for (final o in options)
+                    DropdownMenuItem(value: o.$1, child: Text(o.$2, overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: (v) => set(() => pick = v),
+              ),
+              if (err != null) ...[
+                const SizedBox(height: 8),
+                Text(err!, style: TextStyle(color: Theme.of(ctx).colorScheme.error, fontWeight: FontWeight.w600)),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: busy ? null : () => Navigator.pop(ctx, false), child: const Text('Отказ')),
+            FilledButton(
+              onPressed: busy || pick == null
+                  ? null
+                  : () async {
+                      set(() => busy = true);
+                      try {
+                        await s.setChurchVicariate(churchId, pick!);
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } on AppError catch (e) {
+                        set(() {
+                          busy = false;
+                          err = e.message;
+                        });
+                      }
+                    },
+              child: const Text('Запази'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+  return saved == true;
+}
+
 /// Адресът и Булстатът на храма с бутоните за навигация.
 /// Председателят вижда и „Редактирай“.
 class ChurchAddressBlock extends StatelessWidget {
@@ -138,7 +206,27 @@ class ChurchAddressBlock extends StatelessWidget {
     final p = Palette.of(context);
     final addr = (church.address ?? '').trim();
     final bul = (church.bulstat ?? '').trim();
+    final place = AppScope.of(context).churchPlace(church);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (place.isNotEmpty) ...[
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.account_balance_outlined, size: 20, color: p.textMuted),
+          const SizedBox(width: 8),
+          Expanded(child: Text(place, style: const TextStyle(fontSize: 15))),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Смени околията',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              onPressed: () async {
+                final ok = await editChurchVicariate(context,
+                    churchId: church.id, dioceseId: church.dioceseId, vicariateId: church.vicariateId);
+                if (ok && context.mounted) showMessage(context, 'Записано.');
+              },
+            ),
+        ]),
+        const SizedBox(height: 6),
+      ],
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(Icons.place_rounded, size: 20, color: p.textMuted),
         const SizedBox(width: 8),

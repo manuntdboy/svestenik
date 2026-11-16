@@ -69,6 +69,7 @@ class AppUser {
   final bool suspended;
   /// Основният храм – най-отгоре в списъка и с него се отваря приложението.
   String? primaryChurch;
+  String? dioceseId;
 
   AppUser({
     required this.id,
@@ -80,6 +81,7 @@ class AppUser {
     this.privacyVersion = 0,
     this.suspended = false,
     this.primaryChurch,
+    this.dioceseId,
   }) : name = fullName;
 
   /// Името за показване – със сана отпред, ако е избран.
@@ -95,6 +97,7 @@ class AppUser {
         privacyVersion: (r['privacy_version'] as num?)?.toInt() ?? 0,
         suspended: r['suspended_at'] != null,
         primaryChurch: r['primary_church'] as String?,
+        dioceseId: r['diocese_id'] as String?,
       );
 }
 
@@ -111,6 +114,8 @@ class Church {
   final bool approvalsToggleAllowed; // създателят разрешава тестовия режим без второ одобрение
   String? address; // точен адрес (улица, №) – за навигацията до храма
   String? bulstat;
+  String? dioceseId;
+  String? vicariateId;
 
   Church({
     required this.id,
@@ -125,6 +130,8 @@ class Church {
     this.approvalsToggleAllowed = false,
     this.address,
     this.bulstat,
+    this.dioceseId,
+    this.vicariateId,
   });
 
   String get place => '$settlement, общ. $municipality';
@@ -150,6 +157,8 @@ class Church {
         approvalsToggleAllowed: (r['approvals_toggle_allowed'] as bool?) ?? false,
         address: r['address'] as String?,
         bulstat: r['bulstat'] as String?,
+        dioceseId: r['diocese_id'] as String?,
+        vicariateId: r['vicariate_id'] as String?,
       );
 }
 
@@ -1149,5 +1158,41 @@ class ChatMessage {
         recipientId: r['recipient_id'] as String?,
         body: r['body'] as String,
         createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+      );
+}
+
+
+/// Епархия на БПЦ („Тест“ е скрита – само за изпитания).
+class Diocese {
+  final String id;
+  final String name;
+  final int sort;
+  final bool hidden;
+  const Diocese({required this.id, required this.name, this.sort = 0, this.hidden = false});
+
+  factory Diocese.fromRow(Map<String, dynamic> r) => Diocese(
+        id: r['id'] as String,
+        name: r['name'] as String,
+        sort: (r['sort'] as num?)?.toInt() ?? 0,
+        hidden: (r['hidden'] as bool?) ?? false,
+      );
+}
+
+/// Духовна околия или епархийският център (напр. „Стара Загора“).
+class Vicariate {
+  final String id;
+  final String dioceseId;
+  final String name;
+  final bool isCenter;
+  final int sort;
+  const Vicariate(
+      {required this.id, required this.dioceseId, required this.name, this.isCenter = false, this.sort = 0});
+
+  factory Vicariate.fromRow(Map<String, dynamic> r) => Vicariate(
+        id: r['id'] as String,
+        dioceseId: r['diocese_id'] as String,
+        name: r['name'] as String,
+        isCenter: (r['is_center'] as bool?) ?? false,
+        sort: (r['sort'] as num?)?.toInt() ?? 0,
       );
 }

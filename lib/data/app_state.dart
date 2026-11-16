@@ -47,6 +47,8 @@ class AppState extends ChangeNotifier {
   StreamSubscription<AuthState>? _authSub;
 
   final List<AppUser> _profiles = [];
+  final List<Diocese> _dioceses = [];
+  final List<Vicariate> _vicariates = [];
   final List<Church> _churches = [];
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
@@ -189,6 +191,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     try {
+      if (_dioceses.isEmpty) await loadPlaces();
       final results = await Future.wait([
         _db.from('profiles').select(),
         _db.from('churches').select(),
@@ -342,6 +345,14 @@ class AppState extends ChangeNotifier {
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('need_chair')) return 'Първо изберете друг председател на храма.';
     if (t.contains('not_member')) return 'Не сте член на този храм.';
+    if (t.contains('members_other_diocese')) return 'В храма има хора от друга епархия – първо сменете тяхната епархия.';
+    if (t.contains('other_diocese')) {
+      return 'Този храм е в друга епархия. Ако сте избрали грешна епархия при регистрацията, '
+          'свържете се със създателя на Кайрос – само той може да я смени.';
+    }
+    if (t.contains('is_chair')) return 'Човекът е председател на храм в старата епархия – първо сменете председателя.';
+    if (t.contains('name_taken')) return 'Такава околия вече има.';
+    if (t.contains('bad_name')) return 'Въведете име.';
     if (t.contains('bad_bulstat')) return 'Булстатът трябва да е 9 или 13 цифри.';
     if (t.contains('address_too_long')) return 'Адресът е твърде дълъг (до 200 знака).';
     if (t.contains('name_mismatch')) return 'Името не съвпада – храмът не е изтрит.';
@@ -931,8 +942,10 @@ class AppState extends ChangeNotifier {
     required String username,
     required String email,
     required String password,
+    String? dioceseId,
   }) async {
     final uname = username.trim().toLowerCase();
+    if (dioceseId == null) return 'Изберете епархия.';
     if (!RegExp(r'^[a-z0-9._-]{3,30}$').hasMatch(uname)) {
       return 'Потребителското име трябва да е от 3 до 30 латински букви, цифри, точка или тире.';
     }
@@ -947,7 +960,7 @@ class AppState extends ChangeNotifier {
       final res = await _db.auth.signUp(
         email: email.trim(),
         password: password,
-        data: {'username': uname, 'full_name': fullName.trim()},
+        data: {'username': uname, 'full_name': fullName.trim(), 'diocese_id': dioceseId},
       );
       if (res.session == null) {
         return 'Профилът е създаден. Отворете писмото, което изпратихме на ${email.trim()}, '
@@ -1261,6 +1274,76 @@ class AppState extends ChangeNotifier {
   }
 
   bool isPrimary(String churchId) => currentUser?.primaryChurch == churchId;
+
+  // ---------------------------------------------------------------- епархии
+
+  /// Епархиите и околиите (публични – трябват още при регистрация).
+  Future<void> loadPlaces() async {
+    try {
+      final r = await Future.wait([
+        _db.from('dioceses').select().order('sort'),
+        _db.from('vicariates').select().order('sort'),
+      ]);
+      _dioceses
+        ..clear()
+        ..addAll(r[0].map(Diocese.fromRow));
+      _vicariates
+        ..clear()
+        ..addAll(r[1].map(Vicariate.fromRow));
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Епархиите за избор (без скритата „Тест“, освен за създателя).
+  List<Diocese> get dioceses => _dioceses.where((d) => !d.hidden || isCreator).toList();
+
+  List<Vicariate> vicariatesOf(String? dioceseId) =>
+      _vicariates.where((v) => v.dioceseId == dioceseId).toList()
+        ..sort((a, b) => a.isCenter != b.isCenter ? (a.isCenter ? -1 : 1) : a.sort.compareTo(b.sort));
+
+  String? dioceseName(String? id) => _dioceses.where((d) => d.id == id).firstOrNull?.name;
+  String? vicariateName(String? id) => _vicariates.where((v) => v.id == id).firstOrNull?.name;
+
+  /// „Старозагорска епархия · Казанлъшка духовна околия“.
+  String churchPlace(Church c) =>
+      [dioceseName(c.dioceseId), vicariateName(c.vicariateId)].whereType<String>().join(' · ');
+
+  /// Околията на храма (председателят – в своята епархия; създателят – навсякъде).
+  Future<void> setChurchVicariate(String churchId, String vicariateId) async {
+    try {
+      await _db.rpc('church_set_vicariate', params: {'p_church': churchId, 'p_vicariate': vicariateId});
+      final v = _vicariates.where((x) => x.id == vicariateId).firstOrNull;
+      final c = _churches.where((x) => x.id == churchId).firstOrNull;
+      if (c != null && v != null) {
+        c.vicariateId = v.id;
+        c.dioceseId = v.dioceseId;
+      }
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Създателят сменя епархията на човек; връща колко храма е напуснал.
+  Future<int> creatorSetUserDiocese(String userId, String dioceseId) async {
+    try {
+      final n = await _db.rpc('creator_set_user_diocese', params: {'p_user': userId, 'p_diocese': dioceseId});
+      await refresh();
+      return (n as num?)?.toInt() ?? 0;
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Създателят добавя (id == null) или преименува околия.
+  Future<void> creatorSaveVicariate(String dioceseId, String? id, String name) async {
+    try {
+      await _db.rpc('creator_vicariate_save', params: {'p_diocese': dioceseId, 'p_id': id, 'p_name': name});
+      await loadPlaces();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
 
   /// Отбелязва (или маха с null) основния храм.
   Future<void> setPrimaryChurch(String? churchId) async {
@@ -1847,7 +1930,7 @@ class AppState extends ChangeNotifier {
           ),
       ];
 
-  Future<Church> createChurch(String name, String settlement, String municipality) async {
+  Future<Church> createChurch(String name, String settlement, String municipality, {String? vicariateId}) async {
     try {
       final row = await _db.rpc('create_church', params: {
         'p_name': name.trim(),
@@ -1855,6 +1938,9 @@ class AppState extends ChangeNotifier {
         'p_municipality': municipality.trim(),
       });
       final c = Church.fromRow(Map<String, dynamic>.from(row as Map));
+      if (vicariateId != null) {
+        await _db.rpc('church_set_vicariate', params: {'p_church': c.id, 'p_vicariate': vicariateId});
+      }
       await refresh();
       await selectChurch(c.id);
       unawaited(_invokeNotify({'type': 'creator_event', 'kind': 'new_church'}));

@@ -23,6 +23,7 @@ class _ChurchConnectScreenState extends State<ChurchConnectScreen> {
   final _mun = TextEditingController();
   String? _codeError;
   String? _createError;
+  String? _vic; // духовна околия (или епархийският център)
 
   @override
   void dispose() {
@@ -63,11 +64,15 @@ class _ChurchConnectScreenState extends State<ChurchConnectScreen> {
       return;
     }
     final state = AppScope.read(context);
+    if (state.currentUser?.dioceseId != null && _vic == null) {
+      setState(() => _createError = 'Изберете духовна околия.');
+      return;
+    }
     final nav = Navigator.of(context);
     final pushed = widget.pushed;
     final Church church;
     try {
-      church = await state.createChurch(_name.text, _place.text, _mun.text);
+      church = await state.createChurch(_name.text, _place.text, _mun.text, vicariateId: _vic);
     } on AppError catch (e) {
       if (mounted) setState(() => _createError = e.message);
       return;
@@ -204,6 +209,23 @@ class _ChurchConnectScreenState extends State<ChurchConnectScreen> {
                     textCapitalization: TextCapitalization.words,
                     style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                   ),
+                  if (state.currentUser?.dioceseId != null) ...[
+                    const SizedBox(height: 12),
+                    FieldLabel('Духовна околия · ${state.dioceseName(state.currentUser?.dioceseId) ?? ''}'),
+                    DropdownButtonFormField<String>(
+                      initialValue: _vic,
+                      isExpanded: true,
+                      hint: const Text('Изберете'),
+                      items: [
+                        for (final v in state.vicariatesOf(state.currentUser?.dioceseId))
+                          DropdownMenuItem(
+                              value: v.id,
+                              child: Text(v.isCenter ? '${v.name} (епархийски център)' : v.name,
+                                  overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (v) => setState(() => _vic = v),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                       'Населеното място и общината различават храмове с еднакви имена. '
