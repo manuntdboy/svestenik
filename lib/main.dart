@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
@@ -24,6 +25,8 @@ import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // В браузъра десният бутон отваря менюто на Кайрос (напр. за съобщение), не това на браузъра.
+  if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
   await initializeDateFormatting('bg');
   Intl.defaultLocale = 'bg';
   // В браузъра няма будилник и известия на телефона – само на Android.
