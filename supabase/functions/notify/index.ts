@@ -98,6 +98,46 @@ async function fcmAccessToken(sa: ServiceAccount): Promise<string> {
   return cachedToken.value;
 }
 
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
+// Праща до всички устройства; изтритите/сменени токени се чистят.
+// deno-lint-ignore no-explicit-any
+async function pushTo(admin: any, sa: ServiceAccount, tokens: { token: string }[], title: string, text: string,
+  data: Record<string, string>, androidNote: Record<string, string>) {
+  const access = await fcmAccessToken(sa);
+  let sent = 0;
+  let stale = 0; // стари/изтрити телефони – чистят се сами, не са грешка
+  const fcmErrors: number[] = [];
+  for (const { token } of tokens) {
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          token,
+          notification: { title, body: text },
+          data,
+          android: { priority: "high", notification: androidNote },
+        },
+      }),
+    });
+    if (res.ok) {
+      sent++;
+    } else {
+      const text = await res.text();
+      // Изтрит или сменен токен – махаме го.
+      if (res.status === 404 || text.includes("UNREGISTERED") || text.includes("INVALID_ARGUMENT")) {
+        await admin.from("device_tokens").delete().eq("token", token);
+        stale++;
+      } else {
+        fcmErrors.push(res.status);
+        console.error("FCM", res.status, text.slice(0, 300));
+      }
+    }
+  }
+  return { sent, stale, fcmErrors };
+}
+
 async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
@@ -144,6 +184,7 @@ async function handle(req: Request): Promise<Response> {
   let negative = false; // отказ / върнато – свой звук и цвят
   let text = "";
   let data: Record<string, string> = {};
+  let callIds: string[] = []; // повикване в кабинета – за повторното звънене
 
   const fmtD = (d: string) =>
     new Date(d + "T12:00:00Z").toLocaleDateString("bg-BG", { day: "numeric", month: "long" });
@@ -186,6 +227,27 @@ async function handle(req: Request): Promise<Response> {
     const t = String(m.body);
     text = m.recipient_id ? t.slice(0, 180) : `${callerName}: ${t.slice(0, 160)}`;
     data = { type: "metro_chat", diocese_id: String(m.diocese_id), thread: m.recipient_id ? caller.id : "c" };
+  } else if (type === "metro_call") {
+    // Владиката вика в кабинета → до повиканите (току-що записани от него).
+    const ids = Array.isArray(body.call_ids) ? (body.call_ids as unknown[]).map(String).slice(0, 20) : [];
+    const { data: cs } = await admin.from("metro_calls").select("id,callee_id,note")
+      .in("id", ids).eq("caller_id", caller.id).is("answer", null).gte("created_at", recent);
+    if (!cs || cs.length === 0) return json(404, { error: "not_found" });
+    callIds = cs.map((c) => c.id);
+    recipients = [...new Set(cs.map((c) => c.callee_id))];
+    title = "Владиката ви вика";
+    const note = cs.find((c) => c.note)?.note;
+    text = note ? `${callerName}: ${String(note).slice(0, 180)}` : `${callerName} ви вика в кабинета.`;
+    data = { type: "metro_call", call: "1" };
+  } else if (type === "metro_call_answer") {
+    // Отговор на повикване → до владиката.
+    const { data: c } = await admin.from("metro_calls").select("*").eq("id", String(body.call_id ?? "")).maybeSingle();
+    if (!c || c.callee_id !== caller.id || !c.answer || !c.caller_id) return json(404, { error: "not_found" });
+    recipients = [c.caller_id];
+    title = c.answer === "coming" ? `${callerName} – идва` : `${callerName} – не може да дойде`;
+    text = c.answer === "coming" ? "Идвам." : "Не мога сега.";
+    negative = c.answer !== "coming";
+    data = { type: "metro_call_answer" };
   } else if (type === "announcement") {
     // Съобщение от създателя → до всички или до членовете на един храм.
     const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();
@@ -612,42 +674,29 @@ async function handle(req: Request): Promise<Response> {
   const approval = type === "cash_pending" || type === "cash_close_pending" || type === "stock_pending";
   if (approval) data = { ...data, approval: "1" };
   else if (negative) data = { ...data, negative: "1" };
-  const androidNote = approval
+  const call = type === "metro_call";
+  const androidNote: Record<string, string> = call
+    ? { channel_id: "calls", sound: "call", color: "#E2B553" }
+    : approval
     ? { channel_id: "approvals", sound: "approval", color: "#E0AD2C" }
     : negative
     ? { channel_id: "declined", sound: "declined", color: "#A33A3A" }
     : { channel_id: "events", sound: "default" };
 
-  const access = await fcmAccessToken(sa);
-  let sent = 0;
-  let stale = 0; // стари/изтрити телефони – чистят се сами, не са грешка
-  const fcmErrors: number[] = [];
-  for (const { token } of tokens) {
-    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          token,
-          notification: { title, body: text },
-          data,
-          android: { priority: "high", notification: androidNote },
-        },
-      }),
-    });
-    if (res.ok) {
-      sent++;
-    } else {
-      const text = await res.text();
-      // Изтрит или сменен токен – махаме го.
-      if (res.status === 404 || text.includes("UNREGISTERED") || text.includes("INVALID_ARGUMENT")) {
-        await admin.from("device_tokens").delete().eq("token", token);
-        stale++;
-      } else {
-        fcmErrors.push(res.status);
-        console.error("FCM", res.status, text.slice(0, 300));
-      }
-    }
+  const { sent, stale, fcmErrors } = await pushTo(admin, sa, tokens, title, text, data, androidNote);
+
+  // Повикване в кабинета: ако някой не отговори до 2 минути – звъни повторно.
+  if (type === "metro_call" && typeof EdgeRuntime !== "undefined") {
+    const ids = callIds;
+    EdgeRuntime.waitUntil((async () => {
+      await new Promise((r) => setTimeout(r, 120_000));
+      const { data: open } = await admin.from("metro_calls").select("callee_id").in("id", ids).is("answer", null);
+      const again = [...new Set((open ?? []).map((x) => x.callee_id))];
+      if (again.length === 0) return;
+      const { data: tk } = await admin.from("device_tokens").select("token").in("user_id", again);
+      if (tk && tk.length) await pushTo(admin, sa, tk, "Повторно: " + title, text, data, androidNote);
+      console.log("notify " + JSON.stringify({ type: "metro_call_again", recipients: again.length }));
+    })());
   }
   log({ recipients: recipients.length, devices: tokens.length, sent, stale });
   return json(200, { sent, stale, recipients: recipients.length, devices: tokens.length, fcm_errors: fcmErrors });

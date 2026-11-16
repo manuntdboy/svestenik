@@ -115,6 +115,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         await s.selectChurch(cid);
       }
       nav.push(MaterialPageRoute(builder: (_) => ChatScreen(thread: thread)));
+    } else if (type == 'metro_call' || type == 'metro_call_answer') {
+      // Повикването се показва само (CallWatcher) – тук нищо не отваряме.
     } else if (type == 'metro_chat' && s.isAdmin) {
       final thread = data['thread'] ?? 'c';
       await s.loadMetroPeople();

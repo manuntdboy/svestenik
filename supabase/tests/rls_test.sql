@@ -969,6 +969,56 @@ select public.staff_remove(:'E1', 'protosyngel') \g /dev/null
 select t.as_user(:'E1');
 select t.ok((select count(*) from metro_messages) = 0, 'наместникът не е в чата на администрацията');
 select t.as_user(:'A');
+\echo '== Кабинетът на владиката: повикване, календар, храм от епархията'
+reset role;
+insert into auth.users (id, email, raw_user_meta_data) values
+ ('00000000-0000-0000-0000-0000000000e5', 'e5@x.bg', json_build_object('username','sekr','full_name','Иван Секретаров','diocese_id',:'szd')::jsonb);
+set role authenticated;
+\set E5 '00000000-0000-0000-0000-0000000000e5'
+select t.as_user(:'E3');
+select public.staff_add(:'szd', 'sekr', 'secretary') \g /dev/null
+select t.ok(cardinality(public.metro_call(array[:'E4', :'E5']::uuid[], 'С папката за Шипка')) = 2, 'владиката вика двама');
+select t.fails(format('select public.metro_call(array[%L]::uuid[])', :'E1'), 'наместникът не се вика в кабинета', 'not_member');
+select t.fails($$select public.metro_call('{}'::uuid[])$$, 'без избран човек – няма повикване', 'no_people');
+select t.as_user(:'E5');
+select t.fails(format('select public.metro_call(array[%L]::uuid[])', :'E4'), 'само митрополитът вика', 'forbidden');
+select t.ok((select count(*) from metro_calls) = 1, 'повиканият вижда само своето повикване');
+select id as call5 from metro_calls \gset
+select public.metro_call_answer(:'call5', 'coming') \g /dev/null
+select t.as_user(:'E4');
+select t.fails(format('select public.metro_call_answer(%L, %L)', :'call5', 'cannot'), 'чуждо повикване не се отговаря', 'not_found');
+select t.as_user(:'E3');
+select t.ok((select answer from metro_calls where callee_id = :'E5') = 'coming', 'владиката вижда „Идвам“');
+select public.metro_event_save(null, :'szd', now() + interval '1 day', null, false, 'Среща с кмета', 'Кабинетът', null, false) as ev1 \gset
+select public.metro_event_save(null, :'szd', now() + interval '2 day', null, true, 'Лично', null, null, true) as ev2 \gset
+select t.as_user(:'E5');
+select t.ok((select count(*) from metro_events) = 1, 'секретарят не вижда записите „само за мен“');
+select public.metro_event_save(null, :'szd', now() + interval '3 day', null, false, 'Посещение в Шипка', 'Шипка', null, false) \g /dev/null
+select t.fails(format('select public.metro_event_save(null, %L, now(), null, false, %L, null, null, true)', :'szd', 'Х'),
+               'секретарят не пише „само за мен“', 'forbidden');
+select t.fails(format('select public.metro_event_delete(%L)', :'ev2'), 'секретарят не трие личните записи', 'not_found');
+select public.metro_event_save(:'ev1', :'szd', now() + interval '1 day', null, false, 'Среща с кмета на града', 'Кабинетът', null, false) \g /dev/null
+select t.as_user(:'E3');
+select t.ok((select count(*) from metro_events) = 3 and exists (select 1 from metro_events where title = 'Среща с кмета на града'),
+            'владиката вижда всичко, вкл. промяната на секретаря');
+select t.as_user(:'E4');
+select t.ok((select count(*) from metro_events) = 0, 'служителят не вижда календара на владиката');
+select t.fails(format('select public.metro_event_save(null, %L, now(), null, false, %L, null, null, false)', :'szd', 'Х'),
+               'служителят не пише в календара на владиката', 'forbidden');
+reset role;
+insert into duties (church_id, user_id, start_date, end_date) values (:'szc', :'E1', current_date, current_date + 6);
+set role authenticated;
+select t.as_user(:'E5');
+select public.diocese_church(:'szc') as dc \gset
+select t.ok(jsonb_array_length(:'dc'::jsonb->'duties') = 1 and :'dc'::text not like '%amount%',
+            'секретарят вижда дежурствата на храма, без касата');
+select t.as_user(:'E4');
+select t.fails(format('select public.diocese_church(%L)', :'szc'), 'служителят не вижда храмовете', 'forbidden');
+select t.as_user(:'E1');
+select t.ok(public.diocese_church(:'szc')->>'name' = 'Св. Тест', 'наместникът вижда храм от своята околия');
+select t.as_user(:'B');
+select t.fails(format('select public.diocese_church(%L)', :'szc'), 'свещеник от друг храм не вижда', 'forbidden');
+select t.as_user(:'A');
 \echo '== Адрес и Булстат на храма'
 select t.as_user(:'B');
 select t.fails(format('select public.church_set_info(%L, %L, %L)', :'cid', 'ул. Х 1', '123456789'), 'свещеникът не сменя адреса', 'not_manager');

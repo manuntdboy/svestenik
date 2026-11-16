@@ -4,6 +4,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'metro_cabinet.dart';
 
 /// Обвива екран в митрополитската тема (пурпур и злато).
 Widget metroTheme(Widget child) => Theme(data: buildTheme(Palette.metro), child: child);
@@ -51,6 +52,13 @@ class _DioceseScreenState extends State<DioceseScreen> {
       (v as List? ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
   String _person(Map<String, dynamic> p) => withRank(ClergyRank.fromCode(p['rank']), '${p['name'] ?? ''}');
+
+  void _openChurch(Map<String, dynamic> c) => Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => Theme(
+              data: Theme.of(context),
+              child: DioceseChurchScreen(churchId: '${c['id']}', title: '${c['name']}'))));
 
   bool get _canAssign {
     final s = AppScope.read(context);
@@ -328,11 +336,16 @@ class _DioceseScreenState extends State<DioceseScreen> {
                         style: TextStyle(color: p.textMuted)),
                     children: [
                       for (final pr in _list(c['priests'])) _priestTile(pr, c, sec),
-                      if ((c['address'] as String? ?? '').trim().isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 16, 12),
-                          child: Text('${c['address']}', style: TextStyle(color: p.textMuted)),
-                        ),
+                      ListTile(
+                        contentPadding: const EdgeInsets.only(left: 24, right: 16),
+                        leading: Icon(Icons.shield_outlined, color: p.primary),
+                        title: const Text('Дежурства, адрес и път до храма'),
+                        subtitle: (c['address'] as String? ?? '').trim().isEmpty
+                            ? null
+                            : Text('${c['address']}', style: TextStyle(color: p.textMuted)),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => _openChurch(c),
+                      ),
                     ],
                   ),
               ],
@@ -347,6 +360,7 @@ class _DioceseScreenState extends State<DioceseScreen> {
             final cText = '${c['name']} ${c['settlement']} ${sec['name']}'.toLowerCase();
             if (cText.contains(q)) {
               hits.add(ListTile(
+                onTap: () => _openChurch(c),
                 leading: Icon(Icons.church_outlined, color: p.primary),
                 title: Text('${c['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text('${c['settlement']} · ${sec['name']}', style: TextStyle(color: p.textMuted)),

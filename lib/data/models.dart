@@ -1264,3 +1264,75 @@ class MetroMessage {
         createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
       );
 }
+
+/// Повикване в кабинета на владиката.
+class MetroCall {
+  final String id;
+  final String dioceseId;
+  final String? callerId;
+  final String calleeId;
+  final String? note;
+  final String? answer; // null – чака; 'coming' / 'cannot'
+  final DateTime createdAt;
+  final DateTime? answeredAt;
+  const MetroCall(
+      {required this.id,
+      required this.dioceseId,
+      this.callerId,
+      required this.calleeId,
+      this.note,
+      this.answer,
+      required this.createdAt,
+      this.answeredAt});
+
+  bool get coming => answer == 'coming';
+
+  factory MetroCall.fromRow(Map<String, dynamic> r) => MetroCall(
+        id: r['id'] as String,
+        dioceseId: r['diocese_id'] as String,
+        callerId: r['caller_id'] as String?,
+        calleeId: r['callee_id'] as String,
+        note: r['note'] as String?,
+        answer: r['answer'] as String?,
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        answeredAt: r['answered_at'] == null ? null : DateTime.parse(r['answered_at'] as String).toLocal(),
+      );
+}
+
+/// Запис в календара на владиката.
+class MetroEvent {
+  final String id;
+  final String dioceseId;
+  final DateTime startsAt;
+  final DateTime? endsAt;
+  final bool allDay;
+  final String title;
+  final String? place;
+  final String? note;
+  final bool private; // „само за мен“ – секретарят не го вижда
+  final String? createdBy;
+  const MetroEvent(
+      {required this.id,
+      required this.dioceseId,
+      required this.startsAt,
+      this.endsAt,
+      this.allDay = false,
+      required this.title,
+      this.place,
+      this.note,
+      this.private = false,
+      this.createdBy});
+
+  factory MetroEvent.fromRow(Map<String, dynamic> r) => MetroEvent(
+        id: r['id'] as String,
+        dioceseId: r['diocese_id'] as String,
+        startsAt: DateTime.parse(r['starts_at'] as String).toLocal(),
+        endsAt: r['ends_at'] == null ? null : DateTime.parse(r['ends_at'] as String).toLocal(),
+        allDay: r['all_day'] == true,
+        title: r['title'] as String,
+        place: r['place'] as String?,
+        note: r['note'] as String?,
+        private: r['private'] == true,
+        createdBy: r['created_by'] as String?,
+      );
+}

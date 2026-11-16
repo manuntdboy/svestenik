@@ -280,7 +280,18 @@ class Notifier {
       payload: data == null ? null : jsonEncode(data),
       body: body,
       notificationDetails: NotificationDetails(
-        android: data?['approval'] == '1'
+        android: data?['call'] == '1'
+            ? AndroidNotificationDetails(
+                callChannel,
+                'Повикване от владиката',
+                channelDescription: 'Владиката ви вика в кабинета',
+                importance: Importance.max,
+                priority: Priority.max,
+                sound: const RawResourceAndroidNotificationSound('call'),
+                color: callColor,
+                vibrationPattern: _callVibration,
+              )
+            : data?['approval'] == '1'
             ? AndroidNotificationDetails(
                 approvalChannel,
                 'Чака одобрение',
@@ -318,6 +329,52 @@ class Notifier {
   /// Канал и цвят за известията „чака одобрение“.
   static const approvalChannel = 'approvals';
   static const approvalColor = Color(0xFFE0AD2C);
+
+  /// Канал, звук и цвят за повикване от владиката.
+  static const callChannel = 'calls';
+  static const callColor = Color(0xFFE2B553);
+  static final _callVibration = Int64List.fromList([0, 300, 200, 300, 200, 300]);
+
+  static AndroidNotificationChannel _callChannelDef(bool bypassDnd) => AndroidNotificationChannel(
+        callChannel,
+        'Повикване от владиката',
+        description: 'Владиката ви вика в кабинета',
+        importance: Importance.max,
+        sound: const RawResourceAndroidNotificationSound('call'),
+        playSound: true,
+        enableVibration: true,
+        vibrationPattern: _callVibration,
+        enableLights: true,
+        ledColor: callColor,
+        bypassDnd: bypassDnd,
+      );
+
+  /// Може ли Кайрос да звъни при „Не безпокойте“.
+  static Future<bool> callDndAllowed() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      return (await _android?.hasNotificationPolicyAccess()) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Отваря настройката „Достъп до Не безпокойте“.
+  static Future<void> askCallDnd() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _android?.requestNotificationPolicyAccess();
+    } catch (_) {}
+  }
+
+  /// Създава канала за повикванията (след въпроса за „Не безпокойте“ –
+  /// Android не позволява настройката да се смени по-късно).
+  static Future<void> ensureCallChannel() async {
+    if (!_ready || kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _android?.createNotificationChannel(_callChannelDef(await callDndAllowed()));
+    } catch (_) {}
+  }
 
   /// Канал и цвят за „отказано или върнато“.
   static const declinedChannel = 'declined';

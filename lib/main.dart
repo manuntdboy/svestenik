@@ -17,6 +17,7 @@ import 'screens/church_connect.dart';
 import 'screens/diocese.dart';
 import 'screens/login.dart';
 import 'screens/metro_shell.dart';
+import 'widgets/call_watcher.dart';
 import 'screens/privacy.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
@@ -124,10 +125,13 @@ class RootGate extends StatelessWidget {
     if (s.needsPrivacy) return const PrivacyConsentScreen();
     // Митрополитът – собствен изглед в пурпур и злато (може да мине към храма си).
     // Пурпурът е само за митрополита; останалите от митрополията – обичайната тема.
-    if (s.showMetro) return s.isMetropolitan ? metroTheme(const MetroShell()) : const MetroShell();
+    // CallWatcher показва „Владиката ви вика“, щом има неотговорено повикване.
+    if (s.showMetro) {
+      return CallWatcher(child: s.isMetropolitan ? metroTheme(const MetroShell()) : const MetroShell());
+    }
     if (s.currentChurch == null) return const ChurchConnectScreen();
     // Ключът кара таблото да започне отначало при смяна на потребител или храм.
-    return Shell(key: ValueKey('${s.currentUser!.id}-${s.currentChurch!.id}'));
+    return CallWatcher(child: Shell(key: ValueKey('${s.currentUser!.id}-${s.currentChurch!.id}')));
   }
 }
 

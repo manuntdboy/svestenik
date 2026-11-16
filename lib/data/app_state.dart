@@ -53,6 +53,8 @@ class AppState extends ChangeNotifier {
   final List<MetroMessage> _metroMsgs = [];
   final Map<String, DateTime> _metroReads = {}; // нишка ('c' или id) → прочетено до
   List<Map<String, dynamic>> metroPeople = []; // администрацията (за чата)
+  final List<MetroCall> _calls = [];
+  final List<MetroEvent> _metroEvents = [];
   /// Митрополитът вижда митрополитския изглед; може да мине към храма си.
   bool metroMode = true;
   final List<Church> _churches = [];
@@ -158,6 +160,8 @@ class AppState extends ChangeNotifier {
     _staff.clear();
     _metroMsgs.clear();
     _metroReads.clear();
+    _calls.clear();
+    _metroEvents.clear();
     metroPeople = [];
     metroMode = true;
     mustChangePassword = false;
@@ -228,16 +232,32 @@ class AppState extends ChangeNotifier {
         _db.from('diocese_staff').select(),
         _db.from('metro_messages').select().order('created_at', ascending: true),
         _db.from('metro_reads').select().eq('user_id', authUser.id),
+        _db
+            .from('metro_calls')
+            .select()
+            .gte('created_at', DateTime.now().toUtc().subtract(const Duration(days: 1)).toIso8601String())
+            .order('created_at'),
+        _db
+            .from('metro_events')
+            .select()
+            .gte('starts_at', DateTime.now().toUtc().subtract(const Duration(days: 60)).toIso8601String())
+            .order('starts_at'),
       ]);
       _staff
         ..clear()
-        ..addAll(results[results.length - 3].map(StaffEntry.fromRow).whereType<StaffEntry>());
+        ..addAll(results[21].map(StaffEntry.fromRow).whereType<StaffEntry>());
       _metroMsgs
         ..clear()
-        ..addAll(results[results.length - 2].map(MetroMessage.fromRow));
+        ..addAll(results[22].map(MetroMessage.fromRow));
+      _calls
+        ..clear()
+        ..addAll(results[24].map(MetroCall.fromRow));
+      _metroEvents
+        ..clear()
+        ..addAll(results[25].map(MetroEvent.fromRow));
       _metroReads
         ..clear()
-        ..addEntries(results.last.map((r) =>
+        ..addEntries(results[23].map((r) =>
             MapEntry(r['thread'] as String, DateTime.parse(r['read_at'] as String).toLocal())));
       _profiles
         ..clear()
@@ -368,6 +388,8 @@ class AppState extends ChangeNotifier {
     if (t.contains('no_offer')) return 'Предложението вече не е активно.';
     if (t.contains('already_chair')) return 'Вие вече сте председател.';
     if (t.contains('need_chair')) return 'Първо изберете друг председател на храма.';
+    if (t.contains('no_people')) return 'Изберете поне един човек.';
+    if (t.contains('bad_dates')) return 'Проверете датата и часа.';
     if (t.contains('not_member')) return 'Не сте член на този храм.';
     if (t.contains('members_other_diocese')) return 'В храма има хора от друга епархия – първо сменете тяхната епархия.';
     if (t.contains('other_diocese')) {
@@ -1402,6 +1424,106 @@ class AppState extends ChangeNotifier {
       await _db.rpc('metro_chat_delete', params: {'p_id': id});
       _metroMsgs.removeWhere((m) => m.id == id);
       notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  // ------------------------------------------------- кабинетът на владиката
+
+  bool get isSecretary => myStaff.any((e) => e.role == StaffRole.secretary);
+
+  /// Епархията, чийто календар водя (митрополит или секретар).
+  String? get cabinetDioceseId => myStaff
+      .where((e) => e.role == StaffRole.metropolitan || e.role == StaffRole.secretary)
+      .firstOrNull
+      ?.dioceseId;
+
+  /// Повиквания към мен, на които още не съм отговорил (до 30 минути).
+  List<MetroCall> get openCallsForMe {
+    final me = currentUser?.id;
+    final since = DateTime.now().subtract(const Duration(minutes: 30));
+    return _calls.where((c) => c.calleeId == me && c.answer == null && c.createdAt.isAfter(since)).toList();
+  }
+
+  /// Моите повиквания (на владиката) от последните 12 часа – най-новите отгоре.
+  List<MetroCall> get myCallsMade {
+    final me = currentUser?.id;
+    final since = DateTime.now().subtract(const Duration(hours: 12));
+    return _calls.where((c) => c.callerId == me && c.createdAt.isAfter(since)).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  Future<int> metroCall(List<String> users, String? note) async {
+    try {
+      final r = await _db.rpc('metro_call', params: {'p_users': users, 'p_note': note});
+      final ids = (r as List).map((e) => '$e').toList();
+      await refresh();
+      unawaited(_invokeNotify({'type': 'metro_call', 'call_ids': ids}));
+      return ids.length;
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> metroCallAnswer(String id, bool coming) async {
+    try {
+      await _db.rpc('metro_call_answer', params: {'p_id': id, 'p_answer': coming ? 'coming' : 'cannot'});
+      await refresh();
+      unawaited(_invokeNotify({'type': 'metro_call_answer', 'call_id': id}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Календарът на владиката (каквото сървърът ми позволява да видя).
+  List<MetroEvent> get metroEvents => [..._metroEvents]..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+
+  Future<void> metroEventSave({
+    String? id,
+    required DateTime startsAt,
+    DateTime? endsAt,
+    bool allDay = false,
+    required String title,
+    String? place,
+    String? note,
+    bool private = false,
+  }) async {
+    final d = cabinetDioceseId;
+    if (d == null) return;
+    try {
+      await _db.rpc('metro_event_save', params: {
+        'p_id': id,
+        'p_diocese': d,
+        'p_starts': startsAt.toUtc().toIso8601String(),
+        'p_ends': endsAt?.toUtc().toIso8601String(),
+        'p_all_day': allDay,
+        'p_title': title,
+        'p_place': place,
+        'p_note': note,
+        'p_private': private,
+      });
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> metroEventDelete(String id) async {
+    try {
+      await _db.rpc('metro_event_delete', params: {'p_id': id});
+      _metroEvents.removeWhere((e) => e.id == id);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Храм, гледан от митрополията: адрес, Булстат и дежурствата.
+  Future<Map<String, dynamic>> dioceseChurch(String churchId) async {
+    try {
+      final r = await _db.rpc('diocese_church', params: {'p_church': churchId});
+      return Map<String, dynamic>.from(r as Map);
     } catch (e) {
       throw AppError(_friendly(e));
     }
