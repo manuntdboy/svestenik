@@ -5,6 +5,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/desk_chrome.dart';
 import 'cash_more.dart';
 import '../widgets/church_banner.dart';
 import '../widgets/layout.dart';
@@ -332,7 +333,7 @@ class _CashScreenState extends State<CashScreen> {
                         : 'Още няма записи в тази книга.',
                 style: TextStyle(fontSize: 16, color: p.textMuted)),
           ),
-        for (final e in shown) e.isReturned ? Opacity(opacity: .7, child: CashRow(entry: e)) : CashRow(entry: e),
+        if (shown.isNotEmpty) CashList(entries: shown),
         if (_ret && returned.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -508,6 +509,84 @@ double? parseAmount(String t) {
 }
 
 /// Ред в книгата.
+/// Списъкът със записи: на телефон – карти, на широк екран – таблица.
+class CashList extends StatelessWidget {
+  final List<CashEntry> entries;
+  const CashList({super.key, required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final p = Palette.of(context);
+    return LayoutBuilder(builder: (context, c) {
+      if (c.maxWidth < 720) {
+        return Column(children: [
+          for (final e in entries) e.isReturned ? Opacity(opacity: .7, child: CashRow(entry: e)) : CashRow(entry: e),
+        ]);
+      }
+      return DeskTable(
+        columns: const [
+          ('№', 1),
+          ('Дата', 2),
+          ('Категория', 3),
+          ('Бележка', 4),
+          ('Въвел', 3),
+          ('Начин', 2),
+          ('Статус', 3),
+          ('Сума', 2),
+        ],
+        numeric: const [7],
+        dim: [for (final e in entries) e.isReturned || e.reversedBy != null],
+        onTap: [for (final e in entries) () => showCashEntry(context, e)],
+        rows: [
+          for (final e in entries)
+            () {
+              final sign = e.book == CashBook.expense ? -1 : 1;
+              final amount = e.book == CashBook.transfer ? e.amount : e.amount * sign;
+              final (label, color) = e.isPending
+                  ? ('чака одобрение', Palette.yellow)
+                  : e.isReturned
+                      ? ('върнат', const Color(0xFFB35C1E))
+                      : e.reversedBy != null
+                          ? ('сторниран', p.textMuted)
+                          : ('одобрен', Colors.green.shade600);
+              final cross = e.isReturned || e.reversedBy != null;
+              return <Widget>[
+                Text(e.ref.isEmpty ? '—' : e.ref, style: TextStyle(fontWeight: FontWeight.w800, color: p.primary)),
+                Text(_dayShort.format(e.date)),
+                Text('${e.isReversal ? 'Сторно · ' : ''}${e.book == CashBook.transfer ? e.kindLabel : e.categoryLabel}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text([if (e.donor.isNotEmpty) e.donor, if (e.note.isNotEmpty) e.note].join(' · '),
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: p.textMuted)),
+                Text(s.priestName(e.createdBy), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(e.account == 'bank' ? 'банка' : 'в брой'),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                  decoration: BoxDecoration(color: color.withValues(alpha: .18), borderRadius: BorderRadius.circular(20)),
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+                ),
+                Text(fmtEur(amount),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: cross
+                          ? p.textMuted
+                          : amount < 0
+                              ? Theme.of(context).colorScheme.error
+                              : Colors.green.shade600,
+                      decoration: cross ? TextDecoration.lineThrough : null,
+                    )),
+              ];
+            }(),
+        ],
+      );
+    });
+  }
+}
+
 class CashRow extends StatelessWidget {
   final CashEntry entry;
   const CashRow({super.key, required this.entry});

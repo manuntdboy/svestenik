@@ -4,6 +4,7 @@ import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/desk_chrome.dart';
 import 'metro_cabinet.dart';
 
 /// Обвива екран в митрополитската тема (пурпур и злато).
@@ -199,6 +200,124 @@ class _DioceseScreenState extends State<DioceseScreen> {
     );
   }
 
+  String? _section; // избраният раздел в изгледа на компютър
+
+  /// Компютър: отляво обобщението и разделите, отдясно таблица със
+  /// свещениците на избрания раздел.
+  Widget _wideBody(List<Map<String, dynamic>> sections, List<Map<String, dynamic>> staff, List<Widget> head,
+      Widget searchField) {
+    final p = Palette.of(context);
+    final s = AppScope.read(context);
+    if (sections.isEmpty) return Center(child: Text('Още няма раздели.', style: TextStyle(color: p.textMuted)));
+    final sel = sections.where((x) => x['id'] == _section).firstOrNull ?? sections.first;
+    Map<String, dynamic>? headOf(Map<String, dynamic> sec) => sec['is_center'] == true
+        ? staff.where((x) => x['role'] == 'protosyngel').firstOrNull
+        : staff.where((x) => x['role'] == 'vicar' && x['vicariate_id'] == sec['id']).firstOrNull;
+    final cs = _list(sel['churches']);
+    final rows = <List<Widget>>[];
+    final taps = <VoidCallback?>[];
+    for (final c in cs) {
+      final prs = _list(c['priests']);
+      for (final pr in prs.isEmpty ? [<String, dynamic>{}] : prs) {
+        final phone = '${pr['phone'] ?? ''}'.trim();
+        final badge = pr['user_id'] == null ? null : s.staffBadge(pr['user_id'] as String);
+        rows.add([
+          Text(pr.isEmpty ? '—' : _person(pr), style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text('${c['name']}'),
+          Text('${c['settlement']}'),
+          Text([if (pr['chair'] == true) 'председател', if (pr['cashier'] == true) 'касиер'].join(', ')),
+          badge == null
+              ? const SizedBox.shrink()
+              : Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: p.chipBg, borderRadius: BorderRadius.circular(7)),
+                  child: Text(badge,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.primary)),
+                ),
+          phone.isEmpty
+              ? Text('—', style: TextStyle(color: p.textMuted))
+              : SelectableText(phone, style: TextStyle(fontWeight: FontWeight.w700, color: p.primary)),
+        ]);
+        taps.add(() => _openChurch(c));
+      }
+    }
+    final h = headOf(sel);
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(
+        width: 380,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(padding: const EdgeInsets.fromLTRB(20, 16, 10, 32), children: [
+            searchField,
+            const SizedBox(height: 14),
+            ...head,
+            for (final sec in sections)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: p.surface,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                          color: sec == sel ? p.primary : p.border, width: sec == sel ? 2 : 1)),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => setState(() => _section = sec['id'] as String?),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('${sec['name']}', style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+                        Text(
+                            [
+                              if (headOf(sec) != null)
+                                '${sec['is_center'] == true ? 'протосингел' : 'наместник'}: ${_person(headOf(sec)!)}',
+                              '${_list(sec['churches']).length} храма',
+                            ].join(' · '),
+                            style: TextStyle(fontSize: 12.5, color: p.textMuted)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+      ),
+      Expanded(
+        child: ListView(padding: const EdgeInsets.fromLTRB(10, 16, 20, 32), children: [
+          Text('${sel['name']}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+          Text(
+              [
+                if (h != null) '${sel['is_center'] == true ? 'Протосингел' : 'Наместник'}: ${_person(h)}',
+                '${cs.length} храма',
+                '${rows.where((r) => (r.first as Text).data != '—').length} свещеници',
+              ].join(' · '),
+              style: TextStyle(color: p.textMuted)),
+          const SizedBox(height: 14),
+          if (cs.isEmpty)
+            Text('Още няма храмове в Кайрос.', style: TextStyle(color: p.textMuted))
+          else
+            DeskTable(
+              columns: const [
+                ('Свещеник', 3),
+                ('Храм', 3),
+                ('Населено място', 2),
+                ('В храма', 2),
+                ('Митрополия', 2),
+                ('Телефон', 2),
+              ],
+              rows: rows,
+              onTap: taps,
+            ),
+          const SizedBox(height: 10),
+          Text('Ред → дежурствата, адресът и пътят до храма. Касата, складът и почивките не се виждат.',
+              style: TextStyle(fontSize: 12.5, color: p.textMuted)),
+        ]),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
@@ -218,6 +337,7 @@ class _DioceseScreenState extends State<DioceseScreen> {
       };
       final q = query.trim().toLowerCase();
       final children = <Widget>[];
+      var headCount = -1; // докъде е обобщението (за изгледа на компютър)
       if (q.isEmpty) {
         // Обобщение
         children.add(Row(children: [
@@ -296,6 +416,7 @@ class _DioceseScreenState extends State<DioceseScreen> {
           ));
           children.add(const SizedBox(height: 14));
         }
+        headCount = children.length;
         // Разделите
         for (final sec in sections) {
           final cs = _list(sec['churches']);
@@ -389,7 +510,26 @@ class _DioceseScreenState extends State<DioceseScreen> {
             style: TextStyle(color: p.textMuted)));
         children.addAll(hits);
       }
-      body = RefreshIndicator(
+      final searchField = TextField(
+        controller: _q,
+        decoration: InputDecoration(
+          hintText: 'Търсене: име, сан, длъжност, храм, село, околия…',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: query.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() {
+                    _q.clear();
+                    query = '';
+                  })),
+        ),
+        onChanged: (v) => setState(() => query = v),
+      );
+      final wide = MediaQuery.sizeOf(context).width >= 1200;
+      body = wide && headCount >= 0
+          ? _wideBody(sections, staff, children.sublist(0, headCount), searchField)
+          : RefreshIndicator(
         onRefresh: _load,
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: [
           TextField(

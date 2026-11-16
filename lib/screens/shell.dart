@@ -4,11 +4,13 @@ import 'package:alarm/alarm.dart';
 import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../data/notifier.dart';
 import '../theme.dart';
+import '../widgets/desk_chrome.dart';
 import '../widgets/layout.dart';
 import 'alarm_ring.dart';
 import 'calendar.dart';
@@ -191,19 +193,19 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Widget _desktop(BuildContext context, AppState s) {
     final p = Palette.of(context);
     final church = s.currentChurch;
-    final items = <(String, IconData, String, int)>[
-      ('calendar', Icons.calendar_month_outlined, 'Календар', 0),
-      ('home', Icons.home_outlined, 'Начало', 0),
-      if (s.chatOn) ('chat', Icons.chat_bubble_outline_rounded, 'Чат', s.chatUnreadAll()),
-      ('leaves', Icons.beach_access_outlined, 'Почивки', 0),
-      ('duties', Icons.shield_outlined, 'Дежурства', 0),
-      if (church?.cashEnabled != false) ('cash', Icons.payments_outlined, 'Каса', 0),
-      if (church?.stockEnabled != false) ('stock', Icons.inventory_2_outlined, 'Склад', 0),
-      ('profile', Icons.person_outline_rounded, 'Профил', 0),
+    final items = <DeskNavItem>[
+      const DeskNavItem('calendar', Icons.calendar_month_outlined, 'Календар'),
+      DeskNavItem('home', Icons.home_outlined, 'Начало', badge: church == null ? 0 : s.waitingIn(church.id)),
+      if (s.chatOn) DeskNavItem('chat', Icons.chat_bubble_outline_rounded, 'Чат', badge: s.chatUnreadAll()),
+      const DeskNavItem('leaves', Icons.beach_access_outlined, 'Почивки', section: 'Храм'),
+      const DeskNavItem('duties', Icons.shield_outlined, 'Дежурства'),
+      if (church?.cashEnabled != false) const DeskNavItem('cash', Icons.payments_outlined, 'Каса'),
+      if (church?.stockEnabled != false) const DeskNavItem('stock', Icons.inventory_2_outlined, 'Склад'),
+      const DeskNavItem('profile', Icons.person_outline_rounded, 'Профил', section: 'Аз'),
       // Проба на програмите за архиерейски служения – само за създателя, само в уеб.
-      if (kIsWeb && s.isCreator) ('program', Icons.directions_car_outlined, 'Програма (проба)', 0),
+      if (kIsWeb && s.isCreator) const DeskNavItem('program', Icons.directions_car_outlined, 'Програма (проба)'),
     ];
-    if (!items.any((i) => i.$1 == _dest)) _dest = 'home';
+    if (!items.any((i) => i.id == _dest)) _dest = 'home';
     Widget pane(String d) {
       if (d == 'chat') {
         return Row(children: [
@@ -239,111 +241,132 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       );
     }
 
-    return Scaffold(
-      body: Row(children: [
-        Container(
-          width: 236,
-          decoration: BoxDecoration(color: p.surface, border: Border(right: BorderSide(color: p.border))),
-          child: SafeArea(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              // „Кайрос“ – като „Начало“: календарът на днешния ден + обновяване.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 12, 10, 0),
-                child: Tooltip(
-                  message: 'Към календара (днес) и обновяване',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      _go('calendar');
-                      _navKeys['calendar']?.currentState?.popUntil((r) => r.isFirst);
-                      calendarToday.value++;
-                      s.refresh();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                      child: Text('Кайрос',
-                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Palette.yellow)),
-                    ),
-                  ),
+    final me = s.currentUser;
+    final role = church == null
+        ? ''
+        : s.isManagerOf(church.id)
+            ? 'Председател'
+            : s.canSeeCash(church.id)
+                ? 'Касиер'
+                : 'Свещеник';
+    final others = s.myChurches.where((c) => c.id != church?.id).toList();
+    return DeskFrame(
+      logoColor: Palette.yellow,
+      onLogo: () {
+        _go('calendar');
+        _navKeys['calendar']?.currentState?.popUntil((r) => r.isFirst);
+        calendarToday.value++;
+        s.refresh();
+      },
+      chipIcon: '⛪',
+      chipTitle: church?.name ?? 'Кайрос',
+      chipSubtitle: [role, if (church != null) church.settlement].where((x) => x.isNotEmpty).join(' · '),
+      chipMenu: [
+        for (final c in others)
+          DeskMenuAction(Icons.swap_horiz_rounded, 'Към „${c.name}“', () => s.selectChurch(c.id)),
+      ],
+      searchHint: 'Търсене: събитие, човек, телефон, раздел…',
+      search: (q) => _deskSearch(context, s, q),
+      bell: church == null ? 0 : s.waitingIn(church.id),
+      bellTooltip: 'Чака вас',
+      onBell: () => _go('home'),
+      userInitials: _initials(me?.name ?? ''),
+      userName: me == null ? '' : withRank(me.rank, me.name),
+      userMenu: [
+        DeskMenuAction(Icons.person_outline_rounded, 'Профил', () => _go('profile')),
+        if (s.isMetropolitan) DeskMenuAction(Icons.account_balance_outlined, 'Митрополитски изглед', () => s.setMetroMode(true)),
+        DeskMenuAction(Icons.refresh_rounded, 'Обнови', s.refresh),
+        DeskMenuAction(Icons.logout_rounded, 'Изход', s.logout),
+      ],
+      items: items,
+      current: _dest,
+      onSelect: _go,
+      footer: 'Кайрос за компютър · Beta',
+      banner: s.syncError == null
+          ? null
+          : Material(
+              color: Palette.yellow,
+              child: InkWell(
+                onTap: s.refresh,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Text('${s.syncError} Натиснете, за да опитате пак.',
+                      style: const TextStyle(color: Palette.onYellow, fontWeight: FontWeight.w600)),
                 ),
-              ),
-              if (church != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 0, 16, 18),
-                  child: Text(church.name, style: TextStyle(fontSize: 14, color: p.textMuted)),
-                ),
-              for (final (id, icon, label, badge) in items)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  child: Material(
-                    color: _dest == id ? p.primary.withValues(alpha: .16) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => _go(id),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        child: Row(children: [
-                          Badge(
-                            isLabelVisible: badge > 0,
-                            label: Text(badge > 99 ? '99+' : '$badge'),
-                            child: Icon(icon, color: _dest == id ? p.primary : p.textMuted),
-                          ),
-                          const SizedBox(width: 14),
-                          Text(label,
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: _dest == id ? FontWeight.w700 : FontWeight.w500,
-                                  color: _dest == id ? p.primary : null)),
-                        ]),
-                      ),
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Кайрос за компютър · проба', style: TextStyle(fontSize: 12, color: p.textMuted)),
-              ),
-            ]),
-          ),
-        ),
-        Expanded(
-          child: Column(children: [
-            if (s.syncError != null)
-              Material(
-                color: Palette.yellow,
-                child: InkWell(
-                  onTap: s.refresh,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Text('${s.syncError} Натиснете, за да опитате пак.',
-                        style: const TextStyle(color: Palette.onYellow, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ),
-            Expanded(
-              child: IndexedStack(
-                index: items.indexWhere((i) => i.$1 == _dest),
-                children: [
-                  for (final (id, _, _, _) in items)
-                    _visited.contains(id)
-                        ? (id == 'chat'
-                            ? pane(id)
-                            : Center(
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 1240),
-                                  child: pane(id),
-                                ),
-                              ))
-                        : const SizedBox.shrink(),
-                ],
               ),
             ),
-          ]),
+      body: Container(
+        color: p.bg,
+        child: IndexedStack(
+          index: items.indexWhere((i) => i.id == _dest),
+          children: [
+            for (final it in items)
+              _visited.contains(it.id)
+                  ? (it.id == 'chat'
+                      ? pane(it.id)
+                      : Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1320),
+                            child: pane(it.id),
+                          ),
+                        ))
+                  : const SizedBox.shrink(),
+          ],
         ),
-      ]),
+      ),
     );
+  }
+
+  static String _initials(String name) {
+    final w = name.trim().split(RegExp(r'\s+')).where((x) => x.isNotEmpty).toList();
+    if (w.isEmpty) return '?';
+    return (w.first.characters.first + (w.length > 1 ? w.last.characters.first : '')).toUpperCase();
+  }
+
+  /// Търсачката горе: разделите, хората в храма и събитията.
+  List<SearchHit> _deskSearch(BuildContext context, AppState s, String query) {
+    final q = query.trim().toLowerCase();
+    final church = s.currentChurch;
+    final hits = <SearchHit>[];
+    const sections = [
+      ('calendar', Icons.calendar_month_outlined, 'Календар'),
+      ('home', Icons.home_outlined, 'Начало'),
+      ('chat', Icons.chat_bubble_outline_rounded, 'Чат'),
+      ('leaves', Icons.beach_access_outlined, 'Почивки'),
+      ('duties', Icons.shield_outlined, 'Дежурства'),
+      ('cash', Icons.payments_outlined, 'Каса'),
+      ('stock', Icons.inventory_2_outlined, 'Склад'),
+      ('profile', Icons.person_outline_rounded, 'Профил'),
+    ];
+    for (final (id, icon, label) in sections) {
+      if (q.isEmpty || label.toLowerCase().contains(q)) {
+        if (id == 'cash' && church?.cashEnabled == false) continue;
+        if (id == 'stock' && church?.stockEnabled == false) continue;
+        if (id == 'chat' && !s.chatOn) continue;
+        hits.add(SearchHit(icon, label, 'Раздел', () => _go(id)));
+      }
+    }
+    if (q.isEmpty || church == null) return hits;
+    final qd = q.replaceAll(' ', '');
+    for (final (u, m) in s.membersOf(church.id)) {
+      final name = withRank(u.rank, u.name);
+      if (name.toLowerCase().contains(q) || (qd.length >= 3 && u.phone.replaceAll(' ', '').contains(qd))) {
+        hits.add(SearchHit(Icons.person_outline_rounded, name,
+            [if (m.isManager) 'председател', if (m.isCashier) 'касиер', if (u.phone.isNotEmpty) u.phone].join(' · '),
+            () => _go('profile')));
+      }
+    }
+    final df = DateFormat('d MMM y, HH:mm', 'bg');
+    for (final e in s.search(q).take(25)) {
+      hits.add(SearchHit(Icons.event_outlined, e.forWhom.isEmpty ? e.kind.label : '${e.kind.label} · ${e.forWhom}',
+          [df.format(e.startsAt), s.priestName(e.assigneeId)].where((x) => x.isNotEmpty).join(' · '), () {
+        _go('calendar');
+        WidgetsBinding.instance.addPostFrameCallback((_) => _navKeys['calendar']
+            ?.currentState
+            ?.push(MaterialPageRoute(builder: (_) => EventDetailScreen(eventId: e.id))));
+      }));
+    }
+    return hits;
   }
 
   @override

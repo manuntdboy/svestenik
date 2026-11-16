@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/desk_chrome.dart';
 import 'church_connect.dart';
 import 'diocese.dart';
 import 'metro_cabinet.dart';
@@ -36,6 +38,130 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
   }
 
   void _open(String id) => setState(() => tab = id);
+
+  Map<String, dynamic>? _overview; // за търсачката горе
+
+  Widget _desktop(BuildContext context, AppState s, List<(String, IconData, String, int)> items, String current) {
+    final p = Palette.of(context);
+    final me = s.currentUser;
+    final mine = s.myStaff.firstOrNull;
+    final dio = s.dioceseName(mine?.dioceseId) ?? '';
+    final role = mine == null ? '' : (mine.role == StaffRole.employee ? (mine.title ?? mine.role.label) : mine.role.label);
+    if (_overview == null && s.hasDioceseView) {
+      _overview = const {};
+      s.dioceseOverview().then((d) {
+        if (mounted) setState(() => _overview = d);
+      }).catchError((_) {});
+    }
+    String? section(String id) => switch (id) {
+          'calendar' => 'Служение',
+          'profile' => 'Аз',
+          _ => null,
+        };
+    return DeskFrame(
+      logoColor: s.isMetropolitan ? p.primary : Palette.yellow,
+      logoSuffix: 'Митрополия',
+      onLogo: () {
+        _open(items.first.$1);
+        s.refresh();
+      },
+      chipIcon: '☦',
+      chipTitle: dio.isEmpty ? 'Митрополия' : dio,
+      chipSubtitle: role,
+      searchHint: s.hasDioceseView ? 'Търсене: име, сан, храм, село, околия…' : 'Търсене…',
+      search: (q) => _deskSearch(context, s, q),
+      bell: s.metroUnreadAll,
+      bellTooltip: 'Непрочетени в чата',
+      onBell: s.isAdmin ? () => _open('chat') : null,
+      userInitials: (me?.name ?? '?').trim().isEmpty ? '?' : (me!.name.trim().characters.first).toUpperCase(),
+      userName: me == null ? '' : withRank(s.isMetropolitan ? ClergyRank.metropolitan : me.rank, me.name),
+      userMenu: [
+        DeskMenuAction(Icons.person_outline_rounded, 'Профил', () => _open('profile')),
+        if (s.myChurches.isNotEmpty) DeskMenuAction(Icons.church_outlined, 'Към храма', () => s.setMetroMode(false)),
+        DeskMenuAction(Icons.refresh_rounded, 'Обнови', s.refresh),
+        DeskMenuAction(Icons.logout_rounded, 'Изход', s.logout),
+      ],
+      items: [
+        for (final it in items) DeskNavItem(it.$1, it.$2, it.$3, badge: it.$4, section: section(it.$1)),
+      ],
+      current: current,
+      onSelect: _open,
+      footer: 'Кайрос · Митрополия · Beta',
+      body: Container(
+        color: p.bg,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: current == 'diocese' ? 1400 : 980),
+            child: _page(s, current),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<SearchHit> _deskSearch(BuildContext context, AppState s, String query) {
+    final q = query.trim().toLowerCase();
+    final ids = _items(s).map((e) => e.$1).toSet();
+    final hits = <SearchHit>[
+      for (final it in _items(s))
+        if (q.isEmpty || it.$3.toLowerCase().contains(q)) SearchHit(it.$2, it.$3, 'Раздел', () => _open(it.$1)),
+    ];
+    if (q.length < 2) return hits;
+    if (ids.contains('calendar') && (s.isMetropolitan || s.isSecretary)) {
+      final df = DateFormat('d MMM y', 'bg');
+      for (final e in s.metroEvents) {
+        if ('${e.title} ${e.place ?? ''} ${e.note ?? ''}'.toLowerCase().contains(q)) {
+          hits.add(SearchHit(Icons.event_outlined, e.title,
+              [df.format(e.startsAt), if ((e.place ?? '').isNotEmpty) e.place!].join(' · '),
+              () => editMetroEvent(context, e: e)));
+        }
+      }
+    }
+    final d = _overview;
+    if (d == null || d.isEmpty) return hits;
+    List<Map<String, dynamic>> list(Object? v) =>
+        (v as List? ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final qd = q.replaceAll(' ', '');
+    for (final sec in list(d['sections'])) {
+      for (final c in list(sec['churches'])) {
+        final cText = '${c['name']} ${c['settlement']} ${sec['name']}'.toLowerCase();
+        if (cText.contains(q)) {
+          hits.add(SearchHit(Icons.church_outlined, '${c['name']}', '${c['settlement']} · ${sec['name']}', () {
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => Theme(
+                        data: Theme.of(context),
+                        child: DioceseChurchScreen(churchId: '${c['id']}', title: '${c['name']}'))));
+          }));
+        }
+        for (final pr in list(c['priests'])) {
+          final name = withRank(ClergyRank.fromCode(pr['rank']), '${pr['name'] ?? ''}');
+          final phone = '${pr['phone'] ?? ''}'.trim();
+          if (name.toLowerCase().contains(q) || (qd.length >= 3 && phone.replaceAll(' ', '').contains(qd))) {
+            hits.add(SearchHit(Icons.person_outline_rounded, name,
+                ['${c['name']} – ${c['settlement']}', if (phone.isNotEmpty) phone].join(' · '),
+                () => _showPerson(context, name, '${c['name']} – ${c['settlement']} · ${sec['name']}', phone)));
+          }
+        }
+      }
+    }
+    return hits;
+  }
+
+  void _showPerson(BuildContext context, String name, String where, String phone) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(name),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(where, style: TextStyle(color: Palette.of(ctx).textMuted)),
+            const SizedBox(height: 10),
+            SelectableText(phone.isEmpty ? 'Няма въведен телефон.' : phone,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          ]),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Затвори'))],
+        ),
+      );
 
   Widget _page(AppState s, String id) => switch (id) {
         'home' => s.isMetropolitan ? _MetroHome(onOpen: _open) : _SecretaryHome(onOpen: _open),
@@ -80,25 +206,7 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
     Widget icon((String, IconData, String, int) it) =>
         it.$4 > 0 ? Badge(label: Text('${it.$4}'), child: Icon(it.$2)) : Icon(it.$2);
     final wide = MediaQuery.sizeOf(context).width >= 1000;
-    if (wide) {
-      return Scaffold(
-        body: Row(children: [
-          NavigationRail(
-            backgroundColor: p.surfaceAlt,
-            selectedIndex: index,
-            labelType: NavigationRailLabelType.all,
-            onDestinationSelected: (i) => _open(ids[i]),
-            destinations: [
-              for (final it in items) NavigationRailDestination(icon: icon(it), label: Text(it.$3)),
-            ],
-          ),
-          Expanded(
-            child: Center(
-                child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 900), child: _page(s, current))),
-          ),
-        ]),
-      );
-    }
+    if (wide) return _desktop(context, s, items, current);
     return Scaffold(
       body: _page(s, current),
       bottomNavigationBar: items.length < 2
