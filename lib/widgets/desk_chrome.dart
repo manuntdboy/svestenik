@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/hotkey.dart';
+
 import '../theme.dart';
 
 /// Кайрос за компютър: горна лента (лого, храм/епархия, търсачка, камбанка,
@@ -31,7 +33,7 @@ class DeskMenuAction {
   const DeskMenuAction(this.icon, this.label, this.onTap);
 }
 
-class DeskFrame extends StatelessWidget {
+class DeskFrame extends StatefulWidget {
   final Color logoColor;
   final String? logoSuffix; // „Митрополия“
   final VoidCallback onLogo;
@@ -79,21 +81,60 @@ class DeskFrame extends StatelessWidget {
     required this.body,
   });
 
-  void _openSearch(BuildContext context) => showDeskSearch(context, searchHint, search);
+  @override
+  State<DeskFrame> createState() => _DeskFrameState();
+}
+
+class _DeskFrameState extends State<DeskFrame> {
+  void Function()? _stopWeb;
+  bool _searchOpen = false;
+
+  DeskFrame get w => widget;
+
+  Future<void> _openSearch() async {
+    if (_searchOpen || !mounted) return;
+    _searchOpen = true;
+    await showDeskSearch(context, w.searchHint, w.search);
+    _searchOpen = false;
+  }
+
+  // Ctrl+K / ⌘K от където и да е фокусът (в браузъра – и преди браузъра).
+  bool _onKey(KeyEvent e) {
+    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.keyK) return false;
+    final k = HardwareKeyboard.instance;
+    if (!(k.isControlPressed || k.isMetaPressed) || k.isAltPressed || k.isShiftPressed) return false;
+    _openSearch();
+    return true;
+  }
 
   @override
-  Widget build(BuildContext context) {
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+    _stopWeb = listenCtrlK(_openSearch);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    _stopWeb?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => w._build(context, this);
+}
+
+extension on DeskFrame {
+  Widget _build(BuildContext context, _DeskFrameState st) {
     final p = Palette.of(context);
     final mac = Theme.of(context).platform == TargetPlatform.macOS;
-    return CallbackShortcuts(
-      bindings: {
-        SingleActivator(LogicalKeyboardKey.keyK, control: !mac, meta: mac): () => _openSearch(context),
-      },
-      child: Focus(
+    return Builder(builder: (_) {
+      return Focus(
         autofocus: true,
         child: Scaffold(
           body: Column(children: [
-            _topBar(context, p, mac),
+            _topBar(context, p, mac, st),
             if (banner != null) banner!,
             Expanded(
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -103,11 +144,11 @@ class DeskFrame extends StatelessWidget {
             ),
           ]),
         ),
-      ),
-    );
+      );
+    });
   }
 
-  Widget _topBar(BuildContext context, Palette p, bool mac) {
+  Widget _topBar(BuildContext context, Palette p, bool mac, _DeskFrameState st) {
     final chip = Container(
       padding: const EdgeInsets.fromLTRB(6, 6, 12, 6),
       decoration: BoxDecoration(
@@ -203,7 +244,7 @@ class DeskFrame extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10), side: BorderSide(color: p.border)),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: () => _openSearch(context),
+                    onTap: st._openSearch,
                     child: SizedBox(
                       height: 40,
                       child: Row(children: [
