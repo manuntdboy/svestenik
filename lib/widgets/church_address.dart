@@ -126,8 +126,8 @@ Future<bool> editChurchInfo(BuildContext context,
   return saved == true;
 }
 
-/// Избор на духовна околия за храм. Председателят – в своята епархия;
-/// създателят – във всички (с епархията пред името). Връща true при запис.
+/// Избор на духовна околия за храм – само създателят (всички епархии).
+/// Връща true при запис.
 Future<bool> editChurchVicariate(BuildContext context,
     {required String churchId, String? dioceseId, String? vicariateId}) async {
   final s = AppScope.read(context);
@@ -213,7 +213,7 @@ class ChurchAddressBlock extends StatelessWidget {
           Icon(Icons.account_balance_outlined, size: 20, color: p.textMuted),
           const SizedBox(width: 8),
           Expanded(child: Text(place, style: const TextStyle(fontSize: 15))),
-          if (canEdit)
+          if (AppScope.of(context).isCreator)
             IconButton(
               tooltip: 'Смени околията',
               visualDensity: VisualDensity.compact,

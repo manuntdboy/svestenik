@@ -881,7 +881,9 @@ reset role;
 select t.ok((select diocese_id from profiles where id = :'E2') = :'tst', 'без епархия – поема епархията на храма');
 set role authenticated;
 select t.as_user(:'B');
-select t.fails(format('select public.church_set_vicariate(%L, %L)', :'cid', :'kzl'), 'свещеникът не сменя околията', 'not_manager');
+select t.fails(format('select public.church_set_vicariate(%L, %L)', :'cid', :'kzl'), 'околията не я сменя никой освен създателя', 'forbidden');
+select t.fails(format('select public.create_church_in(%L, %L, %L, %L)', 'Х', 'У', 'З', :'kzl'),
+               'нов храм само в своята епархия', 'other_diocese');
 select t.fails(format('select public.creator_set_user_diocese(%L, %L)', :'E1', :'tst'), 'само създателят сменя епархия', 'forbidden');
 select t.as_user(:'A');
 select t.ok(public.creator_set_user_diocese(:'E1', :'tst') = 0, 'създателят сменя епархията');
@@ -890,6 +892,11 @@ select public.join_church(:'jc') \g /dev/null
 select t.ok(exists (select 1 from church_members where church_id = :'cid' and user_id = :'E1'), 'след смяната влиза в храма');
 select t.as_user(:'A');
 select t.ok(public.creator_set_user_diocese(:'E1', :'szd') = 1, 'смяна на епархия – напуска храмовете от старата');
+select t.as_user(:'E1');
+select id as szc from public.create_church_in('Св. Тест', 'Казанлък', 'Казанлък', :'kzl') \gset
+select t.ok((select vicariate_id from churches where id = :'szc') = :'kzl', 'нов храм – в избраната околия');
+select t.fails(format('select public.church_set_vicariate(%L, %L)', :'szc', :'kzl'), 'председателят не сменя околията', 'forbidden');
+select t.as_user(:'A');
 select public.creator_vicariate_save(:'szd', null, 'Тестова околия') as nv \gset
 select t.ok((select diocese_id from vicariates where id = :'nv') = :'szd', 'създателят добавя околия');
 select t.fails(format('select public.creator_vicariate_save(%L, null, %L)', :'szd', 'Тестова околия'), 'околиите не се повтарят', 'name_taken');

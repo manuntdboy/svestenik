@@ -1308,7 +1308,7 @@ class AppState extends ChangeNotifier {
   String churchPlace(Church c) =>
       [dioceseName(c.dioceseId), vicariateName(c.vicariateId)].whereType<String>().join(' · ');
 
-  /// Околията на храма (председателят – в своята епархия; създателят – навсякъде).
+  /// Околията на храма – сменя я само създателят.
   Future<void> setChurchVicariate(String churchId, String vicariateId) async {
     try {
       await _db.rpc('church_set_vicariate', params: {'p_church': churchId, 'p_vicariate': vicariateId});
@@ -1932,15 +1932,13 @@ class AppState extends ChangeNotifier {
 
   Future<Church> createChurch(String name, String settlement, String municipality, {String? vicariateId}) async {
     try {
-      final row = await _db.rpc('create_church', params: {
+      final row = await _db.rpc(vicariateId == null ? 'create_church' : 'create_church_in', params: {
         'p_name': name.trim(),
         'p_settlement': settlement.trim(),
         'p_municipality': municipality.trim(),
+        if (vicariateId != null) 'p_vicariate': vicariateId,
       });
       final c = Church.fromRow(Map<String, dynamic>.from(row as Map));
-      if (vicariateId != null) {
-        await _db.rpc('church_set_vicariate', params: {'p_church': c.id, 'p_vicariate': vicariateId});
-      }
       await refresh();
       await selectChurch(c.id);
       unawaited(_invokeNotify({'type': 'creator_event', 'kind': 'new_church'}));
