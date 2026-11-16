@@ -209,9 +209,22 @@ class _MetroThreadScreenState extends State<MetroThreadScreen> {
                           }
 }
 
+                    final dots = MediaQuery.sizeOf(context).width < 1000 ||
+                            !(mine || (m.recipientId == null && s.isMetropolitanOf(m.dioceseId)))
+                        ? null
+                        : IconButton(
+                            tooltip: 'Действия',
+                            visualDensity: VisualDensity.compact,
+                            iconSize: 20,
+                            color: p.textMuted,
+                            icon: const Icon(Icons.more_vert_rounded),
+                            onPressed: act,
+                          );
                     return Align(
                       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                      child: GestureDetector(
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (mine && dots != null) dots,
+                        Flexible(child: GestureDetector(
                         onLongPress: act,
                         onSecondaryTap: act, // десен бутон на мишката
                         child: Container(
@@ -231,7 +244,9 @@ class _MetroThreadScreenState extends State<MetroThreadScreen> {
                             Text(_hm(m.createdAt), style: TextStyle(fontSize: 12, color: p.textMuted)),
                           ]),
                         ),
-                      ),
+                      )),
+                        if (!mine && dots != null) dots,
+                      ]),
                     );
                   },
                 ),

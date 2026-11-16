@@ -506,13 +506,37 @@ class _Bubble extends StatelessWidget {
         ]),
       ),
     );
-    if (mine) return Align(alignment: Alignment.centerRight, child: bubble);
+    // На компютър – бутон ⋮ до балончето (ляв бутон на мишката), вместо задържане.
+    final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final dots = Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: IconButton(
+        tooltip: 'Действия',
+        visualDensity: VisualDensity.compact,
+        iconSize: 20,
+        color: p.textMuted,
+        icon: const Icon(Icons.more_vert_rounded),
+        onPressed: onLongPress,
+      ),
+    );
+    if (mine) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: wide
+            ? Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
+                dots,
+                Flexible(child: bubble),
+              ])
+            : bubble,
+      );
+    }
     return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
       Padding(
         padding: const EdgeInsets.only(right: 8, bottom: 8),
         child: PriestBadge(name: name, color: who, size: 34, userId: msg.senderId.isEmpty ? null : msg.senderId),
       ),
       Flexible(child: bubble),
+      if (wide) dots,
     ]);
   }
 }
