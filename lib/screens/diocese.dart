@@ -265,7 +265,7 @@ class _DioceseScreenState extends State<DioceseScreen> {
               onTap: taps,
             ),
           const SizedBox(height: 10),
-          Text('Ред → адресът и пътят до храма. Вътрешният живот на храма (служби, дежурства, почивки, каса, склад) не се вижда.',
+          Text('Ред → адресът и пътят до храма.',
               style: TextStyle(fontSize: 12.5, color: p.textMuted)),
         ]),
       ),

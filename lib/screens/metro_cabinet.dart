@@ -273,7 +273,7 @@ class MetroCalendarScreen extends StatelessWidget {
           if (s.isSecretary && !s.isMetropolitan)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('Записите тук вижда и владиката. Неговите лични записи не се виждат.',
+              child: Text('Записите тук вижда и владиката.',
                   style: TextStyle(color: p.textMuted)),
             ),
           if (upcoming.isEmpty)
@@ -557,9 +557,6 @@ class _DioceseChurchScreenState extends State<DioceseChurchScreen> {
         const SizedBox(height: 10),
         NavigateButtons(query),
         const SizedBox(height: 22),
-        const SizedBox(height: 12),
-        Text('Вътрешният живот на храма – служби, дежурства, почивки, каса и склад – не се вижда от митрополията.',
-            style: TextStyle(fontSize: 13.5, color: p.textMuted)),
       ]);
     }
     return Scaffold(appBar: AppBar(title: Text(widget.title)), body: body);
