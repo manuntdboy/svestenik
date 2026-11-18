@@ -631,17 +631,22 @@ class _PersonCard extends StatelessWidget {
                   }
                 } else if (v == 'staff') {
                   if (s.dioceses.isEmpty) await s.loadPlaces();
-                  if (!context.mounted) return;
                   final uid = u['id'] as String;
+                  String? ud;
+                  try {
+                    ud = await s.creatorUserDiocese(uid);
+                  } on AppError catch (_) {}
+                  if (!context.mounted) return;
                   final cur = s.staffOf(uid);
                   final opts = <(StaffRole, String?, String)>[
                     (StaffRole.metropolitan, null, 'Митрополит'),
                     (StaffRole.secretary, null, 'Секретар'),
                     (StaffRole.protosyngel, null, 'Протосингел'),
                     (StaffRole.employee, null, 'Служител (счетоводител, деловодител…)'),
-                    for (final d in s.dioceses)
+                    // Наместник – само в околиите на неговата епархия.
+                    for (final d in s.dioceses.where((d) => d.id == ud))
                       for (final vv in s.vicariatesOf(d.id).where((x) => !x.isCenter))
-                        (StaffRole.vicar, vv.id, 'Наместник · ${d.name} · ${vv.name}'),
+                        (StaffRole.vicar, vv.id, 'Наместник · ${vv.name}'),
                   ];
                   final pick = await showDialog<(bool, StaffRole, String?, String)>(
                     context: context,

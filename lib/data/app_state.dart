@@ -1570,6 +1570,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Създателят: епархията на човек.
+  Future<String?> creatorUserDiocese(String userId) async {
+    try {
+      final r = await _db.rpc('creator_user_diocese', params: {'p_user': userId});
+      return r as String?;
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Хора от епархията за администрацията – търсене по име или телефон.
   Future<List<Map<String, dynamic>>> staffCandidates(String dioceseId, String q) async {
     try {
