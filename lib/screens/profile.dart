@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
@@ -13,6 +14,7 @@ import 'church_priests.dart';
 import 'change_password.dart';
 import 'creator.dart';
 import 'feedback.dart';
+import 'help.dart';
 import 'privacy.dart';
 import 'my_profile.dart';
 import '../widgets/whats_new.dart' show buildNumber, isTestBuild;
@@ -157,6 +159,12 @@ class ProfileScreen extends StatelessWidget {
           onSelectionChanged: (v) => s.setTextScale(v.first),
         ),
         heading('Напомняния'),
+        if (kIsWeb)
+          SurfaceCard(
+            child: Text('Напомнянията и алармата работят в приложението на телефона. На компютъра ги няма.',
+                style: TextStyle(fontSize: 15, color: p.textMuted)),
+          )
+        else
         SurfaceCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -213,6 +221,13 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen())),
           icon: const Icon(Icons.key_rounded),
           label: const Text('Смени паролата'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpScreen())),
+          icon: const Icon(Icons.help_outline_rounded),
+          label: const Text('Как работи Кайрос'),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
