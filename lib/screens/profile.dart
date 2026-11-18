@@ -15,6 +15,7 @@ import 'change_password.dart';
 import 'creator.dart';
 import 'feedback.dart';
 import 'help.dart';
+import 'invite.dart';
 import 'privacy.dart';
 import 'my_profile.dart';
 import '../widgets/whats_new.dart' show buildNumber, isTestBuild;
@@ -228,6 +229,13 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpScreen())),
           icon: const Icon(Icons.help_outline_rounded),
           label: const Text('Как работи Кайрос'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InviteScreen())),
+          icon: const Icon(Icons.qr_code_2_rounded),
+          label: const Text('Покани колега'),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(

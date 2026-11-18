@@ -194,7 +194,10 @@ jobs:
             --dart-define=TEST_BUILD=true
 
       - name: Преименуване
-        run: cp build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
+          # Постоянно име – адресът …/releases/latest/download/kairos.apk винаги дава най-новата версия.
+          cp "$APK_NAME" kairos.apk
 
       - name: Публикуване в GitHub Releases (резервно)
         uses: softprops/action-gh-release@v2
@@ -205,7 +208,9 @@ jobs:
           # Версията за всички тестери е „latest“ – по нея приложението предлага „Обнови“.
           prerelease: ${{ env.SEND_TO_TESTERS != 'true' }}
           make_latest: ${{ env.SEND_TO_TESTERS == 'true' }}
-          files: ${{ env.APK_NAME }}
+          files: |
+            ${{ env.APK_NAME }}
+            kairos.apk
 
       - name: Изпращане към Firebase App Distribution
         if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS == 'true'

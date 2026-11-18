@@ -30,3 +30,5 @@ flutter build web --release --base-href "$BASE" \
   --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
   --dart-define=BUILD_NUMBER="$NUM" \
   --dart-define=TEST_BUILD=true
+# Страницата „Свали Кайрос“ (QR кодът води тук)
+if [ -d "$HERE/svali" ]; then mkdir -p build/web/svali && cp "$HERE"/svali/* build/web/svali/; fi

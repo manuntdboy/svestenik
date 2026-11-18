@@ -21,6 +21,7 @@ import 'leaves.dart';
 import 'chat.dart';
 import 'duties.dart';
 import 'help.dart';
+import 'invite.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'program_draft.dart';
@@ -278,6 +279,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         if (s.isMetropolitan) DeskMenuAction(Icons.account_balance_outlined, 'Митрополитски изглед', () => s.setMetroMode(true)),
         DeskMenuAction(Icons.help_outline_rounded, 'Как работи Кайрос',
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpScreen()))),
+        DeskMenuAction(Icons.qr_code_2_rounded, 'Покани колега',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InviteScreen()))),
         DeskMenuAction(Icons.refresh_rounded, 'Обнови', s.refresh),
         DeskMenuAction(Icons.logout_rounded, 'Изход', s.logout),
       ],
