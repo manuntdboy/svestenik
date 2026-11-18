@@ -493,7 +493,7 @@ Future<void> editMetroEvent(BuildContext context, {MetroEvent? e}) async {
 
 // ============================================================ Храм от епархията
 
-/// Храм, гледан от митрополията: адрес, навигация и дежурствата.
+/// Храм, гледан от митрополията: адрес, Булстат и навигация (без дежурства).
 class DioceseChurchScreen extends StatefulWidget {
   final String churchId;
   final String title;
@@ -535,8 +535,6 @@ class _DioceseChurchScreenState extends State<DioceseChurchScreen> {
         if ('${d['municipality'] ?? ''}'.isNotEmpty) 'общ. ${d['municipality']}',
         'България',
       ].where((x) => x.trim().isNotEmpty).join(', ');
-      final duties = ((d['duties'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      final today = DateUtils.dateOnly(DateTime.now());
       body = ListView(padding: const EdgeInsets.fromLTRB(18, 12, 18, 32), children: [
         Text('${d['name']}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
         Text('${d['settlement']}', style: TextStyle(fontSize: 16, color: p.textMuted)),
@@ -559,35 +557,8 @@ class _DioceseChurchScreenState extends State<DioceseChurchScreen> {
         const SizedBox(height: 10),
         NavigateButtons(query),
         const SizedBox(height: 22),
-        Text('ДЕЖУРСТВА',
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: 1.6, color: p.primary)),
-        const SizedBox(height: 8),
-        if (duties.isEmpty)
-          Text('Храмът няма въведен график на дежурствата.', style: TextStyle(color: p.textMuted, fontSize: 15)),
-        for (final x in duties)
-          Builder(builder: (_) {
-            final a = DateTime.parse('${x['start_date']}');
-            final b = DateTime.parse('${x['end_date']}');
-            final now = !a.isAfter(today) && !b.isBefore(today);
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: p.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: now ? p.primary : p.border, width: now ? 2 : 1),
-              ),
-              child: Row(children: [
-                Expanded(
-                  child: Text(_personName(x), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                ),
-                Text(a == b ? _dmF.format(a) : '${_dmF.format(a)} – ${_dmF.format(b)}',
-                    style: TextStyle(color: now ? p.primary : p.textMuted, fontWeight: FontWeight.w600)),
-              ]),
-            );
-          }),
         const SizedBox(height: 12),
-        Text('Службите, почивките, касата и складът на храма не се виждат от митрополията.',
+        Text('Вътрешният живот на храма – служби, дежурства, почивки, каса и склад – не се вижда от митрополията.',
             style: TextStyle(fontSize: 13.5, color: p.textMuted)),
       ]);
     }

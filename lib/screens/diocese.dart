@@ -265,7 +265,7 @@ class _DioceseScreenState extends State<DioceseScreen> {
               onTap: taps,
             ),
           const SizedBox(height: 10),
-          Text('Ред → дежурствата, адресът и пътят до храма. Касата, складът и почивките не се виждат.',
+          Text('Ред → адресът и пътят до храма. Вътрешният живот на храма (служби, дежурства, почивки, каса, склад) не се вижда.',
               style: TextStyle(fontSize: 12.5, color: p.textMuted)),
         ]),
       ),
@@ -413,8 +413,8 @@ class _DioceseScreenState extends State<DioceseScreen> {
                       for (final pr in _list(c['priests'])) _priestTile(pr, c, sec),
                       ListTile(
                         contentPadding: const EdgeInsets.only(left: 24, right: 16),
-                        leading: Icon(Icons.shield_outlined, color: p.primary),
-                        title: const Text('Дежурства, адрес и път до храма'),
+                        leading: Icon(Icons.place_outlined, color: p.primary),
+                        title: const Text('Адрес и път до храма'),
                         subtitle: (c['address'] as String? ?? '').trim().isEmpty
                             ? null
                             : Text('${c['address']}', style: TextStyle(color: p.textMuted)),

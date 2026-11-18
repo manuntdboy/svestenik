@@ -1010,8 +1010,8 @@ insert into duties (church_id, user_id, start_date, end_date) values (:'szc', :'
 set role authenticated;
 select t.as_user(:'E5');
 select public.diocese_church(:'szc') as dc \gset
-select t.ok(jsonb_array_length(:'dc'::jsonb->'duties') = 1 and :'dc'::text not like '%amount%',
-            'секретарят вижда дежурствата на храма, без касата');
+select t.ok(:'dc'::jsonb ? 'address' and not (:'dc'::jsonb ? 'duties') and :'dc'::text not like '%amount%',
+            'секретарят вижда адреса на храма, но не и дежурствата и касата');
 select t.as_user(:'E4');
 select t.fails(format('select public.diocese_church(%L)', :'szc'), 'служителят не вижда храмовете', 'forbidden');
 select t.as_user(:'E1');
