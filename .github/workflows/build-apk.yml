@@ -258,49 +258,68 @@ jobs:
   # при версия за всички („[тестери]“), при „[уеб]“ или при ръчно пускане.
   web:
     needs: server
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[тестери]') || contains(github.event.head_commit.message, '[уеб]')
+    # „[тестери]“/„[уеб]“/ръчно – истинският сайт за всички;
+    # „[аз]“ – пробният сайт /svestenik/proba/ само за създателя.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[тестери]') || contains(github.event.head_commit.message, '[уеб]') || contains(github.event.head_commit.message, '[аз]')
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      PUBLIC: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[тестери]') || contains(github.event.head_commit.message, '[уеб]') }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           # Заключено до след теста в реална среда (21.11) – без изненади от нов Flutter.
           flutter-version: 3.50.0
           cache: true
-      - name: Създаване на уеб частта
-        run: |
-          flutter create . --platforms=web --org bg.kairos --project-name kairos
-          rm -f test/widget_test.dart
-          sed -i 's#<title>[^<]*</title>#<title>Кайрос</title>#' web/index.html
-          python3 - <<'PY'
-          import json
-          p = 'web/manifest.json'
-          m = json.load(open(p))
-          m.update(name='Кайрос', short_name='Кайрос', description='Кайрос – приложение за свещеници',
-                   background_color='#12161C', theme_color='#12161C')
-          json.dump(m, open(p, 'w'), ensure_ascii=False, indent=2)
-          PY
-      - run: flutter pub get
       - name: Изграждане за браузър
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          flutter build web --release --base-href /svestenik/ \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
-            --dart-define=BUILD_NUMBER=${{ github.run_number }} \
-            --dart-define=TEST_BUILD=true
+          git config user.name "kairos-bot"; git config user.email "kairos-bot@users.noreply.github.com"
+          # Готовите сайтове се пазят в клоновете site-public и site-proba.
+          save() {  # save <папка> <клон>
+            ( cd "$1" && rm -rf .git && git init -q -b "$2" && git add -A \
+              && git -c user.name=kairos-bot -c user.email=kairos-bot@users.noreply.github.com commit -qm "сайт ${{ github.run_number }}" \
+              && git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "$2:$2" )
+          }
+          if [ "$PUBLIC" = "true" ]; then
+            ./ci/build_web.sh . /svestenik/ ${{ github.run_number }}
+            cp -r build/web /tmp/public; save /tmp/public site-public
+          else
+            ./ci/build_web.sh . /svestenik/proba/ ${{ github.run_number }}
+            cp -r build/web /tmp/proba; save /tmp/proba site-proba
+          fi
+          mkdir -p site
+          # Истинският сайт: от клона; ако го още няма – изграждаме го от последната версия за всички.
+          if git fetch -q origin site-public 2>/dev/null; then
+            git archive origin/site-public | tar -x -C site
+          else
+            tag=$(git tag -l 'build-*' --sort=-v:refname | while read t; do
+                    git log -1 --format=%s "$t" | grep -q '\[тестери\]' && { echo "$t"; break; }; done)
+            echo "Първоначален истински сайт от $tag"
+            git worktree add -q /tmp/pubsrc "$tag"
+            cp -r ci/web_icons ci/build_web.sh /tmp/pubsrc/ci/ 2>/dev/null || true
+            cp pubspec.lock /tmp/pubsrc/ 2>/dev/null || true
+            ./ci/build_web.sh /tmp/pubsrc /svestenik/ "${tag#build-}"
+            cp -r /tmp/pubsrc/build/web /tmp/public; save /tmp/public site-public
+            cp -r /tmp/public/. site/
+          fi
+          if git fetch -q origin site-proba 2>/dev/null; then
+            mkdir -p site/proba; git archive origin/site-proba | tar -x -C site/proba
+          fi
+          ls site | head; ls site/proba 2>/dev/null | head -3
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/web
+          path: site
       - id: deploy
         uses: actions/deploy-pages@v4
