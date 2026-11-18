@@ -152,6 +152,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Заключено до след теста в реална среда (21.11) – без изненади от нов Flutter.
+          flutter-version: 3.50.0
           cache: true
 
       - name: Създаване на Android частта
@@ -169,6 +171,9 @@ jobs:
           cp ci/debug.keystore ~/.android/debug.keystore
 
       - run: flutter pub get
+
+      - name: Заключените версии на пакетите (за pubspec.lock)
+        run: echo '=====LOCK-BEGIN====='; cat pubspec.lock; echo '=====LOCK-END====='
 
       - name: Проверка на кода
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -270,6 +275,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Заключено до след теста в реална среда (21.11) – без изненади от нов Flutter.
+          flutter-version: 3.50.0
           cache: true
       - name: Създаване на уеб частта
         run: |
