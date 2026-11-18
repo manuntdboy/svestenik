@@ -212,13 +212,17 @@ jobs:
             ${{ env.APK_NAME }}
             kairos.apk
 
-      - name: Изпращане към Firebase App Distribution
+      # От 18.11.2026 имейл от Firebase получава само авторът. Всички останали
+      # се обновяват от самия Кайрос („Има нова версия → Обнови“) или от QR кода.
+      - name: Изпращане към Firebase App Distribution (само до автора)
         if: env.HAS_FIREBASE == 'true' && env.SEND_TO_TESTERS == 'true'
         env:
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          AUTHOR_EMAIL: ${{ secrets.AUTHOR_EMAIL }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
+          if [ -z "$AUTHOR_EMAIL" ]; then echo "::notice::Няма AUTHOR_EMAIL – без имейл."; exit 0; fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           # Бележките са същите като в камбанката на приложението.
@@ -226,7 +230,7 @@ jobs:
           cat "$RUNNER_TEMP/notes.txt"
           npx --yes firebase-tools@latest appdistribution:distribute "$APK_NAME" \
             --app "$FIREBASE_APP_ID" \
-            --groups "testers" \
+            --testers "$AUTHOR_EMAIL" \
             --release-notes-file "$RUNNER_TEMP/notes.txt"
           rm -f "$RUNNER_TEMP/firebase-sa.json"
 
