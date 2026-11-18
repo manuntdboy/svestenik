@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
 
@@ -72,14 +74,14 @@ class HelpScreen extends StatelessWidget {
     (Icons.phone_iphone_rounded, 'iPhone', [
       'Приложението е за Android. С iPhone работите през сайта: отворете manuntdboy.github.io/svestenik в Safari и влезте със същия профил. На телефона сайтът изглежда и работи като приложението.',
       'За да се отваря като приложение: в Safari натиснете „Сподели“ → „Добави към началния екран“. На екрана ще се появи иконката на Кайрос.',
-      'Известия през сайта засега няма – проверявайте „Начало“ и чата сами. Подготвяме известия и за iPhone.',
+      'Известия през сайта засега няма – проверявайте „Начало“ и чата сами. Подготвям известия и за iPhone.',
       'Напомнянията и алармата за събития работят само в приложението за Android – браузърът не може да звъни, когато е затворен.',
     ]),
     (Icons.forum_outlined, 'Предложения и грешки', [
-      'Кайрос се прави заедно с вас. Всяко предложение, въпрос или забелязана грешка ни помага – пишете смело, дори за дреболия.',
-      'В приложението: Профил → „Обратна връзка“. Можете да приложите и снимка на екрана.',
-      'По Viber: 0888 177 738 (Димитър Костадинов) – напишете какво сте правили, какво сте очаквали и какво се случи; снимка на екрана помага най-много.',
-      'Отговаряме и поправяме възможно най-бързо. Новата версия идва сама – приложението ви казва, когато е готова.',
+      'Кайрос се прави заедно с вас. Всяко предложение, въпрос или забелязана грешка ми помага – пишете ми смело, дори за дреболия.',
+      'В приложението: Профил → „Обратна връзка“ – съобщението стига направо до мен. Можете да приложите и снимка на екрана.',
+      'По Viber: 0888 177 738 – Димитър Костадинов, създателят на Кайрос. Напишете ми какво сте правили, какво сте очаквали и какво се случи; снимка на екрана помага най-много.',
+      'Отговарям и поправям възможно най-бързо. Новата версия идва сама – приложението ви казва, когато е готова.',
     ]),
     (Icons.lock_outline_rounded, 'Поверителност', [
       'Виждате само храмовете, в които сте одобрени. Касата и складът – само ако сте председател или касиер.',
@@ -125,7 +127,7 @@ class HelpScreen extends StatelessWidget {
                                   height: 6,
                                   decoration: BoxDecoration(color: p.primary, shape: BoxShape.circle)),
                             ),
-                            Expanded(child: Text(l, style: const TextStyle(fontSize: 15.5, height: 1.4))),
+                            Expanded(child: _Linked(l, style: const TextStyle(fontSize: 15.5, height: 1.4))),
                           ]),
                         ),
                     ],
@@ -133,11 +135,75 @@ class HelpScreen extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
-            Text('Нещо не е ясно или не работи? Пишете ни от „Обратна връзка“ в профила или по Viber на 0888 177 738.',
+            _Linked('Нещо не е ясно или не работи? Пишете на създателя на приложението от „Обратна връзка“ в профила или ми пишете по Viber на 0888 177 738.',
                 style: TextStyle(fontSize: 14.5, color: p.textMuted)),
           ]),
         ),
       ),
     );
+  }
+}
+
+
+/// Текст, в който адресът на сайта и Viber номерът се натискат.
+class _Linked extends StatefulWidget {
+  final String text;
+  final TextStyle style;
+  const _Linked(this.text, {required this.style});
+
+  @override
+  State<_Linked> createState() => _LinkedState();
+}
+
+class _LinkedState extends State<_Linked> {
+  static const _site = 'manuntdboy.github.io/svestenik';
+  static const _viber = '0888 177 738';
+  final _taps = <TapGestureRecognizer>[];
+
+  @override
+  void dispose() {
+    for (final t in _taps) {
+      t.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _open(Uri uri) async {
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    for (final t in _taps) {
+      t.dispose();
+    }
+    _taps.clear();
+    final p = Palette.of(context);
+    final link = widget.style.copyWith(
+        color: p.primary, fontWeight: FontWeight.w700, decoration: TextDecoration.underline);
+    final spans = <InlineSpan>[];
+    var rest = widget.text;
+    while (rest.isNotEmpty) {
+      final a = rest.indexOf(_site);
+      final b = rest.indexOf(_viber);
+      final i = [a, b].where((x) => x >= 0).fold<int>(-1, (m, x) => m < 0 || x < m ? x : m);
+      if (i < 0) {
+        spans.add(TextSpan(text: rest));
+        break;
+      }
+      if (i > 0) spans.add(TextSpan(text: rest.substring(0, i)));
+      final isSite = i == a;
+      final word = isSite ? _site : _viber;
+      final tap = TapGestureRecognizer()
+        ..onTap = () => _open(isSite
+            ? Uri.parse('https://$_site/')
+            : Uri.parse('viber://chat?number=%2B359888177738'));
+      _taps.add(tap);
+      spans.add(TextSpan(text: word, style: link, recognizer: tap));
+      rest = rest.substring(i + word.length);
+    }
+    return Text.rich(TextSpan(style: widget.style, children: spans));
   }
 }
