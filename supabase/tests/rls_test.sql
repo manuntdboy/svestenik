@@ -1079,4 +1079,11 @@ select t.ok((select count(*) from announcements where recipient_id = :'C' and ti
 select t.as_user(:'A');
 reset role;
 select t.ok((select public from storage.buckets where id = 'avatars') = false, 'хранилището за снимки е частно');
+\echo '== Създателят не вижда суми'
+set role authenticated;
+select t.as_user(:'A');
+select t.ok(public.creator_activity()::text !~ '€', 'дневникът на създателя е без суми');
+select t.ok(exists (select 1 from jsonb_array_elements(public.creator_activity()) x where x->>'details' in ('приход','разход','движение')),
+            'вижда само вида на записа в касата');
+reset role;
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

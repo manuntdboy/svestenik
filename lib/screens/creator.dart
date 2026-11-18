@@ -1154,7 +1154,6 @@ class _CashSheetState extends State<_CashSheet> {
     final p = Palette.of(context);
     final muted = TextStyle(fontSize: 14, color: p.textMuted);
     final d = _d;
-    final money = NumberFormat.currency(locale: 'bg', symbol: '€', decimalDigits: 2);
     final monthF = DateFormat('LLLL yyyy', 'bg');
     return SafeArea(
       child: ConstrainedBox(
@@ -1186,12 +1185,11 @@ class _CashSheetState extends State<_CashSheet> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(
                       '${switch (e['book']) { 'income' => 'Приход', 'expense' => 'Разход', _ => 'Движение' }}'
-                      '${e['reverses'] == true ? ' (сторно)' : ''} · ${money.format((e['amount'] as num).abs())}',
+                      '${e['reverses'] == true ? ' (сторно)' : ''}',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   Text(
                       [
                         '${e['category']}',
-                        if ((e['note'] as String?)?.isNotEmpty == true) '${e['note']}',
                         '${e['by'] ?? '—'} · ${_when.format(_dt(e['at'])!)}',
                       ].join(' · '),
                       style: muted),
