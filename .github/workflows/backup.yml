@@ -99,9 +99,9 @@ jobs:
           export PGPORT=5499
           echo "Тестова база на порт $PGPORT"
           cp out/kairos.dump /tmp/kairos.dump && chmod a+r /tmp/kairos.dump
-          sudo -E -u postgres psql -qc "create database proba"
+          sudo -u postgres env PGPORT="$PGPORT" psql -qc "create database proba"
           # Ролите и разширенията, които Supabase има, а празната база – не.
-          sudo -E -u postgres psql -q -d proba <<'SQL'
+          sudo -u postgres env PGPORT="$PGPORT" psql -q -d proba <<'SQL'
           do $$ declare r text; begin
             foreach r in array array['anon','authenticated','service_role','supabase_auth_admin',
                                      'supabase_storage_admin','authenticator','supabase_admin','dashboard_user'] loop
@@ -112,14 +112,14 @@ jobs:
           create extension if not exists "uuid-ossp" with schema extensions;
           create extension if not exists citext with schema public;
           SQL
-          sudo -E -u postgres pg_restore --no-owner --no-privileges -d proba /tmp/kairos.dump 2> out/restore.log || true
+          sudo -u postgres env PGPORT="$PGPORT" pg_restore --no-owner --no-privileges -d proba /tmp/kairos.dump 2> out/restore.log || true
           echo "Предупреждения при възстановяване: $(grep -c 'error' out/restore.log || true)"
           grep -i 'error' out/restore.log | head -20 || true
           bad=0
           while read -r t a b; do
             { [ "$a" = "?" ] || [ "$b" = "?" ]; } && continue
             lo=$(( a < b ? a : b )); hi=$(( a > b ? a : b ))
-            m=$(sudo -E -u postgres psql -d proba -tAc "select count(*) from $t" 2>/dev/null || echo "липсва")
+            m=$(sudo -u postgres env PGPORT="$PGPORT" psql -d proba -tAc "select count(*) from $t" 2>/dev/null || echo "липсва")
             if ! [[ "$m" =~ ^[0-9]+$ ]] || [ "$m" -lt "$lo" ] || [ "$m" -gt "$hi" ]; then
               echo "::warning::$t: в базата $a–$b, във възстановеното $m"; bad=$((bad+1))
             fi
