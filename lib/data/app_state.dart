@@ -79,6 +79,7 @@ class AppState extends ChangeNotifier {
   /// Най-старата версия, която създателят още приема (0 = без напомняне).
   int minBuild = 0;
   final Map<String, int> _stockMin = {};
+  final Set<String> _stockHidden = {}; // 'храм|артикул' – изключени от склада
   final Map<String, double> _stockPrice = {};
   // Потвърждения за Архиерейска Литургия: събитие → (свещеник → кога).
   final Map<String, Map<String, DateTime>> _confirmations = {};
@@ -316,9 +317,13 @@ class AppState extends ChangeNotifier {
         _stockPrice['${r['church_id']}|${r['item']}'] = (r['price'] as num).toDouble();
       }
       _stockMin.clear();
+      _stockHidden.clear();
       for (final r in results[10]) {
         final it = StockItem.fromCode(r['item'] as String?);
-        if (it != null) _stockMin['${r['church_id']}|${it.code}'] = (r['min_qty'] as num).toInt();
+        if (it == null) continue;
+        final k = '${r['church_id']}|${it.code}';
+        if (r['min_qty'] != null) _stockMin[k] = (r['min_qty'] as num).toInt();
+        if (r['hidden'] == true) _stockHidden.add(k);
       }
       _confirmations.clear();
       for (final r in results[5]) {
@@ -1957,11 +1962,29 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Изключен ли е артикулът от склада на храма (храмът не го държи).
+  bool stockHidden(String churchId, StockItem i) => _stockHidden.contains('$churchId|${i.code}');
+
+  /// Артикулите, които храмът държи (без изключените).
+  List<StockItem> stockItems(String churchId) =>
+      StockItem.values.where((i) => !stockHidden(churchId, i)).toList();
+
+  Future<void> setStockHidden(String churchId, StockItem item, bool hidden) async {
+    try {
+      await _db.rpc('stock_set_hidden', params: {'p_church': churchId, 'p_item': item.code, 'p_hidden': hidden});
+      final k = '$churchId|${item.code}';
+      hidden ? _stockHidden.add(k) : _stockHidden.remove(k);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Видовете под границата (за предупреждението на началния екран).
   List<StockItem> lowStock(String churchId) {
     if (!canSeeCash(churchId)) return [];
     final b = stockOf(churchId);
-    return StockItem.values.where((i) => b[i]! <= stockMin(churchId, i)).toList();
+    return stockItems(churchId).where((i) => b[i]! <= stockMin(churchId, i)).toList();
   }
 
   List<StockMove> stockToDecide(String churchId) {

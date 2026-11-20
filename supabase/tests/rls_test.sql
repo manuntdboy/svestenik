@@ -715,6 +715,12 @@ select public.stock_set_price(:'cid2', 'diploma', 0.8) \g /dev/null
 select t.ok((select price from stock_prices where church_id = :'cid2' and item = 'diploma') = 0.80, 'цената се настройва');
 select public.stock_set_threshold(:'cid2', 'candle_020', 8);
 select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_020') = 8, 'границата за предупреждение се настройва');
+select public.stock_set_hidden(:'cid2', 'diploma', true) \g /dev/null
+select t.ok((select hidden from stock_thresholds where church_id = :'cid2' and item = 'diploma'), 'артикулът се изключва от склада');
+select public.stock_set_hidden(:'cid2', 'candle_020', true) \g /dev/null
+select t.ok((select min_qty from stock_thresholds where church_id = :'cid2' and item = 'candle_020') = 8, 'изключването пази границата');
+select public.stock_set_hidden(:'cid2', 'candle_020', false) \g /dev/null
+select t.ok(not (select hidden from stock_thresholds where church_id = :'cid2' and item = 'candle_020'), 'и се включва пак');
 select t.fails($$insert into stock_moves(church_id, item, qty, kind) values (gen_random_uuid(), 'diploma', 1, 'load')$$,
                'складът не се пише директно', 'row-level security');
 select t.as_user(:'A');

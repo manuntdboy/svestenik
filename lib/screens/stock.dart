@@ -55,7 +55,8 @@ class _StockScreenState extends State<StockScreen> {
     final bal = s.stockOf(church);
     final toDecide = s.stockToDecide(church);
     final low = s.lowStock(church);
-    final items = StockItem.values.where((i) => i.section == _section).toList();
+    final items = s.stockItems(church).where((i) => i.section == _section).toList();
+    final hidden = StockItem.values.where((i) => s.stockHidden(church, i)).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Склад')),
       body: SafeArea(
@@ -108,7 +109,7 @@ class _StockScreenState extends State<StockScreen> {
                     child: _SectionTile(
                       section: sec,
                       selected: _section == sec,
-                      alert: StockItem.values
+                      alert: s.stockItems(church)
                           .where((i) => i.section == sec)
                           .map((i) => stockAlert(bal[i]!, s.stockMin(church, i)))
                           .fold<Color?>(null, (a, c) => a == _red || c == _red ? _red : (a ?? c)),
@@ -123,6 +124,33 @@ class _StockScreenState extends State<StockScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ItemCard(item: i, qty: bal[i]!, min: s.stockMin(church, i)),
+                ),
+              if (hidden.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ExpansionTile(
+                    shape: const Border(),
+                    tilePadding: EdgeInsets.zero,
+                    leading: Icon(Icons.visibility_off_outlined, color: p.textMuted),
+                    title: Text('Изключени артикули (${hidden.length})', style: TextStyle(color: p.textMuted)),
+                    children: [
+                      for (final i in hidden)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(i.label),
+                          trailing: TextButton(
+                            onPressed: () async {
+                              try {
+                                await s.setStockHidden(church, i, false);
+                              } on AppError catch (e) {
+                                if (context.mounted) showMessage(context, e.message);
+                              }
+                            },
+                            child: const Text('Включи'),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               const SizedBox(height: 4),
               Text(
@@ -255,6 +283,27 @@ class _ItemCard extends StatelessWidget {
             icon: const Icon(Icons.notifications_active_outlined),
           ),
         ]),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: Palette.of(context).textMuted),
+            onPressed: () async {
+              if (!await confirm(context, 'Изключи от склада',
+                  '„${item.label}“ няма да се показва в склада и няма да свети червено. '
+                      'Включва се пак от „Изключени артикули“ най-долу.',
+                  'Изключи')) {
+                return;
+              }
+              try {
+                await s.setStockHidden(church, item, true);
+              } on AppError catch (e) {
+                if (context.mounted) showMessage(context, e.message);
+              }
+            },
+            icon: const Icon(Icons.visibility_off_outlined, size: 18),
+            label: const Text('Храмът не го държи – изключи'),
+          ),
+        ),
       ]),
     );
   }
@@ -1101,7 +1150,7 @@ class _StockOrderScreenState extends State<StockOrderScreen> {
     final s = AppScope.of(context);
     final church = s.currentChurchId!;
     final bal = s.stockOf(church);
-    final items = [...StockItem.values]
+    final items = [...s.stockItems(church)]
       ..sort((a, b) {
         final la = bal[a]! <= s.stockMin(church, a) ? 0 : 1;
         final lb = bal[b]! <= s.stockMin(church, b) ? 0 : 1;
