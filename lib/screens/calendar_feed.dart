@@ -122,9 +122,13 @@ class _CalendarFeedScreenState extends State<CalendarFeedScreen> {
                   const SizedBox(height: 22),
                   Text('Google Calendar (Android)', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  step('1', 'Натиснете „Добави в Google Calendar“ – отваря се Google Calendar в браузъра.'),
-                  step('2', 'Потвърдете „Добавяне“. Влезте със същия Google профил, който е на телефона.'),
-                  step('3', 'В приложението Google Calendar: меню ☰ → Настройки → „Кайрос“ → включете „Синхронизиране“.'),
+                  step('1', 'Натиснете „Добави в Google Calendar“ (бутона отдолу). Отваря се страница на Google.'),
+                  step('2', 'Ако пита за профил – изберете същия Google профил, който е на телефона.'),
+                  step('3', 'Натиснете „Добавяне“.'),
+                  step('4', 'Отворете приложението Google Calendar.'),
+                  step('5', 'Горе вляво ☰ (трите чертички) → най-долу „Настройки“.'),
+                  step('6', 'Отворете „Кайрос“ и включете „Синхронизиране“.'),
+                  step('7', 'Готово. След малко (понякога до няколко часа) събитията се появяват в календара и в уиджета.'),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                     icon: const Icon(Icons.event_available_rounded),
@@ -135,9 +139,11 @@ class _CalendarFeedScreenState extends State<CalendarFeedScreen> {
                   const SizedBox(height: 22),
                   Text('iPhone', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  step('1', 'Натиснете „Добави в календара на iPhone“ и потвърдете „Абониране“.'),
-                  step('2', 'Ако не стане: Настройки → Календар → Акаунти → Добави акаунт → Друго → '
-                      '„Добави абонаментен календар“ и поставете копираната връзка.'),
+                  step('1', 'Натиснете „Добави в календара на iPhone“ (бутона отдолу).'),
+                  step('2', 'Натиснете „Абониране“, после „Добави“.'),
+                  step('3', 'Готово – събитията се появяват в Календар и в уиджета.'),
+                  step('', 'Ако не стане: копирайте връзката (горе) → Настройки → Календар → Акаунти → Добави акаунт → '
+                      'Друго → „Добави абонаментен календар“ → поставете връзката → Напред → Запиши.'),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                     icon: const Icon(Icons.phone_iphone_rounded),
