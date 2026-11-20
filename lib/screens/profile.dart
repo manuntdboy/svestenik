@@ -14,6 +14,7 @@ import 'church_priests.dart';
 import 'change_password.dart';
 import 'creator.dart';
 import 'feedback.dart';
+import 'calendar_feed.dart';
 import 'help.dart';
 import 'invite.dart';
 import 'privacy.dart';
@@ -236,6 +237,13 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InviteScreen())),
           icon: const Icon(Icons.qr_code_2_rounded),
           label: const Text('Покани колега'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarFeedScreen())),
+          icon: const Icon(Icons.event_available_rounded),
+          label: const Text('Календар в Google и iPhone'),
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(

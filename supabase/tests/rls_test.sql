@@ -1086,4 +1086,20 @@ select t.ok(public.creator_activity()::text !~ '€', 'дневникът на �
 select t.ok(exists (select 1 from jsonb_array_elements(public.creator_activity()) x where x->>'details' in ('приход','разход','движение')),
             'вижда само вида на записа в касата');
 reset role;
+\echo '== Календар в Google (iCal връзка)'
+set role authenticated;
+select t.as_user(:'A');
+select public.calendar_feed_get()->>'token' as toka \gset
+select t.ok(char_length(:'toka') = 48, 'всеки получава лична тайна връзка');
+select t.ok(public.calendar_feed_get()->>'token' = :'toka', 'връзката е една и съща, докато не се смени');
+select public.calendar_feed_set('church', true) \g /dev/null
+select t.ok((select scope from calendar_feeds) = 'church', 'настройката се пази');
+select t.ok(public.calendar_feed_reset()->>'token' <> :'toka', '„Нова връзка“ сменя адреса');
+select t.fails(format('select public.calendar_feed_data(%L)', :'toka'), 'данните не се четат от приложението', 'permission denied');
+select t.as_user(:'B');
+select t.ok((select count(*) from calendar_feeds) = 0, 'чуждите връзки не се виждат');
+reset role;
+select t.ok(public.calendar_feed_data(:'toka') is null, 'старата връзка вече не дава нищо');
+select t.ok(jsonb_typeof(public.calendar_feed_data((select token from calendar_feeds where user_id = :'A'))->'events') = 'array',
+            'новата връзка дава събитията');
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

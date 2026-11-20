@@ -1570,6 +1570,33 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------ календар в Google / iPhone
+
+  /// Личната връзка за абонамент: {token, scope, with_names}.
+  Future<Map<String, dynamic>> calendarFeed() async {
+    try {
+      return Map<String, dynamic>.from(await _db.rpc('calendar_feed_get') as Map);
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> calendarFeedSet(String scope, bool withNames) async {
+    try {
+      await _db.rpc('calendar_feed_set', params: {'p_scope': scope, 'p_with_names': withNames});
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<Map<String, dynamic>> calendarFeedReset() async {
+    try {
+      return Map<String, dynamic>.from(await _db.rpc('calendar_feed_reset') as Map);
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Създателят: епархията на човек.
   Future<String?> creatorUserDiocese(String userId) async {
     try {

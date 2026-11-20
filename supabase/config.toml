@@ -22,3 +22,7 @@ verify_jwt = false
 
 [functions.change_email]
 verify_jwt = false
+
+[functions.ical]
+# Абонамент за календар: Google/iPhone не изпращат вход – пазачът е тайната връзка.
+verify_jwt = false
