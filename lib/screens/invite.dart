@@ -15,7 +15,8 @@ class InviteScreen extends StatelessWidget {
 
   static const _message =
       'Кайрос – приложението за свещеници: календар, дежурства, почивки, каса, склад и чат на храма.\n'
-      'Свалете го оттук (Android) или го отворете в браузъра (iPhone): $kDownloadPage';
+      'На Android се сваля, на iPhone се отваря в браузъра – от тази страница:\n\n'
+      '$kDownloadPage';
 
   Future<void> _viber(BuildContext context) async {
     var ok = false;
