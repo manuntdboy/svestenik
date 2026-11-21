@@ -160,6 +160,20 @@ class ProfileScreen extends StatelessWidget {
           selected: {s.textScale},
           onSelectionChanged: (v) => s.setTextScale(v.first),
         ),
+        heading('Кайрос се отваря в'),
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            minimumSize: const Size(44, 52),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          segments: const [
+            ButtonSegment(value: false, label: Text('Календар'), icon: Icon(Icons.calendar_month_outlined)),
+            ButtonSegment(value: true, label: Text('Начало'), icon: Icon(Icons.home_outlined)),
+          ],
+          selected: {s.startHome},
+          onSelectionChanged: (v) => s.setStartHome(v.first),
+        ),
         heading('Напомняния'),
         if (kIsWeb)
           SurfaceCard(

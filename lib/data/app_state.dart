@@ -39,6 +39,7 @@ class AppState extends ChangeNotifier {
   bool _openPrimary = true;
   static const _kTheme = 'theme_mode';
   static const _kTextScale = 'text_scale';
+  static const _kStartTab = 'start_tab';
   static const _kRemember = 'remember_me';
   static const _kLastUser = 'last_username';
 
@@ -124,6 +125,7 @@ class AppState extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     themeMode = ThemeMode.values[_prefs.getInt(_kTheme) ?? 0];
     textScale = _prefs.getDouble(_kTextScale) ?? 1.0;
+    startHome = _prefs.getBool(_kStartTab) ?? false;
     // Основният храм (ако е отбелязан) печели пред последно отворения.
     currentChurchId = _prefs.getString(_kPrimary) ?? _prefs.getString(_kChurch);
     rememberMe = _prefs.getBool(_kRemember) ?? true;
@@ -2978,6 +2980,15 @@ class AppState extends ChangeNotifier {
   Future<void> setThemeMode(ThemeMode m) async {
     themeMode = m;
     await _prefs.setInt(_kTheme, m.index);
+    notifyListeners();
+  }
+
+  /// С какво се отваря Кайрос: false – Календар (по подразбиране), true – Начало.
+  bool startHome = false;
+
+  Future<void> setStartHome(bool v) async {
+    startHome = v;
+    await _prefs.setBool(_kStartTab, v);
     notifyListeners();
   }
 

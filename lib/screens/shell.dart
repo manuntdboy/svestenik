@@ -46,6 +46,12 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    // Началният раздел – по избор в Профил (Календар или Начало).
+    if (AppScope.read(context).startHome) {
+      _tab = 1;
+      _dest = 'home';
+      _visited.add('home');
+    }
     WidgetsBinding.instance.addObserver(this);
     // Обновява „след 2 часа“ и следващото събитие всяка минута.
     _tick = Timer.periodic(const Duration(minutes: 1), (_) {
