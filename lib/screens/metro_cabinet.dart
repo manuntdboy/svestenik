@@ -166,7 +166,7 @@ class CallButton extends StatelessWidget {
       );
 }
 
-// ============================================================ Календар на владиката
+// ============================================================ Календар на митрополита
 
 String _when(MetroEvent e) {
   if (e.allDay) return 'цял ден';
@@ -259,7 +259,7 @@ class MetroCalendarScreen extends StatelessWidget {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text(s.isMetropolitan ? 'Календар' : 'Календар на владиката'),
+        title: Text(s.isMetropolitan ? 'Календар' : 'Календар на митрополита'),
         automaticallyImplyLeading: !embedded,
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -273,7 +273,7 @@ class MetroCalendarScreen extends StatelessWidget {
           if (s.isSecretary && !s.isMetropolitan)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('Записите тук вижда и владиката.',
+              child: Text('Записите тук вижда и митрополитът.',
                   style: TextStyle(color: p.textMuted)),
             ),
           if (upcoming.isEmpty)
@@ -341,7 +341,7 @@ class _EventTile extends StatelessWidget {
   }
 }
 
-/// Нов запис или промяна в календара на владиката.
+/// Нов запис или промяна в календара на митрополита.
 Future<void> editMetroEvent(BuildContext context, {MetroEvent? e}) async {
   final s = AppScope.read(context);
   final title = TextEditingController(text: e?.title ?? '');
@@ -574,7 +574,7 @@ class LockedFeature {
 
 const lockPrograms = LockedFeature('Програми', Icons.airport_shuttle_outlined,
     'Програми за архиерейските служения. Секретарят съставя програмата: групи, коли, шофьори, служещи, гости на обяда. '
-        'Владиката я утвърждава с бутон, всеки участник получава известие със своята част, а документът излиза готов за печат. '
+        'Митрополитът я утвърждава с бутон, всеки участник получава известие със своята част, а документът излиза готов за печат. '
         'Старите програми се пазят и по тях се прави нова.');
 const lockCirculars = LockedFeature('Окръжни', Icons.campaign_outlined,
     'Окръжни до всички храмове, до избрани околии или храмове – с номер, дата и прикачени файлове. '
@@ -585,7 +585,7 @@ const lockLeaves = LockedFeature('Отпуски', Icons.beach_access_outlined,
 const lockDocs = LockedFeature('Документи за печат', Icons.print_outlined,
     'Всичко, което се изпраща, и като лист A4 в бланката на епархията. Подписът и печатът остават на ръка.');
 const lockGoogle = LockedFeature('Google Calendar', Icons.sync_rounded,
-    'Календарът на владиката се копира сам и в Google Calendar.');
+    'Календарът на митрополита се копира сам и в Google Calendar.');
 const lockAccounting = LockedFeature('Счетоводство', Icons.account_balance_wallet_outlined,
     'Счетоводството на митрополията – касиер, счетоводител, ревизори.');
 const lockCars = LockedFeature('Автопарк', Icons.directions_car_outlined,

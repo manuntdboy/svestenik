@@ -74,8 +74,8 @@ class _CallWatcherState extends State<CallWatcher> {
       context: context,
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.notifications_active_outlined, size: 36),
-        title: const Text('Повикване от владиката'),
-        content: const Text('Когато владиката ви повика в кабинета, телефонът ще звънне със звънец.\n\n'
+        title: const Text('Повикване от митрополита'),
+        content: const Text('Когато митрополитът ви повика в кабинета, телефонът ще звънне със звънец.\n\n'
             'За да звъни и при включено „Не безпокойте“, разрешете на Кайрос в следващия екран '
             '(„Достъп до Не безпокойте“).'),
         actions: [
@@ -93,20 +93,20 @@ class _CallWatcherState extends State<CallWatcher> {
   Widget build(BuildContext context) => widget.child;
 }
 
-/// Прозорецът „Владиката ви вика“ с двата отговора.
+/// Прозорецът „Митрополитът ви вика“ с двата отговора.
 Future<void> answerCall(BuildContext context, MetroCall c) async {
   final s = AppScope.read(context);
   final p = Palette.of(context);
   if (s.metroPeople.isEmpty) await s.loadMetroPeople();
   if (!context.mounted) return;
   final x = s.metroPeople.where((e) => e['user_id'] == c.callerId).firstOrNull;
-  final who = x == null ? 'Владиката' : withRank(ClergyRank.fromCode(x['rank']), '${x['name'] ?? ''}');
+  final who = x == null ? 'Митрополитът' : withRank(ClergyRank.fromCode(x['rank']), '${x['name'] ?? ''}');
   final coming = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
       icon: Icon(Icons.notifications_active_rounded, size: 40, color: Notifier.callColor),
-      title: const Text('Владиката ви вика'),
+      title: const Text('Митрополитът ви вика'),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('$who ви вика в кабинета.', style: const TextStyle(fontSize: 17)),
         if ((c.note ?? '').isNotEmpty) ...[

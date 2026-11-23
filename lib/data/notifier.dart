@@ -283,8 +283,8 @@ class Notifier {
         android: data?['call'] == '1'
             ? AndroidNotificationDetails(
                 callChannel,
-                'Повикване от владиката',
-                channelDescription: 'Владиката ви вика в кабинета',
+                'Повикване от митрополита',
+                channelDescription: 'Митрополитът ви вика в кабинета',
                 importance: Importance.max,
                 priority: Priority.max,
                 sound: const RawResourceAndroidNotificationSound('call'),
@@ -337,8 +337,8 @@ class Notifier {
 
   static AndroidNotificationChannel _callChannelDef(bool bypassDnd) => AndroidNotificationChannel(
         callChannel,
-        'Повикване от владиката',
-        description: 'Владиката ви вика в кабинета',
+        'Повикване от митрополита',
+        description: 'Митрополитът ви вика в кабинета',
         importance: Importance.max,
         sound: const RawResourceAndroidNotificationSound('call'),
         playSound: true,

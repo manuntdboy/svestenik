@@ -336,7 +336,7 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
             ),
             SizedBox(width: 300, child: _carPicker(g)),
             FilterChip(
-              label: const Text('Владиката пътува тук'),
+              label: const Text('Митрополитът пътува тук'),
               selected: g.withBishop,
               onSelected: (v) => setState(() => g.withBishop = v),
             ),
@@ -546,7 +546,7 @@ class _ProgramDraftScreenState extends State<ProgramDraftScreen> {
               Row(children: [
                 Expanded(child: _field('Титла', doc.bishopTitle, (v) => doc.bishopTitle = v)),
                 const SizedBox(width: 10),
-                SizedBox(width: 200, child: _field('Име на владиката', doc.bishopName, (v) => doc.bishopName = v)),
+                SizedBox(width: 200, child: _field('Име на митрополита', doc.bishopName, (v) => doc.bishopName = v)),
               ]),
               const SizedBox(height: 10),
               _field('Обръщение', doc.honorific, (v) => doc.honorific = v),

@@ -235,7 +235,7 @@ async function handle(req: Request): Promise<Response> {
     if (!cs || cs.length === 0) return json(404, { error: "not_found" });
     callIds = cs.map((c) => c.id);
     recipients = [...new Set(cs.map((c) => c.callee_id))];
-    title = "Владиката ви вика";
+    title = "Митрополитът ви вика";
     const note = cs.find((c) => c.note)?.note;
     text = note ? `${callerName}: ${String(note).slice(0, 180)}` : `${callerName} ви вика в кабинета.`;
     data = { type: "metro_call", call: "1" };

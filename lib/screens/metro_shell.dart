@@ -324,7 +324,7 @@ class _SecretaryHome extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Запиши в календара на владиката'),
+                label: const Text('Запиши в календара на митрополита'),
                 onPressed: () => editMetroEvent(context),
               ),
             ),
