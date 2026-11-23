@@ -462,6 +462,24 @@ class _MetroProfile extends StatelessWidget {
             label: const Text('Към храма'),
             onPressed: () => s.setMetroMode(false),
           ),
+        if (s.myChurches.isNotEmpty && s.isAdmin) ...[
+          const SizedBox(height: 18),
+          Text('Кайрос започва от', style: TextStyle(fontSize: 15, color: Palette.of(context).textMuted)),
+          const SizedBox(height: 6),
+          SegmentedButton<bool>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              minimumSize: const Size(44, 50),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            segments: const [
+              ButtonSegment(value: true, label: Text('Митрополия'), icon: Icon(Icons.account_balance_outlined)),
+              ButtonSegment(value: false, label: Text('Храм'), icon: Icon(Icons.church_outlined)),
+            ],
+            selected: {s.startsInMetro},
+            onSelectionChanged: (v) => s.setStartMetro(v.first),
+          ),
+        ],
         if (s.myChurches.isEmpty && !s.isMetropolitan)
           OutlinedButton.icon(
             icon: const Icon(Icons.church_outlined),

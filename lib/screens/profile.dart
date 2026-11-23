@@ -163,6 +163,22 @@ class ProfileScreen extends StatelessWidget {
           selected: {s.textScale},
           onSelectionChanged: (v) => s.setTextScale(v.first),
         ),
+        if (s.isAdmin && s.myChurches.isNotEmpty) ...[
+          heading('Кайрос започва от'),
+          SegmentedButton<bool>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              minimumSize: const Size(44, 52),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            segments: const [
+              ButtonSegment(value: true, label: Text('Митрополия'), icon: Icon(Icons.account_balance_outlined)),
+              ButtonSegment(value: false, label: Text('Храм'), icon: Icon(Icons.church_outlined)),
+            ],
+            selected: {s.startsInMetro},
+            onSelectionChanged: (v) => s.setStartMetro(v.first),
+          ),
+        ],
         heading('Кайрос се отваря в'),
         SegmentedButton<bool>(
           showSelectedIcon: false,

@@ -41,6 +41,7 @@ class AppState extends ChangeNotifier {
   static const _kTheme = 'theme_mode';
   static const _kTextScale = 'text_scale';
   static const _kStartTab = 'start_tab';
+  static const _kStartMetro = 'start_metro';
   static const _kRemember = 'remember_me';
   static const _kLastUser = 'last_username';
 
@@ -58,8 +59,13 @@ class AppState extends ChangeNotifier {
   final List<MetroCall> _calls = [];
   final List<MetroEvent> _metroEvents = [];
   final List<MetroNote> _metroNotes = [];
-  /// Митрополитът вижда митрополитския изглед; може да мине към храма си.
-  bool metroMode = true;
+  /// Изгледът за тази сесия („Към храма“ / „Митрополия“); null – по избора
+  /// в профила („Започвам от“), а без избор – митрополитът от митрополията,
+  /// останалите от храма.
+  bool? metroMode;
+
+  /// „Започвам от“ – Митрополия (true) или Храм (false); null – не е избрано.
+  bool? startMetro;
   final List<Church> _churches = [];
   final List<Membership> _members = [];
   final List<ChurchEvent> _events = [];
@@ -128,6 +134,7 @@ class AppState extends ChangeNotifier {
     themeMode = ThemeMode.values[_prefs.getInt(_kTheme) ?? 0];
     textScale = _prefs.getDouble(_kTextScale) ?? 1.0;
     startHome = _prefs.getBool(_kStartTab) ?? false;
+    startMetro = _prefs.getBool(_kStartMetro);
     // Основният храм (ако е отбелязан) печели пред последно отворения.
     currentChurchId = _prefs.getString(_kPrimary) ?? _prefs.getString(_kChurch);
     rememberMe = _prefs.getBool(_kRemember) ?? true;
@@ -169,7 +176,7 @@ class AppState extends ChangeNotifier {
     _metroEvents.clear();
     _metroNotes.clear();
     metroPeople = [];
-    metroMode = true;
+    metroMode = null;
     mustChangePassword = false;
     isCreator = false;
     _versionAt = null;
@@ -1369,7 +1376,8 @@ class AppState extends ChangeNotifier {
   /// администрацията по подразбиране (минават към храма с „Към храма“);
   /// наместниците – ако нямат храм.
   bool get showMetro =>
-      (isAdmin && (metroMode || currentChurch == null)) || (myStaff.isNotEmpty && currentChurch == null);
+      (isAdmin && ((metroMode ?? startMetro ?? isMetropolitan) || currentChurch == null)) ||
+      (myStaff.isNotEmpty && currentChurch == null);
 
   /// Пурпурната значка до името: „Секретар на митрополията“, „Наместник – …“, „Счетоводител“.
   String? staffBadge(String userId) {
@@ -3101,6 +3109,16 @@ class AppState extends ChangeNotifier {
 
   /// С какво се отваря Кайрос: false – Календар (по подразбиране), true – Начало.
   bool startHome = false;
+
+  /// Кой е в митрополията и има храм: от къде да започва Кайрос.
+  bool get startsInMetro => startMetro ?? isMetropolitan;
+
+  Future<void> setStartMetro(bool v) async {
+    startMetro = v;
+    metroMode = v;
+    await _prefs.setBool(_kStartMetro, v);
+    notifyListeners();
+  }
 
   Future<void> setStartHome(bool v) async {
     startHome = v;
