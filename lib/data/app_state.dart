@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -56,6 +57,7 @@ class AppState extends ChangeNotifier {
   List<Map<String, dynamic>> metroPeople = []; // администрацията (за чата)
   final List<MetroCall> _calls = [];
   final List<MetroEvent> _metroEvents = [];
+  final List<MetroNote> _metroNotes = [];
   /// Митрополитът вижда митрополитския изглед; може да мине към храма си.
   bool metroMode = true;
   final List<Church> _churches = [];
@@ -165,6 +167,7 @@ class AppState extends ChangeNotifier {
     _metroReads.clear();
     _calls.clear();
     _metroEvents.clear();
+    _metroNotes.clear();
     metroPeople = [];
     metroMode = true;
     mustChangePassword = false;
@@ -245,6 +248,13 @@ class AppState extends ChangeNotifier {
             .select()
             .gte('starts_at', DateTime.now().toUtc().subtract(const Duration(days: 60)).toIso8601String())
             .order('starts_at'),
+        _db
+            .from('metro_notes')
+            .select()
+            .gte('day', DateFormat('yyyy-MM-dd').format(DateTime.now().subtract(const Duration(days: 400))))
+            .order('day')
+            .order('created_at'),
+        _db.from('metro_note_assignees').select(),
       ]);
       _staff
         ..clear()
@@ -258,6 +268,13 @@ class AppState extends ChangeNotifier {
       _metroEvents
         ..clear()
         ..addAll(results[25].map(MetroEvent.fromRow));
+      final assignees = <String, List<MetroAssignee>>{};
+      for (final r in results[27]) {
+        (assignees[r['note_id'] as String] ??= []).add(MetroAssignee.fromRow(r));
+      }
+      _metroNotes
+        ..clear()
+        ..addAll(results[26].map((r) => MetroNote.fromRow(r, assignees[r['id']] ?? const [])));
       _metroReads
         ..clear()
         ..addEntries(results[23].map((r) =>
@@ -1118,7 +1135,8 @@ class AppState extends ChangeNotifier {
         e.isAccepted);
   }
 
-  Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents, duties: _myDuties);
+  Future<void> rescheduleReminders() => Notifier.rescheduleAll(_myEvents, duties: _myDuties,
+      tasks: myTasks.where((n) => !n.assigneeOf(currentUser?.id)!.done && n.deadline != null));
 
   Iterable<Duty> get _myDuties {
     final u = currentUser;
@@ -1347,10 +1365,11 @@ class AppState extends ChangeNotifier {
   String? get adminDioceseId => myStaff.where((e) => e.role.admin).firstOrNull?.dioceseId;
   bool get isEmployee => myStaff.any((e) => e.role == StaffRole.employee);
 
-  /// Показва ли се митрополитският изглед вместо храма: митрополитът по
-  /// подразбиране; останалите от митрополията – ако нямат храм.
+  /// Показва ли се митрополитският изглед вместо храма: митрополитът и
+  /// администрацията по подразбиране (минават към храма с „Към храма“);
+  /// наместниците – ако нямат храм.
   bool get showMetro =>
-      (isMetropolitan && (metroMode || currentChurch == null)) || (myStaff.isNotEmpty && currentChurch == null);
+      (isAdmin && (metroMode || currentChurch == null)) || (myStaff.isNotEmpty && currentChurch == null);
 
   /// Пурпурната значка до името: „Секретар на митрополията“, „Наместник – …“, „Счетоводител“.
   String? staffBadge(String userId) {
@@ -1478,6 +1497,103 @@ class AppState extends ChangeNotifier {
       await _db.rpc('metro_call_answer', params: {'p_id': id, 'p_answer': coming ? 'coming' : 'cannot'});
       await refresh();
       unawaited(_invokeNotify({'type': 'metro_call_answer', 'call_id': id}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  // ------------------------------------------------------------ оперативка
+
+  /// Бележките от оперативката (само митрополитът ги вижда всички).
+  List<MetroNote> get metroNotes => List.unmodifiable(_metroNotes);
+
+  /// Страницата за деня: бележките от този ден; за днес – и недовършените
+  /// от предишните дни (минават напред).
+  List<MetroNote> notesForDay(DateTime day) {
+    final d = DateTime(day.year, day.month, day.day);
+    final today = DateTime.now();
+    final isToday = d == DateTime(today.year, today.month, today.day);
+    return _metroNotes.where((n) => n.day == d || (isToday && n.day.isBefore(d) && !n.complete)).toList()
+      ..sort((a, b) {
+        final c = (a.complete ? 1 : 0).compareTo(b.complete ? 1 : 0);
+        return c != 0 ? c : a.createdAt.compareTo(b.createdAt);
+      });
+  }
+
+  /// Задачи, възложени на мен от митрополита – неизпълнените първи.
+  List<MetroNote> get myTasks {
+    final me = currentUser?.id;
+    return _metroNotes.where((n) => n.assigneeOf(me) != null).toList()
+      ..sort((a, b) {
+        final ad = a.assigneeOf(me)!.done, bd = b.assigneeOf(me)!.done;
+        if (ad != bd) return ad ? 1 : -1;
+        final x = a.deadline ?? DateTime(9999), y = b.deadline ?? DateTime(9999);
+        return x.compareTo(y);
+      });
+  }
+
+  int get myOpenTasks => myTasks.where((n) => !n.assigneeOf(currentUser?.id)!.done).length;
+
+  Future<void> metroNoteSave({
+    String? id,
+    required DateTime day,
+    required String body,
+    DateTime? deadline,
+    bool hasTime = false,
+    List<String> users = const [],
+  }) async {
+    try {
+      final r = await _db.rpc('metro_note_save', params: {
+        'p_id': id,
+        'p_day': DateFormat('yyyy-MM-dd').format(day),
+        'p_body': body,
+        'p_deadline': deadline?.toUtc().toIso8601String(),
+        'p_has_time': hasTime,
+        'p_users': users,
+      });
+      await refresh();
+      if (users.isNotEmpty) unawaited(_invokeNotify({'type': 'metro_task', 'note_id': '$r'}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> metroNoteDone(String id, bool done) async {
+    try {
+      await _db.rpc('metro_note_done', params: {'p_id': id, 'p_done': done});
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  Future<void> metroNoteDelete(String id) async {
+    try {
+      await _db.rpc('metro_note_delete', params: {'p_id': id});
+      _metroNotes.removeWhere((n) => n.id == id);
+      notifyListeners();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Изпълнителят: „Изпълнено“ (с бележка по желание) или отмяна.
+  Future<void> metroTaskDone(String noteId, bool done, {String? comment}) async {
+    try {
+      await _db.rpc('metro_task_done', params: {'p_note': noteId, 'p_done': done, 'p_comment': comment});
+      await refresh();
+      if (done) unawaited(_invokeNotify({'type': 'metro_task_done', 'note_id': noteId}));
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
+  /// Митрополитът връща задачата на изпълнителя.
+  Future<void> metroTaskReturn(String noteId, String userId, {String? reason}) async {
+    try {
+      await _db.rpc('metro_task_return', params: {'p_note': noteId, 'p_user': userId, 'p_reason': reason});
+      await refresh();
+      unawaited(_invokeNotify({'type': 'metro_task_returned', 'note_id': noteId, 'user_id': userId}));
     } catch (e) {
       throw AppError(_friendly(e));
     }

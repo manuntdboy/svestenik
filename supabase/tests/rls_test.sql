@@ -1108,4 +1108,38 @@ reset role;
 select t.ok(public.calendar_feed_data(:'toka') is null, 'старата връзка вече не дава нищо');
 select t.ok(jsonb_typeof(public.calendar_feed_data((select token from calendar_feeds where user_id = :'A'))->'events') = 'array',
             'новата връзка дава събитията');
+\echo '== Оперативка на митрополита'
+set role authenticated;
+select t.as_user(:'E3');
+select public.metro_note_save(null, current_date, 'Да се обадя на кмета', null, false, null) as n1 \gset
+select public.metro_note_save(null, current_date, 'Писмо до общината', now() + interval '2 day', false, array[:'E4', :'E5']::uuid[]) as n2 \gset
+select t.ok((select count(*) from metro_notes) = 2 and (select count(*) from metro_note_assignees) = 2,
+            'митрополитът записва бележки и възлага на двама');
+select t.fails(format('select public.metro_note_save(null, current_date, %L, null, false, array[%L]::uuid[])', 'Х', :'E1'),
+               'не се възлага на човек извън администрацията', 'not_member');
+select t.as_user(:'E5');
+select t.ok((select count(*) from metro_notes) = 1 and (select count(*) from metro_note_assignees) = 1,
+            'секретарят вижда само възложеното на него, не и бележките и другия изпълнител');
+select t.fails(format('select public.metro_note_save(null, current_date, %L, null, false, null)', 'Х'),
+               'секретарят не пише в оперативката', 'forbidden');
+select t.fails(format('select public.metro_note_done(%L, true)', :'n2'), 'секретарят не отмята бележката', 'not_found');
+select public.metro_task_done(:'n2', true, 'Пуснато по пощата') \g /dev/null
+select t.as_user(:'E2');
+select t.ok((select count(*) from metro_notes) = 0, 'извън администрацията не вижда нищо');
+select t.fails(format('select public.metro_task_done(%L, true)', :'n2'), 'чужда задача не се отмята', 'not_found');
+select t.as_user(:'E3');
+select t.ok((select count(*) from metro_note_assignees where note_id = :'n2' and done_at is not null) = 1
+            and (select done_note from metro_note_assignees where user_id = :'E5') = 'Пуснато по пощата',
+            'митрополитът вижда ✓ и бележката на изпълнителя');
+select public.metro_task_return(:'n2', :'E5', 'Липсва подписът') \g /dev/null
+select t.as_user(:'E5');
+select t.ok((select done_at is null and return_note = 'Липсва подписът' from metro_note_assignees), '„Върни“ отваря задачата наново');
+select t.as_user(:'E3');
+select public.metro_note_save(:'n2', current_date, 'Писмо до общината', null, false, array[:'E5']::uuid[]) \g /dev/null
+select t.ok((select count(*) from metro_note_assignees where note_id = :'n2') = 1, 'изпълнителят се маха при промяна');
+select public.metro_note_done(:'n1', true) \g /dev/null
+select public.metro_note_delete(:'n2') \g /dev/null
+select t.ok((select count(*) from metro_notes where done_at is not null) = 1 and (select count(*) from metro_notes) = 1,
+            'отмятане и изтриване');
+reset role;
 \echo '== ВСИЧКИ ПРОВЕРКИ МИНАХА'

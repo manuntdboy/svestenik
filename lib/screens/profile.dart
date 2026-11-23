@@ -77,15 +77,18 @@ class ProfileScreen extends StatelessWidget {
                     ].where((x) => x.isNotEmpty).join(' · '),
                     style: TextStyle(fontSize: 15, color: p.textMuted)),
               const SizedBox(height: 10),
-              if (s.hasDioceseView)
+              if (s.hasDioceseView || s.isAdmin)
               FilledButton.icon(
                 style: s.isMetropolitan
                     ? FilledButton.styleFrom(
                         backgroundColor: Palette.metro.heroBg, foregroundColor: Palette.metro.primary)
-                    : null,
+                    : s.isAdmin
+                        ? FilledButton.styleFrom(
+                            backgroundColor: Palette.admin.surfaceAlt, foregroundColor: Palette.admin.primary)
+                        : null,
                 icon: const Icon(Icons.account_balance_outlined),
-                label: Text(s.isMetropolitan ? 'Митрополитски изглед' : 'Епархия'),
-                onPressed: () => s.isMetropolitan
+                label: Text(s.isMetropolitan ? 'Митрополитски изглед' : s.isAdmin ? 'Митрополия' : 'Епархия'),
+                onPressed: () => s.isAdmin
                     ? s.setMetroMode(true)
                     : Navigator.push(context, MaterialPageRoute(builder: (_) => const DioceseScreen())),
               ),

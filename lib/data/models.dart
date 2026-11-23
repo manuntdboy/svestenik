@@ -1336,3 +1336,69 @@ class MetroEvent {
         createdBy: r['created_by'] as String?,
       );
 }
+
+/// Изпълнител на задача от оперативката.
+class MetroAssignee {
+  final String userId;
+  final DateTime? doneAt;
+  final String? doneNote;
+  final DateTime? returnedAt;
+  final String? returnNote;
+  const MetroAssignee(
+      {required this.userId, this.doneAt, this.doneNote, this.returnedAt, this.returnNote});
+
+  bool get done => doneAt != null;
+
+  factory MetroAssignee.fromRow(Map<String, dynamic> r) {
+    DateTime? t(String k) => r[k] == null ? null : DateTime.parse(r[k] as String).toLocal();
+    return MetroAssignee(
+      userId: r['user_id'] as String,
+      doneAt: t('done_at'),
+      doneNote: r['done_note'] as String?,
+      returnedAt: t('returned_at'),
+      returnNote: r['return_note'] as String?,
+    );
+  }
+}
+
+/// Ред от оперативката на митрополита (или задача от нея към мен).
+class MetroNote {
+  final String id;
+  final String dioceseId;
+  final DateTime day;
+  final String body;
+  final DateTime? deadline;
+  final bool deadlineHasTime;
+  final DateTime? doneAt; // отметнато от митрополита
+  final DateTime createdAt;
+  final List<MetroAssignee> assignees;
+  const MetroNote(
+      {required this.id,
+      required this.dioceseId,
+      required this.day,
+      required this.body,
+      this.deadline,
+      this.deadlineHasTime = false,
+      this.doneAt,
+      required this.createdAt,
+      this.assignees = const []});
+
+  int get doneCount => assignees.where((a) => a.done).length;
+
+  /// Готово: отметнато от митрополита, или всички изпълнители са готови.
+  bool get complete => doneAt != null || (assignees.isNotEmpty && doneCount == assignees.length);
+
+  MetroAssignee? assigneeOf(String? userId) => assignees.where((a) => a.userId == userId).firstOrNull;
+
+  factory MetroNote.fromRow(Map<String, dynamic> r, List<MetroAssignee> assignees) => MetroNote(
+        id: r['id'] as String,
+        dioceseId: r['diocese_id'] as String,
+        day: DateTime.parse(r['day'] as String),
+        body: r['body'] as String,
+        deadline: r['deadline'] == null ? null : DateTime.parse(r['deadline'] as String).toLocal(),
+        deadlineHasTime: r['deadline_has_time'] == true,
+        doneAt: r['done_at'] == null ? null : DateTime.parse(r['done_at'] as String).toLocal(),
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        assignees: assignees,
+      );
+}

@@ -11,6 +11,7 @@ import 'creator.dart';
 import 'diocese.dart';
 import 'metro_cabinet.dart';
 import 'metro_chat.dart';
+import 'metro_desk.dart';
 
 /// Митрополитският изглед – собствено меню и начален екран, в пурпур и злато.
 class MetroShell extends StatefulWidget {
@@ -29,7 +30,7 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
   List<(String, IconData, String, int)> _items(AppState s) {
     final cabinet = s.isMetropolitan || s.isSecretary;
     return [
-      if (cabinet) ('home', Icons.home_rounded, 'Начало', 0),
+      if (s.isAdmin) ('home', Icons.home_rounded, 'Начало', s.isMetropolitan ? 0 : s.myOpenTasks),
       if (s.hasDioceseView) ('diocese', Icons.account_balance_outlined, 'Епархия', 0),
       if (s.isAdmin) ('chat', Icons.chat_bubble_outline_rounded, 'Чат', s.metroUnreadAll),
       if (cabinet || s.isEmployee) ('calendar', Icons.calendar_month_outlined, 'Календар', 0),
@@ -60,7 +61,7 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
           _ => null,
         };
     return DeskFrame(
-      logoColor: s.isMetropolitan ? p.primary : Palette.yellow,
+      logoColor: p.primary,
       logoSuffix: 'Митрополия',
       onLogo: () {
         _open(items.first.$1);
@@ -165,12 +166,16 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
       );
 
   Widget _page(AppState s, String id) => switch (id) {
-        'home' => s.isMetropolitan ? _MetroHome(onOpen: _open) : _SecretaryHome(onOpen: _open),
+        'home' => s.isMetropolitan
+            ? _MetroHome(onOpen: _open)
+            : s.isSecretary
+                ? _SecretaryHome(onOpen: _open)
+                : _StaffHome(onOpen: _open),
         'diocese' => const DioceseScreen(embedded: true),
         'chat' => const MetroChatScreen(embedded: true),
         'programs' => const LockedScreen(lockPrograms),
         'calendar' => s.isMetropolitan || s.isSecretary
-            ? const MetroCalendarScreen(embedded: true)
+            ? const MetroMonthCalendar(embedded: true)
             : const _Soon('Календар',
                 'Вашият календар в митрополията. Събитията влизат сами, когато сте вписани някъде '
                     '(напр. шофьор в програма за архиерейско служение).'),
@@ -208,8 +213,28 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
         it.$4 > 0 ? Badge(label: Text('${it.$4}'), child: Icon(it.$2)) : Icon(it.$2);
     final wide = MediaQuery.sizeOf(context).width >= 1000;
     if (wide) return _desktop(context, s, items, current);
+    final mine = s.myStaff.firstOrNull;
+    final role = mine == null ? '' : (mine.role == StaffRole.employee ? (mine.title ?? mine.role.label) : mine.role.label);
     return Scaffold(
-      body: _page(s, current),
+      body: s.isMetropolitan
+          ? _page(s, current)
+          // Администрацията: лента горе „МИТРОПОЛИЯ · <длъжност>“.
+          : Column(children: [
+              Container(
+                width: double.infinity,
+                color: p.surfaceAlt,
+                child: SafeArea(
+                  bottom: false,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(18, 7, 18, 7),
+                    decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
+                    child: Text('МИТРОПОЛИЯ · ${role.toUpperCase()}',
+                        style: TextStyle(fontSize: 12, letterSpacing: 1.4, color: p.primary, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+              Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: _page(s, current))),
+            ]),
       bottomNavigationBar: items.length < 2
           ? null
           : NavigationBar(
@@ -222,40 +247,13 @@ class _MetroShellState extends State<MetroShell> with WidgetsBindingObserver {
   }
 }
 
-class _MetroHome extends StatefulWidget {
+class _MetroHome extends StatelessWidget {
   final ValueChanged<String> onOpen;
   const _MetroHome({required this.onOpen});
 
   @override
-  State<_MetroHome> createState() => _MetroHomeState();
-}
-
-class _MetroHomeState extends State<_MetroHome> {
-  (int, int, int)? counts;
-
-  @override
-  void initState() {
-    super.initState();
-    AppScope.read(context).dioceseOverview().then((d) {
-      final secs = (d['sections'] as List? ?? const []);
-      var ch = 0;
-      final pr = <String>{};
-      for (final s in secs) {
-        for (final c in ((s as Map)['churches'] as List? ?? const [])) {
-          ch++;
-          for (final x in ((c as Map)['priests'] as List? ?? const [])) {
-            pr.add('${(x as Map)['user_id']}');
-          }
-        }
-      }
-      if (mounted) setState(() => counts = (secs.length, ch, pr.length));
-    }).catchError((_) {});
-  }
-
-  @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final p = Palette.of(context);
     final me = s.currentUser;
     final mine = s.myStaff.where((e) => e.role == StaffRole.metropolitan).firstOrNull;
     final name = me == null ? '' : withRank(ClergyRank.metropolitan, me.name);
@@ -269,29 +267,41 @@ class _MetroHomeState extends State<_MetroHome> {
             const CallButton(),
             const CallsMadeCard(),
             const SizedBox(height: 14),
-            UpcomingMetroEvents(onOpen: () => widget.onOpen('calendar')),
-            const SizedBox(height: 14),
-            Row(children: [
-              for (final n in [
-                ('${counts?.$1 ?? '–'}', 'раздела'),
-                ('${counts?.$2 ?? '–'}', 'храма'),
-                ('${counts?.$3 ?? '–'}', 'свещеници'),
-              ])
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(16)),
-                    child: Column(children: [
-                      Text(n.$1, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: p.primary)),
-                      Text(n.$2, style: TextStyle(fontSize: 13, color: p.textMuted)),
-                    ]),
-                  ),
-                ),
-            ]),
-            const SizedBox(height: 14),
-            _Tiles(onOpen: widget.onOpen),
+            MetroTodayCard(onOpenCalendar: () => onOpen('calendar')),
+            const OperativkaCard(),
+            WaitingCard(onOpen: onOpen),
+            _Tiles(onOpen: onOpen),
             const LockedGrid(lockedForMetropolitan),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Начало за протосингела и служителите: задачите от митрополита.
+class _StaffHome extends StatelessWidget {
+  final ValueChanged<String> onOpen;
+  const _StaffHome({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final me = s.currentUser;
+    final mine = s.myStaff.where((e) => e.role.admin).firstOrNull;
+    final role = mine == null ? '' : (mine.role == StaffRole.employee ? (mine.title ?? mine.role.label) : mine.role.label);
+    return Scaffold(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: s.refresh,
+          child: ListView(padding: const EdgeInsets.fromLTRB(18, 16, 18, 24), children: [
+            _Header(
+                icon: '✎',
+                title: me == null ? '' : withRank(me.rank, me.name),
+                subtitle: [role, s.dioceseName(mine?.dioceseId) ?? ''].where((x) => x.isNotEmpty).join(' · ')),
+            const SizedBox(height: 18),
+            const MyTasksCard(alwaysShow: true),
+            _Tiles(onOpen: onOpen),
           ]),
         ),
       ),
@@ -318,17 +328,8 @@ class _SecretaryHome extends StatelessWidget {
                 title: me == null ? '' : withRank(me.rank, me.name),
                 subtitle: 'Секретар · ${s.dioceseName(mine?.dioceseId) ?? ''}'),
             const SizedBox(height: 18),
-            UpcomingMetroEvents(onOpen: () => onOpen('calendar')),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Запиши в календара на митрополита'),
-                onPressed: () => editMetroEvent(context),
-              ),
-            ),
-            const SizedBox(height: 6),
+            const MyTasksCard(alwaysShow: true),
+            MetroTodayCard(onOpenCalendar: () => onOpen('calendar'), title: 'Календар на митрополита'),
             _Tiles(onOpen: onOpen),
             const LockedGrid(lockedForSecretary),
           ]),
@@ -395,8 +396,10 @@ class _Tiles extends StatelessWidget {
           ),
         );
     return Row(children: [
-      tile(Icons.account_balance_outlined, 'Епархия', 'diocese'),
-      const SizedBox(width: 10),
+      if (s.hasDioceseView) ...[
+        tile(Icons.account_balance_outlined, 'Епархия', 'diocese'),
+        const SizedBox(width: 10),
+      ],
       tile(Icons.chat_bubble_outline_rounded, 'Чат', 'chat', s.metroUnreadAll),
       const SizedBox(width: 10),
       tile(Icons.calendar_month_outlined, 'Календар', 'calendar'),

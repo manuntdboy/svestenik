@@ -10,6 +10,9 @@ import 'metro_cabinet.dart';
 /// Обвива екран в митрополитската тема (пурпур и злато).
 Widget metroTheme(Widget child) => Theme(data: buildTheme(Palette.metro), child: child);
 
+/// Администрацията на митрополията – мастилено синьо и сребро.
+Widget adminTheme(Widget child) => Theme(data: buildTheme(Palette.admin), child: child);
+
 /// Изглед „Епархия“: разделите (градът и духовните околии) → храмовете →
 /// свещениците (сан, длъжност, телефон) и търсачка. Без каса, склад,
 /// почивки и служби. Какво се вижда решава сървърът според длъжността.

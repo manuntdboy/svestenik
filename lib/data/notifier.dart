@@ -217,13 +217,41 @@ class Notifier {
   }
 
   /// Пренасрочва всички напомняния (при вход или стартиране).
-  static Future<void> rescheduleAll(Iterable<ChurchEvent> events, {Iterable<Duty> duties = const []}) async {
+  static Future<void> rescheduleAll(Iterable<ChurchEvent> events,
+      {Iterable<Duty> duties = const [], Iterable<MetroNote> tasks = const []}) async {
     await cancelAll();
+    for (final t in tasks) {
+      await scheduleTask(t);
+    }
     for (final e in events) {
       await schedule(e);
     }
     for (final d in duties) {
       await scheduleDuty(d);
+    }
+  }
+
+  /// Напомняне за срока на задача от митрополита: час преди срока, а ако
+  /// срокът е само ден – в 9:00 сутринта на този ден.
+  static Future<void> scheduleTask(MetroNote n) async {
+    final dl = n.deadline;
+    if (!_ready || dl == null) return;
+    final when = n.deadlineHasTime
+        ? dl.subtract(const Duration(hours: 1))
+        : DateTime(dl.year, dl.month, dl.day, 9);
+    if (!when.isAfter(DateTime.now())) return;
+    try {
+      await _plugin.zonedSchedule(
+        id: _idFor('task:${n.id}'),
+        title: n.deadlineHasTime ? 'Срок в ${fmtTime(dl)}: задача от митрополита' : 'Днес е срокът: задача от митрополита',
+        body: n.body,
+        payload: jsonEncode({'type': 'metro_task'}),
+        scheduledDate: tz.TZDateTime.from(when, tz.UTC),
+        notificationDetails: _details,
+        androidScheduleMode: await _mode(),
+      );
+    } catch (err) {
+      debugPrint('Не може да се планира напомняне за задача: $err');
     }
   }
 

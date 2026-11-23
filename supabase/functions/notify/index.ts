@@ -248,6 +248,58 @@ async function handle(req: Request): Promise<Response> {
     text = c.answer === "coming" ? "Идвам." : "Не мога сега.";
     negative = c.answer !== "coming";
     data = { type: "metro_call_answer" };
+  } else if (type === "metro_task") {
+    // Митрополитът възложи задача → до изпълнителите, които още не са известени.
+    const { data: n } = await admin.from("metro_notes").select("*").eq("id", String(body.note_id ?? "")).maybeSingle();
+    if (!n) return json(404, { error: "not_found" });
+    const { data: me } = await admin.from("diocese_staff").select("user_id")
+      .eq("diocese_id", n.diocese_id).eq("user_id", caller.id).eq("role", "metropolitan").maybeSingle();
+    if (!me) return json(403, { error: "forbidden" });
+    const { data: as } = await admin.from("metro_note_assignees").select("user_id")
+      .eq("note_id", n.id).is("notified_at", null);
+    recipients = (as ?? []).map((a) => a.user_id);
+    if (recipients.length) {
+      await admin.from("metro_note_assignees").update({ notified_at: new Date().toISOString() })
+        .eq("note_id", n.id).in("user_id", recipients);
+    }
+    title = "Задача от митрополита";
+    const due = n.deadline
+      ? " · срок " + new Date(n.deadline).toLocaleString("bg-BG", n.deadline_has_time
+        ? { timeZone: "Europe/Sofia", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }
+        : { timeZone: "Europe/Sofia", day: "numeric", month: "long" })
+      : "";
+    text = String(n.body).slice(0, 160) + due;
+    data = { type: "metro_task" };
+  } else if (type === "metro_task_done") {
+    // Изпълнителят натисна „Изпълнено“ → до митрополита.
+    const { data: n } = await admin.from("metro_notes").select("*").eq("id", String(body.note_id ?? "")).maybeSingle();
+    if (!n) return json(404, { error: "not_found" });
+    const { data: all } = await admin.from("metro_note_assignees").select("user_id,done_at,done_note").eq("note_id", n.id);
+    const mine = (all ?? []).find((a) => a.user_id === caller.id);
+    if (!mine || !mine.done_at) return json(404, { error: "not_found" });
+    const { data: ms } = await admin.from("diocese_staff").select("user_id")
+      .eq("diocese_id", n.diocese_id).eq("role", "metropolitan");
+    recipients = (ms ?? []).map((m) => m.user_id);
+    const total = (all ?? []).length;
+    const done = (all ?? []).filter((a) => a.done_at).length;
+    title = `Изпълнено: ${String(n.body).slice(0, 80)}`;
+    text = [callerName, total > 1 ? `${done} от ${total} ✓` : "", mine.done_note ?? ""].filter(Boolean).join(" · ");
+    data = { type: "metro_task_done" };
+  } else if (type === "metro_task_returned") {
+    // Митрополитът върна задачата → до изпълнителя.
+    const { data: n } = await admin.from("metro_notes").select("*").eq("id", String(body.note_id ?? "")).maybeSingle();
+    if (!n) return json(404, { error: "not_found" });
+    const { data: me } = await admin.from("diocese_staff").select("user_id")
+      .eq("diocese_id", n.diocese_id).eq("user_id", caller.id).eq("role", "metropolitan").maybeSingle();
+    if (!me) return json(403, { error: "forbidden" });
+    const { data: a } = await admin.from("metro_note_assignees").select("*")
+      .eq("note_id", n.id).eq("user_id", String(body.user_id ?? "")).maybeSingle();
+    if (!a || a.done_at || !a.returned_at || a.returned_at < recent) return json(404, { error: "not_found" });
+    recipients = [a.user_id];
+    title = "Върната задача от митрополита";
+    text = [String(n.body).slice(0, 120), a.return_note ?? ""].filter(Boolean).join(" · ");
+    negative = true;
+    data = { type: "metro_task" };
   } else if (type === "announcement") {
     // Съобщение от създателя → до всички или до членовете на един храм.
     const { data: creator } = await admin.from("app_creators").select("user_id").eq("user_id", caller.id).maybeSingle();

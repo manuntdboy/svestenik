@@ -7,6 +7,7 @@ import sys
 build = sys.argv[1] if len(sys.argv) > 1 else ""
 creator = "--creator" in sys.argv
 notes = json.loads((pathlib.Path(__file__).parent.parent / "assets/whats_new.json").read_text(encoding="utf-8"))
+notes = (notes.get("releases") or [notes])[0]  # най-новата версия
 title = "Тестова версия"
 lines = [f"{title} {build} · {notes.get('date', '')}".strip(" ·"), "", "ДОБАВЕНО"]
 lines += [f"• {a}" for a in (notes.get("creator", []) if creator else []) + notes.get("added", [])]

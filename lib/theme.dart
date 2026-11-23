@@ -125,6 +125,27 @@ class Palette {
     dark: true,
   );
 
+  /// Администрацията на митрополията – мастилено синьо и сребро.
+  static const admin = Palette(
+    bg: Color(0xFF0F1622),
+    surface: Color(0xFF16202E),
+    surfaceAlt: Color(0xFF0B1220),
+    border: Color(0xFF2A3A52),
+    text: Color(0xFFE8EEF5),
+    textMuted: Color(0xFF9FB0C3),
+    primary: Color(0xFFC9D3DE),
+    onPrimary: Color(0xFF0F1622),
+    heroBg: Color(0xFF1B2838),
+    heroBorder: Color(0xFFC9D3DE),
+    heroMuted: Color(0xFFB9C6D4),
+    calendarTile: Color(0xFFC9D3DE),
+    onCalendarTile: Color(0xFF0F1622),
+    calendarTileMuted: Color(0xFF223047),
+    chipBg: Color(0xFF223047),
+    chipText: Color(0xFFC9D3DE),
+    dark: true,
+  );
+
   static Palette of(BuildContext context) {
     final t = Theme.of(context);
     return t.extension<PaletteTheme>()?.p ?? (t.brightness == Brightness.dark ? darkP : light);

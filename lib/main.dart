@@ -127,10 +127,10 @@ class RootGate extends StatelessWidget {
     if (s.mustChangePassword) return const ChangePasswordScreen(forced: true);
     if (s.needsPrivacy) return const PrivacyConsentScreen();
     // Митрополитът – собствен изглед в пурпур и злато (може да мине към храма си).
-    // Пурпурът е само за митрополита; останалите от митрополията – обичайната тема.
-    // CallWatcher показва „Владиката ви вика“, щом има неотговорено повикване.
+    // Пурпурът е само за митрополита; останалите от митрополията – мастилено
+    // синьо и сребро. CallWatcher показва „Митрополитът ви вика“.
     if (s.showMetro) {
-      return CallWatcher(child: s.isMetropolitan ? metroTheme(const MetroShell()) : const MetroShell());
+      return CallWatcher(child: s.isMetropolitan ? metroTheme(const MetroShell()) : adminTheme(const MetroShell()));
     }
     if (s.currentChurch == null) return const ChurchConnectScreen();
     // Ключът кара таблото да започне отначало при смяна на потребител или храм.

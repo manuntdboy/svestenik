@@ -25,7 +25,7 @@ import 'invite.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'program_draft.dart';
-import 'diocese.dart' show metroTheme;
+import 'diocese.dart' show metroTheme, adminTheme;
 import 'metro_chat.dart';
 
 /// Основната рамка с долната лента: Начало, Календар, Профил.
@@ -125,6 +125,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         await s.selectChurch(cid);
       }
       nav.push(MaterialPageRoute(builder: (_) => ChatScreen(thread: thread)));
+    } else if (type.startsWith('metro_task') && s.isAdmin) {
+      // Задача от митрополита (или изпълнена) → към митрополията, „Начало“.
+      s.setMetroMode(true);
     } else if (type == 'metro_call' || type == 'metro_call_answer') {
       // Повикването се показва само (CallWatcher) – тук нищо не отваряме.
     } else if (type == 'metro_chat' && s.isAdmin) {
@@ -132,7 +135,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       await s.loadMetroPeople();
       final x = s.metroPeople.where((e) => e['user_id'] == thread).firstOrNull;
       nav.push(MaterialPageRoute(
-          builder: (_) => (s.isMetropolitan ? metroTheme : (Widget w) => w)(MetroThreadScreen(
+          builder: (_) => (s.isMetropolitan ? metroTheme : adminTheme)(MetroThreadScreen(
               thread: thread,
               title: thread == 'c' ? 'Администрация' : withRank(ClergyRank.fromCode(x?['rank']), '${x?['name'] ?? ''}')))));
     } else if (type.startsWith('duty')) {
@@ -282,7 +285,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       userName: me == null ? '' : withRank(me.rank, me.name),
       userMenu: [
         DeskMenuAction(Icons.person_outline_rounded, 'Профил', () => _go('profile')),
-        if (s.isMetropolitan) DeskMenuAction(Icons.account_balance_outlined, 'Митрополитски изглед', () => s.setMetroMode(true)),
+        if (s.isAdmin) DeskMenuAction(Icons.account_balance_outlined, s.isMetropolitan ? 'Митрополитски изглед' : 'Митрополия', () => s.setMetroMode(true)),
         DeskMenuAction(Icons.help_outline_rounded, 'Как работи Кайрос',
             () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpScreen()))),
         DeskMenuAction(Icons.qr_code_2_rounded, 'Покани колега',

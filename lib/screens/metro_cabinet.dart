@@ -342,13 +342,13 @@ class _EventTile extends StatelessWidget {
 }
 
 /// Нов запис или промяна в календара на митрополита.
-Future<void> editMetroEvent(BuildContext context, {MetroEvent? e}) async {
+Future<void> editMetroEvent(BuildContext context, {MetroEvent? e, DateTime? day}) async {
   final s = AppScope.read(context);
   final title = TextEditingController(text: e?.title ?? '');
   final place = TextEditingController(text: e?.place ?? '');
   final note = TextEditingController(text: e?.note ?? '');
   final now = DateTime.now();
-  var date = DateUtils.dateOnly(e?.startsAt ?? now);
+  var date = DateUtils.dateOnly(e?.startsAt ?? day ?? now);
   var start = e == null ? const TimeOfDay(hour: 10, minute: 0) : TimeOfDay.fromDateTime(e.startsAt);
   TimeOfDay? end = e?.endsAt == null ? null : TimeOfDay.fromDateTime(e!.endsAt!);
   var allDay = e?.allDay ?? false;
