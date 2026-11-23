@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Свали Кайрос</title>
+<link rel="icon" href="../favicon.png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<meta name="theme-color" content="#12161C">
+<style>
+  :root { --bg:#12171C; --card:#1F252C; --line:#323B45; --text:#E8ECEF; --muted:#A9B4BF; --accent:#8DBBEE; --onaccent:#0F1D2D; --gold:#F2C230; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.5 Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+         padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+  main { max-width:520px; margin:0 auto; }
+  header { display:flex; align-items:center; gap:14px; margin:8px 0 22px; }
+  header img { width:64px; height:64px; border-radius:16px; }
+  h1 { margin:0; font-size:28px; color:var(--gold); }
+  header p { margin:2px 0 0; color:var(--muted); font-size:15px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; margin-bottom:14px; }
+  .card h2 { margin:0 0 10px; font-size:19px; }
+  .btn { display:block; text-align:center; text-decoration:none; background:var(--accent); color:var(--onaccent);
+         font-weight:800; font-size:18px; padding:15px; border-radius:14px; margin:6px 0 14px; }
+  .btn.alt { background:transparent; color:var(--accent); border:1.5px solid var(--accent); }
+  ol { margin:0; padding-left:22px; } li { margin:6px 0; }
+  .muted { color:var(--muted); font-size:15px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="../icons/Icon-192.png" alt="">
+    <div><h1>Кайрос</h1><p>Приложението за свещениците от храма</p></div>
+  </header>
+
+  <section class="card" id="android">
+    <h2>Android</h2>
+    <a class="btn" href="https://github.com/manuntdboy/svestenik/releases/latest/download/kairos.apk">Свали приложението</a>
+    <ol>
+      <li>Натиснете „Свали приложението“ и изчакайте файла <b>kairos.apk</b>.</li>
+      <li>Отворете го (от известието или от „Изтегляния“).</li>
+      <li>Ако телефонът попита, разрешете <b>„Инсталиране от неизвестни източници“</b> за браузъра – приложението не е в Google Play.</li>
+      <li>Натиснете „Инсталиране“ и отворете Кайрос.</li>
+    </ol>
+    <p class="muted">Новите версии идват сами – Кайрос казва „Има нова версия → Обнови“.</p>
+  </section>
+
+  <section class="card" id="iphone">
+    <h2>iPhone</h2>
+    <a class="btn" href="https://manuntdboy.github.io/svestenik/">Отвори Кайрос</a>
+    <ol>
+      <li>Отворете връзката в <b>Safari</b> и влезте или се регистрирайте.</li>
+      <li>Натиснете „Сподели“ (квадратчето със стрелка) → <b>„Добави към началния екран“</b>.</li>
+      <li>Кайрос се появява с иконка като приложение.</li>
+    </ol>
+    <p class="muted">През сайта засега няма известия – проверявайте „Начало“ и чата.</p>
+  </section>
+
+  <section class="card" id="pc">
+    <h2>Компютър</h2>
+    <a class="btn alt" href="https://manuntdboy.github.io/svestenik/">Отвори Кайрос в браузъра</a>
+    <p class="muted">Влезте със същия профил – данните са едни и същи на телефона и на компютъра.</p>
+  </section>
+
+  <p class="muted">Въпроси: Viber 0888 177 738 – Димитър Костадинов, създателят на Кайрос.</p>
+</main>
+<script>
+  // Показваме първо това, което е за този уред; другите остават отдолу.
+  try {
+    var ua = navigator.userAgent || '';
+    var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var android = /Android/.test(ua);
+    var main = document.querySelector('main'), first = document.getElementById(ios ? 'iphone' : android ? 'android' : 'pc');
+    main.insertBefore(first, main.querySelector('section'));
+  } catch (e) {}
+</script>
+</body>
+</html>
