@@ -48,7 +48,7 @@ class WhatsNew {
             [if (creator) ...list('creator_test'), ...list('test')],
           );
         }(),
-    ]);
+    ].where((r) => r.added.isNotEmpty || r.test.isNotEmpty).toList());
   }
 }
 

@@ -779,6 +779,23 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Създателят търси човек по име, потребителско име или телефон.
+  Future<List<Map<String, dynamic>>> creatorPeopleSearch(String q) async {
+    final r = await _creatorRpc<dynamic>('creator_people_search', {'p_q': q});
+    return (r as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Създателят добавя свещеник в храм (в празен храм – като председател).
+  Future<void> creatorAddMember(String churchId, String userId) async {
+    try {
+      final r = await _db.rpc('creator_add_member', params: {'p_church': churchId, 'p_user': userId});
+      _notifyAnnouncements(r);
+      await refresh();
+    } catch (e) {
+      throw AppError(_friendly(e));
+    }
+  }
+
   /// Създателят изважда човек от храм.
   Future<void> creatorRemoveMember(String churchId, String userId) async {
     try {

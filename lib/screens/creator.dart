@@ -1704,6 +1704,32 @@ class _ChurchControlsState extends State<_ChurchControls> {
     }
   }
 
+  Future<void> _addPriest() async {
+    final s = AppScope.read(context);
+    final church = widget.church;
+    final picked = await showAppSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => _PersonSearch(title: 'Добави свещеник в ${church['name']}'),
+    );
+    if (picked == null || !mounted) return;
+    final ok = await confirm(
+        context,
+        'Добавяне в храма',
+        '${withRank(ClergyRank.fromCode(picked['rank']), '${picked['name']}')} влиза в „${church['name']}“ веднага. '
+            'Ако в храма няма никой, става председател.',
+        'Добави');
+    if (!ok || !mounted) return;
+    try {
+      await s.creatorAddMember(church['id'] as String, picked['user_id'] as String);
+      if (mounted) showMessage(context, 'Добавен е. Получава известие.');
+      await widget.onRefresh();
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final st = widget.settings;
@@ -1733,7 +1759,99 @@ class _ChurchControlsState extends State<_ChurchControls> {
           label: const Text('Смени председателя'),
         ),
       ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: _busy ? null : _addPriest,
+          icon: const Icon(Icons.person_add_alt_1_outlined),
+          label: const Text('Добави свещеник'),
+        ),
+      ),
     ]);
+  }
+}
+
+/// Търсене на човек по име, потребителско име или телефон (за създателя).
+class _PersonSearch extends StatefulWidget {
+  final String title;
+  const _PersonSearch({required this.title});
+
+  @override
+  State<_PersonSearch> createState() => _PersonSearchState();
+}
+
+class _PersonSearchState extends State<_PersonSearch> {
+  List<Map<String, dynamic>> _found = [];
+  String _q = '';
+  bool _busy = false;
+
+  Future<void> _search(String q) async {
+    _q = q.trim();
+    if (_q.length < 2) {
+      setState(() => _found = []);
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final r = await AppScope.read(context).creatorPeopleSearch(_q);
+      if (mounted && q.trim() == _q) setState(() => _found = r);
+    } on AppError catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .75,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(widget.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              autofocus: true,
+              onChanged: _search,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: 'Име, потребителско име или телефон',
+                suffixIcon: _busy
+                    ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : null,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView(padding: const EdgeInsets.fromLTRB(8, 8, 8, 16), children: [
+              if (_q.length >= 2 && _found.isEmpty && !_busy)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Няма намерени. Човекът трябва първо да има профил в Кайрос.',
+                      style: TextStyle(color: p.textMuted)),
+                ),
+              for (final x in _found)
+                ListTile(
+                  title: Text(withRank(ClergyRank.fromCode(x['rank']), '${x['name'] ?? '—'}')),
+                  subtitle: Text(
+                      [
+                        '@${x['username'] ?? ''}',
+                        if ((x['phone'] ?? '').toString().isNotEmpty) '${x['phone']}',
+                        (x['churches'] ?? 'без храм').toString(),
+                      ].join(' · '),
+                      style: TextStyle(color: p.textMuted)),
+                  onTap: () => Navigator.pop(context, x),
+                ),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 }
 

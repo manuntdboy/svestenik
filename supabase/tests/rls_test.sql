@@ -820,6 +820,7 @@ select public.approve_member(:'rcid', :'C') \g /dev/null
 select public.approve_member(:'rcid', :'D') \g /dev/null
 select t.fails(format('select public.creator_set_role(%L,%L,false,true)', :'rcid', :'C'), 'само създателят сменя роли', 'forbidden');
 select t.fails(format('select public.creator_remove_member(%L,%L)', :'rcid', :'C'), 'само създателят изважда', 'forbidden');
+select t.fails(format('select public.creator_add_member(%L,%L)', :'rcid', :'C'), 'само създателят добавя', 'forbidden');
 select t.as_user(:'A');
 select t.ok(jsonb_array_length(public.creator_user_churches(:'C')) >= 1, 'създателят вижда храмовете на човека');
 select cardinality(public.creator_set_role(:'rcid', :'C', false, true)) as n1 \gset
@@ -837,8 +838,15 @@ select t.fails(format('select public.creator_set_role(%L,%L,false,false)', :'rci
 select t.fails(format('select public.creator_remove_member(%L,%L)', :'rcid', :'D'), 'председателят не се изважда, докато има други', 'need_chair');
 select cardinality(public.creator_remove_member(:'rcid', :'B')) as n4 \gset
 select t.ok(:n4 = 2 and not exists (select 1 from jsonb_array_elements(public.creator_user_churches(:'B')) x where x->>'church_id' = :'rcid'), 'изваждане от храма');
+select t.ok(jsonb_array_length(public.creator_people_search('в')) >= 0, 'създателят търси хора');
+select cardinality(public.creator_add_member(:'rcid', :'B')) as n5 \gset
+select t.ok(:n5 = 2 and exists (select 1 from jsonb_array_elements(public.creator_user_churches(:'B')) x where x->>'church_id' = :'rcid' and not (x->>'chair')::boolean),
+            'създателят добавя свещеник – известие до него и до председателя');
+select cardinality(public.creator_add_member(:'rcid', :'B')) as n6 \gset
+select t.ok(:n6 = 0, 'вече добавен – нищо не се променя');
+select public.creator_remove_member(:'rcid', :'B') \g /dev/null
 select t.as_user(:'B');
-select t.ok((select count(*) from announcements where recipient_id = :'B' and title like 'Извадени%') = 1,
+select t.ok((select count(*) from announcements where recipient_id = :'B' and title like 'Извадени%') = 2,
             'изваденият вижда съобщението, макар да не е в храма');
 select t.as_user(:'C');
 select t.ok((select count(*) from announcements where recipient_id is not null and recipient_id <> :'C') = 0,
